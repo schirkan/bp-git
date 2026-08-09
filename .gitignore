@@ -1,0 +1,49 @@
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+ehthumbs_view.db
+$RECYCLE.BIN/
+
+# --- Editor / IDE ---
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.tmp
+
+# --- Logs / Scratch ---
+*.log
+logs/
+temp/
+
+# --- Credentials / Secrets (never commit) ---
+*.env
+*.env.*
+*.pfx
+*.p12
+*.keystore
+credentials/
+secrets/
+
+# --- Windows binaries ---
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.ilk
+*.exp
+*.cache
+
+# --- Office / Lock-Files ---
+~$*
+*.lock
+
+# --- Blue Prism typical artifacts (add specifics as project grows) ---
+*.bpobject.bak
+*.bprelease.bak
+*.releasepack.bak
