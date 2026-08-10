@@ -102,11 +102,16 @@ License-Guard → OK
      ↓
 Liest Worktree-XMLs → parsed → mapped auf BPA*-Tabellen
      ↓
-automateC.exe /import &lt;path&gt;  (Phase 1 Adapter → automC → DB)
-   oder direkt per SqlCommand (Phase 2)
+Schreibt direkt per SqlCommand + Transaktion:
+   • UPSERT BPAProcess.processxml (Haupt-XML-Body) + Head-Metadaten
+   • Reconcile-Loop ueber BPAProcessAttribute, BPAProcess*Dependency,
+     BPAProcessEnvVar, BPAProcessLock usw.
+   • Atomare Commit-Transaktion pro Process (Rollback bei Validierungsfehlern)
      ↓
 Snapshot-Hash-Vergleich (idempotent-check)
 </pre>
+
+> **Implementierungs-Hinweis:** Schreibpfad ist **direkter SqlCommand**, kein `automateC.exe /import`-Round-Trip — Martin-Direktive (16:44 GMT+2): CLI-Round-Trip bei grossen Process-XMLs zu langsam.
 
 ## Sicherheitsgrenzen
 
@@ -168,11 +173,16 @@ commit_msg_template = "bpgit: {action} {count} items ({date})"
 - Tabellen-Scope: `BPAProcess` + Attribute + Dependencies + EnvVar, `BPAEnvironment` (Variable only), `BPAWorkQueue` + Filter + Item, `BPARelease` + Entry
 - **Round-Trip-Test:** Adapter exportiert BP-Demo-Process → XML → manuelle Studio-`Import` → Diff = leer
 
-### Phase 2: Round-Trip-Write
+### Phase 2: Round-Trip-Write (DB-direct)
 
 - Subcommand: `commit --force`
-- `automateC.exe /import <path>` als Backend (Phase 2a) oder direkter SqlCommand (Phase 2b)
-- Idempotenz-Prüfung (gleiches XML zweimal importieren = kein DB-Drift)
+- **Schreibpfad: direkter SqlCommand + Transaktion** (kein CLI-Round-Trip)
+- Begründung (Martin 16:44 GMT+2): `automateC.exe /import` zu langsam für grosse Process-XMLs
+- UPSERT in BPAProcess.processxml (Haupt-XML) + Reconcile in allen abhängigen BPAProcess*-Tabellen (Attribute, Dependencies, EnvVar, Lock, …)
+- Atomare Transaktion pro Process (Rollback bei XSD-/Self-Check-Fehler)
+- Validierung vor Commit: Version-Konflikt-Erkennung + Identity-Lock-Check
+- Idempotenz-Prüfung (gleiches XML zweimal committen = kein DB-Drift)
+- Optionale Phase-2b-Erweiterung: `automateC.exe /import` als Fallback für sehr grosse/komplexe Prozesse (später, falls Performance-Daten das rechtfertigen)
 
 ### Phase 3: VS-Code-Integration
 
