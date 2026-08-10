@@ -47,3 +47,7 @@ secrets/
 *.bpobject.bak
 *.bprelease.bak
 *.releasepack.bak
+
+# --- Blue Prism Education License (lokal, nie committen) ---
+*.lic
+
