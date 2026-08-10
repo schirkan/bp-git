@@ -1,7 +1,7 @@
 # SPEC — BP-Git-Adapter-Architektur
 
-Stand: 2026-08-10 (Martin-Anforderung 16:13 GMT+2)  
-Status: draft v1  
+Stand: 2026-08-10 (Martin-Anforderung 17:02 GMT+2)
+Status: draft v2 — License-Guard entfernt, Bridge-Architektur hinzugefügt
 Bezieht sich auf: [SPEC-target-environment.md](./SPEC-target-environment.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
 ## Ziel
@@ -19,13 +19,13 @@ Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentatione
   │   │  *.bpprocess  │  │  (dotnet bpgit)   │  │  (localdb)\…LocalDB  │ │
   │   │  *.bpobject   │  └────────┬─────────┘  └──────────────────────┘ │
   │   │  *.bprelease  │           │                                    │
-  │   └──────┬───────┘           │  Signatur-Check                     │
-  │          │                   │  + SqlClient (Win-Auth)             │
+  │   └──────┬───────┘           │  SqlClient (Win-Auth)             │
   │          │                   │  + Dapper-Mapping                   │
-  │   ┌──────▼───────┐  ┌────────▼─────────┐                            │
-  │   │  git CLI /    │  │  BP-Lizenz         │                            │
-  │   │  VS Code      │  │  (signiert, XAdES)│                            │
-  │   └──────────────┘  └──────────────────┘                            │
+  │          │                   │                                    │
+  │   ┌──────▼───────┐                                                 │
+  │   │  git CLI /    │                                                 │
+  │   │  VS Code      │                                                 │
+  │   └──────────────┘                                                 │
   └────────────────────────────────────────────────────────────────────┘
 </pre>
 
@@ -37,11 +37,11 @@ Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentatione
 
 | Subcommand | Funktion |
 |---|---|
-| `bpgit init` | Initialisiert bp-git-Worktree aus BP-Instanz (konfiguriert `config.toml`) |
-| `bpgit status` | Zeigt Diffs Worktree ↔ DB |
-| `bpgit pull` | Exportiert aktuellen BP-Stand → Worktree |
+| `bpgit init` | Initialisiert bp-git-Worktree aus BP-Instanz (konfiguriert `config.toml`, ggf. Hooks, initialer Pull + git-Initial-Commit) |
+| `bpgit status` | Zeigt Diffs Worktree ↔ DB (lokal modifiziert + DB-Drift) |
+| `bpgit pull` | Exportiert aktuellen BP-Stand → Worktree, schreibt Snapshot |
 | `bpgit commit` | Worktree → DB-Import (Round-Trip-Write) — explizit `--force`-Flag |
-| `bpgit log` | Commit-History mit BP-Snapshots (manuell + auto-Pull-Snapshots) |
+| `bpgit log` | BP-History aus `BPAProcessBackup` (statt git-log) |
 | `bpgit diff` | Unified-Diff Worktree vs. DB-Snapshot |
 
 Package: `BPGit.Cli` mit `<OutputType>Exe</OutputType>`, referenziert die anderen Packages.
@@ -70,73 +70,141 @@ Kanonisches Mapping BP-DB-Zeilen ↔ XML-Repräsentation:
 - **Validierung:** Self-Consistency-Check (`XmlReader` strict, dann Re-Parse und Property-Bag-Vergleich)
 - **Diff-Format:** Unified-Diff (Line-basierter XML-Diff mit Whitespace-Normalisierung)
 
-### 4. License-Guard (`BPGit.License`)
+## Bridge-Architektur (git ↔ BP-DB)
 
-Prüft **vor jedem BP-DB-Zugriff** die BP-Lizenz-Datei — **Compliance-Gate**, nicht Auth-Mechanismus. Die SQL-Verbindung selbst läuft separat über Windows-Integrated-Auth oder SQL-Auth (siehe `config.toml`).
+bpgit ist der Synchronisations-Layer zwischen zwei Welten:
+- **VS Code / git:** datei-basiert, Working-Tree, Hashes, Commits, Diffs
+- **BP-DB:** SQL-basiert, `BPAProcess` / `BPARelease` / `BPA*`-Tabellen, Identity-PKs (`UNIQUEIDENTIFIER`)
 
-**Blockierende Checks** (verhindern Adapter-Start bzw. ersten DB-Zugriff):
+bpgit übersetzt zwischen beiden: **DB → XML-Dateien** (`pull`) und **XML → DB-UPSERT** (`commit`). VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit XML-Dateien. bpgit läuft als externer Sync-Step zwischen git-Operationen.
 
-| # | Check | Quelle | Failure-Mode |
-|---|---|---|---|
-| G1 | Datei existiert | `config.toml.license_path` | Exit 2 + Hinweis-Pfad |
-| G2 | XML well-formed, Pflichtfelder vorhanden (`type`, `licensee`, `starts`, `expires`, `maxprocesses`, `maxresources`, `maxconcurrentsessions`) | XDocument.Parse | Exit 3 + Diagnose |
-| G3 | `expires` > heute | ISO-Parse | Exit 4 + Datum |
-| G4 | License-Typ in Whitelist (`allowed_license_types`, default `["education","perpetual"]`) — `"trial"` und unbekannte Typen werden geblockt | XML `<type>` | Exit 5 |
-| G5 | Operational-Footprint ≤ Limits (`BPAProcess` ≤ `maxprocesses`, `BPAResource` ≤ `maxresources`) — gesteuert durch `footprint_policy`: `"block"` (Exit 6) oder `"warn"` (nur log) | `SELECT COUNT(*)` + max-Felder aus .lic | Exit 6 oder warn |
+### Pattern: File-Based Adapter, git als Versions-Layer
 
-**Log-Only Checks** (kein Block, Audit-Trail):
+```
+<pre>
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  VS Code (oder jedes Git-fähige Tool)                            │
+   │  • Datei-Editor mit XML-Highlighting                              │
+   │  • Integrierte Git-UI (Source-Control-Panel, Diff-View)           │
+   │  • Terminal: bpgit …                                              │
+   └──────────────────────────┬───────────────────────────────────────┘
+                              │  liest / schreibt
+                              ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  Working-Tree (von git versioniert)                               │
+   │                                                                  │
+   │   .bpgit/                                                         │
+   │   ├── config.toml         # DB-Credentials, Profile, …            │
+   │   ├── snapshot.json       # Pull-Snapshot (Hashes + IDs)          │
+   │   └── lock                                                       │
+   │                                                                  │
+   │   processes/<processid>/                                         │
+   │   ├── process.xml         # = BPAProcess.processxml              │
+   │   ├── attributes.xml      # = BPAProcessAttribute-Zeilen         │
+   │   ├── envvars.xml         # = BPAProcessEnvVar-Zeilen            │
+   │   └── meta.json           # {name, type, version, lastmodified}  │
+   │                                                                  │
+   │   releases/<releaseid>/release.xml                              │
+   │   objects/<objectid>/process.xml                                │
+   │   environments/<envid>/env.xml                                   │
+   │                                                                  │
+   │   .gitattributes       # registriert *.xml als diffbares Text     │
+   └──────────────────────────┬───────────────────────────────────────┘
+                              │  SqlClient (Win-Auth oder SQL-Auth)
+                              ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  Blue Prism DB (BPAProcess, BPARelease, BPA*Identity-PKs)       │
+   └──────────────────────────────────────────────────────────────────┘
+</pre>
+```
 
-| # | Inhalt | Ausgabe |
+**Naming-Strategie** (`config.toml.worktree.naming`):
+
+- **`by-uuid`** (Default): `processes/<processid>/` — deterministisch, immun gegen Renames in BP.
+- **`by-name`** (optional): `processes/<sanitized-name>/` — menschenlesbar, aber Renames in BP brechen das Mapping (Reconciler muss datei umbenennen).
+
+### User Flow (VS-Code-Workflow)
+
+| Schritt | Kommando / Aktion | Was passiert |
 |---|---|---|
-| L1 | `<licensee>`-Name | stderr: `Licensee: Martin Pietschmann` |
-| L2 | Tage bis `<expires>` | `warn` 30 Tage vorher, `critical` 7 Tage vorher, dann kein Adapter-Start mehr |
-| L3 | Aktuelle Counts vs. Limits | stderr-Info (z. B. `BPAProcess=31 / max=5 (OK)`) |
-| L4 | `<source>` der Lizenz (Portal / andere) | Audit-Log |
+| 1 | `bpgit init` (einmalig) | `.bpgit/config.toml`, `.gitattributes`, ggf. Hooks. Initialer `pull` + git-Initial-Commit. |
+| 2 | `bpgit pull` | SqlClient öffnet BP-DB → `SELECT * FROM BPAProcess` + abhängige Tabellen → XML-Dateien in Worktree → Snapshot in `.bpgit/snapshot.json` → `git add . && git commit -m "bpgit: pull YYYY-MM-DD"`. |
+| 3 | User editiert `processes/<guid>/process.xml` in VS Code | Normaler Datei-Edit. `git diff` zeigt XML-Unified-Diff. |
+| 4 | `bpgit status` | Parst lokale XMLs, vergleicht Hashes mit `.bpgit/snapshot.json` → modified / added / deleted. Außerdem DB-Drift (was seit letztem pull in BP geändert wurde). |
+| 5 | `git add . && git commit -m "Edit HellWorld validation"` | Standard-git-Versionierung. VS Code Source-Control-Panel macht das automatisch. |
+| 6 | `bpgit commit` | Parst geänderte XMLs → pro Process SqlCommand-Transaktion: `UPSERT BPAProcess.processxml` + Reconcile in `BPAProcessAttribute` / `BPAProcess*Dependency` / `BPAProcessEnvVar` → Snapshot-Update → `git add . && git commit -m "bpgit: commit YYYY-MM-DD"`. |
+| 7 | `git push` (optional, wenn Remote konfiguriert) | Standard-git. |
 
-**Bypass (Dev/CI):**
+**Wichtig:** bpgit läuft **zwischen** den git-Schritten, nicht parallel. Es werden keine git-Hooks installiert, die Commits blockieren.
 
-- CLI-Flag: `bpgit --skip-license-check …` setzt G1–G5 als bestanden.
-- Env-Var: `BPGIT_SKIP_LICENSE_CHECK=1` (gleiche Wirkung).
-- Wird explizit in stderr/Log vermerkt: `WARNING: License-Check bypassed (B1–G5 nicht ausgeführt)`.
+### Identity-Layer
 
-**Out of Scope v1:**
+| Konzept | BP-DB | Worktree | Zuordnung |
+|---|---|---|---|
+| Process | `BPAProcess.processid UNIQUEIDENTIFIER` | `<processid>` als Verzeichnis-Name | 1:1 |
+| Object | `BPAProcess.processid` (ProcessType='O') | `<processid>` als Verzeichnis-Name | 1:1 |
+| Release | `BPARelease.id` | `<releaseid>` als Verzeichnis-Name | 1:1 |
+| Versionen | `BPAProcessBackup.backupdate` + diff in `processxml` | git-Commits | über `bpgit log` |
 
-- **Kryptografische XAdES-Signatur-Prüfung** (`<Signature>`-Element). Würde BP-Public-Key benötigen — ist nicht öffentlich dokumentiert. Kandidaten-Suche: signierte DLLs im `BPUi/`-Verzeichnis (`C:\Program Files\Blue Prism Limited\Blue Prism Automate\BPUi\`), oder via BP-Support anfordern. Phase-2-Ticket (separate Karte).
-- **Online-Revocation-Checks** (keine Public-API vorhanden).
-- **Per-User-Lizenzen** (BP unterscheidet nur Application-Level-Lizenzen, nicht per BP-Login-User).
+`meta.json` führt menschenlesbare Identität (`name`, `type`, `version`, `lastmodified`) parallel zum UUID-Pfad — für UX-Anzeige in bpgit-Status.
 
-**Bypass-Empfehlung:** `--skip-license-check` nur in CI/Headless-Tests und isolierten Dev-Setups verwenden. In Prod-Umgebungen immer aktiviert.
+### Sync-Sicherheit
+
+- **`BPAProcessLock`** wird vor jedem `bpgit commit` geprüft → Lock aktiv → Exit mit Hinweis auf Lock-Owner.
+- **`lastmodifieddate` als Optimistic-Lock** — wenn der DB-Stand vom Snapshot abweicht → Konflikt-Meldung (Merge-Workflow nötig).
+- **Override-Flag:** `--allow-stale` (Legacy-Mode, klares WARNING-Log) umgeht den Stale-Check.
+- **Atomare Transaktion pro Process** — Rollback bei XML-/Schema-Validierungsfehler.
+- **Idempotenz** — zweimaliges Commit desselben XML ändert die DB nicht (Hash-Vergleich vor UPSERT).
+
+### VS-Code-Integration
+
+| Phase | Mechanismus | Aufwand |
+|---|---|---|
+| **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting. `bpgit` ist ein externes CLI in der Shell. | ✓ fertig, kein Code |
+| **Phase 2** | Custom Diff-Driver via `.gitattributes`: `*.xml diff=bp-xml-clean` → git nutzt `bpgit diff-xml` für semantische Diffs (Stage-Order, Inputs/Outputs) statt Text-Diffs. | ~50 LoC |
+| **Phase 3** | VS-Code-Extension: Snippets für BP-Stages, `BPAValCheck`-Validierung, Inline-Vorschau der Stage-Effekte. | separates Extension-Projekt |
+
+### Hooks (optional, installierbar per `bpgit init --install-hooks`)
+
+- `.git/hooks/post-checkout` — Warnung wenn Working-Tree von DB abweicht (DB-Drift-Detection)
+- `.git/hooks/post-merge` — analog nach Branch-Merge
+
+Pre-commit- und Push-Hooks werden **explizit nicht** installiert — sie würden `git commit` bzw. `git push` blockieren, was die UX verschlechtert. bpgit läuft als expliziter Sync-Step zwischen den git-Befehlen.
+
+### Erkennungs-Heuristik für `bpgit init`
+
+Wenn im aktuellen Ordner bereits ein `.git/`-Verzeichnis existiert und dort BP-XML-Files mit der typischen Struktur (`<process name="..." version="...">`-Root) liegen, erkennt `bpgit init` das bestehende Repo und bietet `bpgit pull --add-missing` (nur neue BP-Items in den Worktree legen) statt eines Voll-`init`.
 
 ## Datenfluss
 
 ### `bpgit pull`
 
 <pre>
-License-Guard → Signatur-Validation OK
-     ↓
 SqlClient öffnet (localdb)\BluePrismLocalDB (Win-Integrated-Auth)
      ↓
 Dapper-Mapping BPAProcess → List&lt;Process&gt;
      ↓
-XML-Serializer schreibt *.bpprocess.xml + zugehörige Process-Attribute-Files
+XML-Serializer schreibt processes/&lt;processid&gt;/process.xml + Sidecar-Files
      ↓
-Snapshot im Adapter-Cache (für `bpgit diff` und `bpgit commit`)
+Snapshot in .bpgit/snapshot.json (Hashes + IDs)
+     ↓
+git add . && git commit (Stage-Modus mit --no-commit möglich)
 </pre>
 
 ### `bpgit commit`
 
 <pre>
-License-Guard → OK
-     ↓
 Liest Worktree-XMLs → parsed → mapped auf BPA*-Tabellen
      ↓
-Schreibt direkt per SqlCommand + Transaktion:
-   • UPSERT BPAProcess.processxml (Haupt-XML-Body) + Head-Metadaten
+Pro Process: SqlCommand-Transaktion
+   • UPSERT BPAProcess.processxml (Haupt-XML) + Head-Metadaten
    • Reconcile-Loop ueber BPAProcessAttribute, BPAProcess*Dependency,
      BPAProcessEnvVar, BPAProcessLock usw.
-   • Atomare Commit-Transaktion pro Process (Rollback bei Validierungsfehlern)
+   • Atomare Commit-Transaktion (Rollback bei Validierungsfehler)
      ↓
-Snapshot-Hash-Vergleich (idempotent-check)
+Snapshot-Update
+     ↓
+git add . && git commit
 </pre>
 
 > **Implementierungs-Hinweis:** Schreibpfad ist **direkter SqlCommand**, kein `automateC.exe /import`-Round-Trip — Martin-Direktive (16:44 GMT+2): CLI-Round-Trip bei grossen Process-XMLs zu langsam.
@@ -145,7 +213,6 @@ Snapshot-Hash-Vergleich (idempotent-check)
 
 - **Credentials ausschließen:** `BPACredentials`, `BPAKeyStore`, `BPAPassword`, alle Spalten mit `encryptid` als FK — niemals in Worktree ausgeben (Whitelist via `ignore_tables` in `config.toml`)
 - **Read-Only by Default:** `commit`-Subcommand scharf explizit (`--force`-Flag erforderlich); sonst nur `pull`/`status`/`log`/`diff`
-- **Signaturprüfung:** Adapter bricht ab bei ungültiger / abgelaufener Lizenz
 - **Keine impliziten Mutationen:** Der Adapter mutiert die BP-DB nur auf expliziten User-Befehl (`commit`)
 - **Administrativer Account:** Adapter läuft mit dem gleichen Windows-Konto wie der laufende BP-Service; keine künstliche Berechtigungs-Eskalation
 - **Audit-Trail:** Jeder `commit` legt einen Eintrag in der Log-Konfiguration ab (Datum, Versionen, Tabellen-Diffs)
@@ -162,19 +229,10 @@ connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI
 # Auth-Modus B: SQL-Auth (für CI oder wenn keine Windows-Identity verfügbar)
 # Aktiv, sobald `sql_user` gesetzt ist. Password NIEMALS ins Repo — kommt
 # via env-var BPGIT_DB_PASSWORD oder `dotnet user-secrets` (Substitution ${BPGIT_DB_PASSWORD}).
-# connection_string_sql_auth = "Server=bp-prod.acme.local;Database=BluePrism;User Id=bpgit_readonly;Password=${BPGIT_DB_PASSWORD}"
+# connection_string_sql_auth = "Server=bp-prod.acme.local;Database=BluePrism;User Id=bpgit_readonly;Password=${BPGI…ORD}"
 # sql_user = "bpgit_readonly"
 
-license_path = "C:\\Users\\Admin\\Desktop\\bp-education-license-v2-2027.lic"
-
-# === License-Guard Tuning ===
-allowed_license_types = ["education", "perpetual"]   # "trial" => block
-footprint_policy       = "block"                      # "block" | "warn"
-warn_before_expiry_days    = 30
-critical_before_expiry_days = 7
-
 # Tabellen, die der Adapter ignoriert (Credentials, Session-Logs, System-Seed)
-ignore_tables = [
 ignore_tables = [
   "BPASessionLog_*",
   "BPASession",
@@ -210,6 +268,10 @@ remote = null  # lokal-only für v1
 author_name = "BP-Git Adapter"
 author_email = "bp-git@local"
 commit_msg_template = "bpgit: {action} {count} items ({date})"
+
+[worktree]
+# Naming-Strategie: "by-uuid" (Default, stabil gegen Renames) oder "by-name" (menschenlesbar)
+naming = "by-uuid"
 ```
 
 ## MVP-Phasen
@@ -218,14 +280,14 @@ commit_msg_template = "bpgit: {action} {count} items ({date})"
 
 - Subcommands: `init`, `pull`, `status`, `log`, `diff`
 - Tabellen-Scope: `BPAProcess` + Attribute + Dependencies + EnvVar, `BPAEnvironment` (Variable only), `BPAWorkQueue` + Filter + Item, `BPARelease` + Entry
-- **Round-Trip-Test:** Adapter exportiert BP-Demo-Process → XML → manuelle Studio-`Import` → Diff = leer
+- Round-Trip-Test: Adapter exportiert BP-Demo-Process → XML → manuelle Studio-`Import` → Diff = leer
 
 ### Phase 2: Round-Trip-Write (DB-direct)
 
 - Subcommand: `commit --force`
 - **Schreibpfad: direkter SqlCommand + Transaktion** (kein CLI-Round-Trip)
 - Begründung (Martin 16:44 GMT+2): `automateC.exe /import` zu langsam für grosse Process-XMLs
-- UPSERT in BPAProcess.processxml (Haupt-XML) + Reconcile in allen abhängigen BPAProcess*-Tabellen (Attribute, Dependencies, EnvVar, Lock, …)
+- UPSERT in `BPAProcess.processxml` (Haupt-XML) + Reconcile in allen abhängigen `BPAProcess*`-Tabellen (Attribute, Dependencies, EnvVar, Lock, …)
 - Atomare Transaktion pro Process (Rollback bei XSD-/Self-Check-Fehler)
 - Validierung vor Commit: Version-Konflikt-Erkennung + Identity-Lock-Check
 - Idempotenz-Prüfung (gleiches XML zweimal committen = kein DB-Drift)
