@@ -166,10 +166,144 @@ bpgit übersetzt zwischen beiden: **DB → XML-Dateien** (`pull`) und **XML → 
 
 ### Hooks (optional, installierbar per `bpgit init --install-hooks`)
 
-- `.git/hooks/post-checkout` — Warnung wenn Working-Tree von DB abweicht (DB-Drift-Detection)
-- `.git/hooks/post-merge` — analog nach Branch-Merge
+#### Ziele
 
-Pre-commit- und Push-Hooks werden **explizit nicht** installiert — sie würden `git commit` bzw. `git push` blockieren, was die UX verschlechtert. bpgit läuft als expliziter Sync-Step zwischen den git-Befehlen.
+- **Drift-Detection:** Warnung wenn Working-Tree nach `git checkout` / `git merge` nicht mehr zur BP-DB passt.
+- **Keine Blockaden:** Hooks geben Warnungen aus, brechen aber nie `git commit`/`git push` ab. bpgit läuft als expliziter Sync-Step zwischen den git-Befehlen.
+- **Cross-Platform:** Windows (NTFS) und Unix (POSIX x-Bit) werden identisch unterstützt.
+- **Update-fähig:** Hook-Wrapper sind dünn, die Logik liegt in `bpgit hook run` — bpgit-Updates wirken automatisch.
+
+#### Installierte Hooks (Phase 1)
+
+| Hook | Trigger | Aktion |
+|---|---|---|
+| `post-checkout` | Branch-Wechsel, File-Restore | Drift-Warnung auf stderr, **nie** Auto-Pull |
+| `post-merge` | Branch-Merge | Drift-Warnung auf stderr, **nie** Auto-Pull |
+
+**Explizit nicht installiert:**
+
+- `pre-commit` / `commit-msg` — würden Commit blockieren, UX-Verschlechterung
+- `pre-push` / `pre-receive` — würden Push blockieren, UX-Verschlechterung
+- `post-rewrite` (rebase) — kann Working-Tree korrumpieren wenn BP-DB mitspielt; verschoben auf Phase 3, falls Use-Cases das rechtfertigen
+
+#### Subcommands
+
+| Subcommand | Funktion |
+|---|---|
+| `bpgit hook install [--force] [--hooks post-checkout,post-merge]` | Installiert Hook-Wrapper nach `.git/hooks/`. Default: beide. |
+| `bpgit hook uninstall [--hooks ...]` | Entfernt die bpgit-Hook-Wrapper. Andere Hooks bleiben unberührt. |
+| `bpgit hook list` | Listet installierte bpgit-Hooks (markiert via `bpgit-hook: yes`-Header) |
+| `bpgit hook run <name> [args...]` | Manueller Trigger — wird auch intern von `.git/hooks/*` aufgerufen |
+
+#### Hook-Wrapper-Architektur
+
+Die installierten `.git/hooks/post-checkout` und `.git/hooks/post-merge` sind **dünne Wrapper**, die nur `bpgit hook run` aufrufen. Die Drift-Detection-Logik lebt in `bpgit hook run post-checkout` (C#-Code, plattformunabhängig).
+
+**Windows-Wrapper** (`.git/hooks/post-checkout`):
+
+```cmd
+@echo off
+bpgit hook run post-checkout %*
+exit /b %ERRORLEVEL%
+```
+
+**Unix-Wrapper** (`.git/hooks/post-checkout`):
+
+```sh
+#!/bin/sh
+exec bpgit hook run post-checkout "$@"
+```
+
+**Begründung Wrapper-Pattern:**
+
+1. **Updates zentral:** bpgit-Updates wirken automatisch auf alle Repos mit installierten Hooks.
+2. **Plattform-Pflege:** Eine plattformunabhängige Logik in C#, plattformspezifische Pfade nur im 5-Zeilen-Wrapper.
+3. **Testbarkeit:** `bpgit hook run post-checkout` ist ohne Git-Kontext testbar (CI-tauglich).
+4. **PowerShell-Konsistenz:** Wrapper-Pattern vermeidet, dass Hook-Scripts in PowerShell neu geschrieben werden müssen — die C#-Logik kennt nur Strings/Args, egal ob von `cmd` oder `sh` aufgerufen.
+
+#### Drift-Detection-Algorithmus
+
+```
+1. Lade .bpgit/snapshot.json (Hashes + IDs aus letztem pull/commit)
+2. Iteriere über alle processes/<guid>/*.{xml,json} im Working-Tree
+3. Pro Datei: SHA-256 berechnen, mit Snapshot vergleichen
+4. Drift erkannt wenn:
+     - Datei-Hash weicht von Snapshot ab           -> "modified"
+     - Datei existiert in Worktree, nicht in Snapshot -> "untracked"
+     - Datei existiert in Snapshot, nicht in Worktree -> "missing"
+5. Ausgabe auf stderr (post-checkout/post-merge):
+     "bpgit: working tree out of sync with BP database"
+     "bpgit:   modified:  <count>"
+     "bpgit:   untracked: <count>"
+     "bpgit:   missing:   <count>"
+     "bpgit: run `bpgit pull` to update, `bpgit status` for details"
+6. Exit-Code 0 — Hook blockiert nicht
+```
+
+**Niemals Auto-Pull:** post-checkout/post-merge führen **kein** `bpgit pull` aus — Working-Tree-Drift könnte gewollt sein (z.B. Feature-Branch mit lokalen Edits), Auto-Pull würde ungewollt überschreiben.
+
+#### Bypass-Mechanismen
+
+| Mechanismus | Wirkung |
+|---|---|
+| `bpgit init --no-hooks` | Überspringt Hook-Installation komplett |
+| `[hooks] enabled = false` in `config.toml` | Drift-Check disabled, Hook bleibt installiert (silent no-op) |
+| `BPGIT_SKIP_DRIFT_CHECK=1` (env) | Skip für CI/Scripts, gilt pro Aufruf |
+| `[hooks] skip_on_ci = true` | Auto-Disable wenn `CI`-Env-Var gesetzt |
+
+#### Permissions
+
+| Plattform | Anforderung | Mechanismus |
+|---|---|---|
+| Windows | Keine (Git ignoriert Unix-Bit) | Wrapper als `.cmd` / `.bat` / ohne Extension |
+| Unix | `chmod +x .git/hooks/post-*` | `bpgit hook install` ruft `File.SetUnixFileMode(0o755)` auf Wrapper |
+
+#### Backup bestehender Hooks
+
+`bpgit hook install` macht **vor** dem Überschreiben ein Backup:
+
+```
+.git/hooks/post-checkout -> .git/hooks/post-checkout.bpgit.bak.<timestamp>
+```
+
+Mit `--force` wird das Backup überschrieben. Ohne `--force` bricht die Installation ab, wenn ein user-defined Hook ohne `.bpgit.bak.`-Marker existiert (Schutz für bestehende Setups wie husky/lefthook).
+
+#### Konfiguration (`config.toml`)
+
+```toml
+[hooks]
+enabled = true                              # globale An/Aus-Schalter
+drift_warnings = ["post-checkout", "post-merge"]  # aktive Drift-Hooks
+skip_on_ci = true                           # BPGIT_SKIP_DRIFT_CHECK bei CI=true
+backup_existing = true                      # Backup vor Überschreiben
+wrapper_style = "auto"                      # "auto" | "unix" | "windows"
+```
+
+#### Tests (`BPGit.Cli.Tests`, xunit)
+
+| Test | Verifikation |
+|---|---|
+| `HookInstaller_Installs_PostCheckout_Script()` | nach `bpgit hook install`: `.git/hooks/post-checkout` existiert |
+| `HookInstaller_Idempotent()` | zweimal installieren = kein Fehler, kein Datenverlust |
+| `HookInstaller_Backup_Existing_Hook()` | user-Hook wird nach `.bpgit.bak.<ts>` verschoben |
+| `HookInstaller_Respects_NoForce()` | ohne `--force`: bestehender bpgit-Hook bleibt unverändert |
+| `HookUninstaller_Removes_Bpgit_Hooks_Only()` | user-Hook bleibt nach uninstall |
+| `HookRun_PostCheckout_Warns_On_Drift_But_Does_Not_Modify()` | kritisch: post-checkout darf Working-Tree NICHT ändern |
+| `HookRun_PostCheckout_Respects_BPGIT_SKIP_DRIFT_CHECK()` | env-bypass funktioniert |
+| `HookRun_PostCheckout_Respects_CI_Env()` | `CI=true` + `skip_on_ci=true` -> silent |
+| `HookList_Reports_Installed_Bpgit_Hooks()` | listet nur bpgit-markierte Hooks |
+
+#### Phase-Plan
+
+- **Phase 1 (MVP):** `bpgit hook install` + Drift-Detection-Bibliothek, Tests gegen die Library.
+- **Phase 2:** Wrapper-Templates in `src/BPGit.Cli/Hooks/` als Embedded Resources; bpgit-Self-Update regeneriert Wrapper.
+- **Phase 3:** Optional `post-rewrite` (rebase-aware Drift-Warnung), nur wenn Use-Cases das rechtfertigen.
+
+#### Sicherheit
+
+- **Backup-Pattern** verhindert versehentliches Überschreiben user-defined Hooks (z.B. pre-commit-Framework wie husky/lefthook).
+- **Wrapper-Exit-Code** wird 1:1 durchgereicht — wenn `bpgit hook run` fehlschlägt (z.B. fehlender `bpgit` im PATH), zeigt Git das in seinem Output, bricht aber **nicht** den Checkout/Merge ab.
+- **Idempotenz:** `bpgit hook install` ist safe, beliebig oft aufrufbar.
 
 ### Erkennungs-Heuristik für `bpgit init`
 
