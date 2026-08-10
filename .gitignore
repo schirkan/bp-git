@@ -39,6 +39,12 @@ secrets/
 *.exp
 *.cache
 
+# --- .NET build outputs ---
+bin/
+obj/
+*.user
+*.suo
+
 # --- Office / Lock-Files ---
 ~$*
 *.lock
