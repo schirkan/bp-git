@@ -72,12 +72,40 @@ Kanonisches Mapping BP-DB-Zeilen ↔ XML-Repräsentation:
 
 ### 4. License-Guard (`BPGit.License`)
 
-Prüft vor jedem DB-Zugriff die Lizenz-Datei (.lic) per Signatur-Validation:
+Prüft **vor jedem BP-DB-Zugriff** die BP-Lizenz-Datei — **Compliance-Gate**, nicht Auth-Mechanismus. Die SQL-Verbindung selbst läuft separat über Windows-Integrated-Auth oder SQL-Auth (siehe `config.toml`).
 
-- **Pfad:** konfigurierbar in `config.toml` (`license_path`)
-- **Signatur-Validation:** XAdES-RSA-SHA1 (BP-Internal-Verfahren; Reference siehe BP Digital Exchange Card #110866)
-- **Failure-Mode:** Adapter bricht ab, kein DB-Zugriff
-- **Selbst-Test:** Adapter-Ping vor ersten Reads zur Bestätigung der Lizenzgültigkeit
+**Blockierende Checks** (verhindern Adapter-Start bzw. ersten DB-Zugriff):
+
+| # | Check | Quelle | Failure-Mode |
+|---|---|---|---|
+| G1 | Datei existiert | `config.toml.license_path` | Exit 2 + Hinweis-Pfad |
+| G2 | XML well-formed, Pflichtfelder vorhanden (`type`, `licensee`, `starts`, `expires`, `maxprocesses`, `maxresources`, `maxconcurrentsessions`) | XDocument.Parse | Exit 3 + Diagnose |
+| G3 | `expires` > heute | ISO-Parse | Exit 4 + Datum |
+| G4 | License-Typ in Whitelist (`allowed_license_types`, default `["education","perpetual"]`) — `"trial"` und unbekannte Typen werden geblockt | XML `<type>` | Exit 5 |
+| G5 | Operational-Footprint ≤ Limits (`BPAProcess` ≤ `maxprocesses`, `BPAResource` ≤ `maxresources`) — gesteuert durch `footprint_policy`: `"block"` (Exit 6) oder `"warn"` (nur log) | `SELECT COUNT(*)` + max-Felder aus .lic | Exit 6 oder warn |
+
+**Log-Only Checks** (kein Block, Audit-Trail):
+
+| # | Inhalt | Ausgabe |
+|---|---|---|
+| L1 | `<licensee>`-Name | stderr: `Licensee: Martin Pietschmann` |
+| L2 | Tage bis `<expires>` | `warn` 30 Tage vorher, `critical` 7 Tage vorher, dann kein Adapter-Start mehr |
+| L3 | Aktuelle Counts vs. Limits | stderr-Info (z. B. `BPAProcess=31 / max=5 (OK)`) |
+| L4 | `<source>` der Lizenz (Portal / andere) | Audit-Log |
+
+**Bypass (Dev/CI):**
+
+- CLI-Flag: `bpgit --skip-license-check …` setzt G1–G5 als bestanden.
+- Env-Var: `BPGIT_SKIP_LICENSE_CHECK=1` (gleiche Wirkung).
+- Wird explizit in stderr/Log vermerkt: `WARNING: License-Check bypassed (B1–G5 nicht ausgeführt)`.
+
+**Out of Scope v1:**
+
+- **Kryptografische XAdES-Signatur-Prüfung** (`<Signature>`-Element). Würde BP-Public-Key benötigen — ist nicht öffentlich dokumentiert. Kandidaten-Suche: signierte DLLs im `BPUi/`-Verzeichnis (`C:\Program Files\Blue Prism Limited\Blue Prism Automate\BPUi\`), oder via BP-Support anfordern. Phase-2-Ticket (separate Karte).
+- **Online-Revocation-Checks** (keine Public-API vorhanden).
+- **Per-User-Lizenzen** (BP unterscheidet nur Application-Level-Lizenzen, nicht per BP-Login-User).
+
+**Bypass-Empfehlung:** `--skip-license-check` nur in CI/Headless-Tests und isolierten Dev-Setups verwenden. In Prod-Umgebungen immer aktiviert.
 
 ## Datenfluss
 
@@ -126,8 +154,27 @@ Snapshot-Hash-Vergleich (idempotent-check)
 
 ```toml
 [bp]
-connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI"
+# Auth-Modus A: SSPI (Windows Integrated Auth; funktioniert automatisch
+# mit NTLM lokal und mit Kerberos in AD-Domänen-SSO)
+# Default-Modus — wenn keine sql_user-Eintraege gesetzt sind.
+connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI;Database=BluePrism"
+
+# Auth-Modus B: SQL-Auth (für CI oder wenn keine Windows-Identity verfügbar)
+# Aktiv, sobald `sql_user` gesetzt ist. Password NIEMALS ins Repo — kommt
+# via env-var BPGIT_DB_PASSWORD oder `dotnet user-secrets` (Substitution ${BPGIT_DB_PASSWORD}).
+# connection_string_sql_auth = "Server=bp-prod.acme.local;Database=BluePrism;User Id=bpgit_readonly;Password=${BPGIT_DB_PASSWORD}"
+# sql_user = "bpgit_readonly"
+
 license_path = "C:\\Users\\Admin\\Desktop\\bp-education-license-v2-2027.lic"
+
+# === License-Guard Tuning ===
+allowed_license_types = ["education", "perpetual"]   # "trial" => block
+footprint_policy       = "block"                      # "block" | "warn"
+warn_before_expiry_days    = 30
+critical_before_expiry_days = 7
+
+# Tabellen, die der Adapter ignoriert (Credentials, Session-Logs, System-Seed)
+ignore_tables = [
 ignore_tables = [
   "BPASessionLog_*",
   "BPASession",
