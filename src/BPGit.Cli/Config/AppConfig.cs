@@ -41,7 +41,11 @@ public class AppConfig
             var key = line.Substring(0, eq).Trim();
             var value = line.Substring(eq + 1).Trim();
             if (value.StartsWith("\"") && value.EndsWith("\""))
+            {
                 value = value.Substring(1, value.Length - 2);
+                // TOML basic-string escapes: at minimum \\ -> \ (for connection-string backslashes)
+                value = value.Replace("\\\\", "\\");
+            }
             if (section == "bp")
             {
                 switch (key)
