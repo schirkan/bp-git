@@ -19,6 +19,7 @@ public class Program
         string? command = null;
         string? output = null;
         bool installHooks = false;
+        bool force = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -33,6 +34,9 @@ public class Program
                     break;
                 case "--install-hooks":
                     installHooks = true;
+                    break;
+                case "--force":
+                    force = true;
                     break;
                 case "--help":
                 case "-h":
@@ -63,6 +67,8 @@ public class Program
                 case "status":
                     StatusCommand.Run(output);
                     return 0;
+                case "commit":
+                    return await CommitCommand.RunAsync(output, force);
                 case null:
                     Console.Error.WriteLine("No command specified. Use 'bpgit --help' for usage.");
                     return 1;
@@ -87,11 +93,13 @@ public class Program
         Console.WriteLine("Options:");
         Console.WriteLine("  -o, --output <dir>     Worktree output directory (default: current dir)");
         Console.WriteLine("      --install-hooks    Install git hooks for drift detection (init only)");
+        Console.WriteLine("      --force            Required for `commit` (explicit write)");
         Console.WriteLine("  -h, --help             Show this help message");
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  init                   Initialize bp-git worktree (.bpgit/config.toml)");
         Console.WriteLine("  pull                   Export BP processes from DB to worktree");
         Console.WriteLine("  status                 Show diff between worktree and snapshot");
+        Console.WriteLine("  commit                 Write worktree changes back to BP DB (requires --force)");
     }
 }
