@@ -1,9 +1,9 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
-**Status:** Draft v0.1
+**Status:** Draft v0.2
 **Datum:** 2026-08-11
 **Autor:** bpgit-Projekt
-**Bezug:** Martin-Direktive #6295 (18:17), #6289 (17:28), #6287 (16:37), #6285 (16:29)
+**Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
 **Mitgeltend:** `SPEC-target-environment.md`, `SPEC-adapter-architecture.md`, `context/bp-cli-reference-7.5.1.md`, `context/bp-database-schema.md`
 
 ---
@@ -13,45 +13,52 @@
 ### Goals
 
 - **Git-konformer Workflow**: User nutzt ausschliesslich Standard-git-Befehle (`clone`, `pull`, `push`, `branch`, `merge`, `log`, `diff`, `status`, `fetch`, `reset`, `revert`).
-- **Lokaler MVP1-Betrieb** auf OpenClawPC (gleicher Rechner wie Blue Prism Studio).
-- **SSO-Authentifizierung** via Windows-Integrated-Auth — BP-Studio-Login = BP-DB-Login.
-- **Folder-aware Worktree** mit BP-Tree- und BP-Group-Struktur (per #6287, #6289).
-- **Atomare BP-DB-Writes** mit korrekten BPAAuditEvents (via AutomateC.exe `/import`).
-- **Read-Performance**: Initial-Pull nutzt SqlCommand direkt gegen BPAProcess + BPATree + BPAGroup + BPAGroupProcess (per Martin #6285).
+- **Self-hosted C# Server** auf OpenClawPC (kein IIS, kein Apache). Kestrel + LibGit2Sharp.
+- **SSO-Authentifizierung** via Windows-Integrated-Auth (BP-Studio-Login = BP-DB-Login).
+- **Atomare BP-DB-Writes** mit korrekten BPAAuditEvents (via AutomateC.exe `/import /forceid`).
+- **Pure-XML-Worktree**: keine Metadata-Files (kein `snapshot.json`, kein `folders.json`).
+- **Filename = derived**: Worktree-Filename ist `sanitize(BPAProcess.name)`, niemals manuell editierbar.
 
 ### Non-Goals
 
-- **Client-side Hooks** (post-checkout/post-merge im Worktree) — obsolet per Martin #6295.
+- **Client-side Hooks** (post-checkout/post-merge im Worktree) — obsolet per #6295.
 - **Multi-User-Sync** in MVP1 (single-user auf OpenClawPC).
 - **Remote-Zugriff ueber Internet** (nur lokal auf OpenClawPC, MVP1).
 - **Branch-basiertes Release-Management** via git — kann spaeter via BP-eigene Release-Mechanismen kommen.
+- **Manuelle Filename-Renames** — Renames passieren via XML-Content-Edit, nicht via `git mv` (per #6311).
 
 ---
 
 ## 2. Architektur-Uebersicht
 
 ```
-+-------------------+    git clone/push/pull       +-----------------------+    AutomateC.exe    +------------------+
-|                   |   (HTTP, Win-Auth/SSO)    |                       |    /import /        |                  |
-|   Developer       | <------------------------> |   bpgit-git-server    |    importrelease   |  Blue Prism      |
-|   Workstation     |     standard-git-protocol  |   (OpenClawPC)        | <----------------> |  Database        |
-|   (kein bpgit)    |                            |                       |    SqlCommand       |  (localdb)       |
-+-------------------+                            +-----------------------+                     +------------------+
-                                                          |
-                                                          | Hooks (server-side):
-                                                          |   post-receive -> bpgit commit --force pro XML
-                                                          |   post-checkout -> bpgit pull (Materialize)
++-------------------+    git clone/push/pull       +-------------------------+    AutomateC.exe    +------------------+
+|                   |   (HTTP, Win-Auth/SSO)    |                         |    /import /        |                  |
+|   Developer       | <------------------------> |   bpgit-git-server      |    /forceid /       |  Blue Prism      |
+|   Workstation     |     standard-git-protocol  |   (OpenClawPC)          |    /overwrite       |  Database        |
+|   (kein bpgit)    |                            |                         | <-----------------> |  (localdb)       |
++-------------------+                            |  - Kestrel HTTP         |    SqlCommand       +------------------+
+                                                |  - LibGit2Sharp         |
+                                                |  - System.Data.SqlClient|
+                                                |  - pre-/post-receive Hooks|
+                                                +-------------------------+
 ```
 
 ### Komponenten
 
 1. **Developer Workstation**: Standard `git` CLI oder Git-GUI. Auth via Windows-Integrated-Auth. **KEIN bpgit.exe lokal noetig**.
-2. **bpgit-git-server**: HTTP-Server auf OpenClawPC. Implementiert git-smart-HTTP-Protocol (via git-http-backend CGI), Windows-Auth, Server-side-Hooks fuer BP-DB-Sync.
+2. **bpgit-git-server** (C#/.NET 10): Kestrel HTTP, LibGit2Sharp fuer Git-Smart-HTTP-Protocol, server-side Hooks fuer BP-Sync.
 3. **Blue Prism Database**: SQL Server Express (localdb) auf OpenClawPC.
+
+### Hook-Skizze
+
+- **pre-receive**: Parse `git diff oldrev..newrev -- processes/`, fuer jede Aenderung: processid-Lookup + `/import /forceid /overwrite` (Push → BP-DB).
+- **post-receive**: BP-DB pollen, neue XML-Dateien in Bare-Repo schreiben (BP-DB → Push-Confirmation).
+- **post-checkout**: BPAProcess lesen, Worktree refresh (Branch-Wechsel).
 
 ---
 
-## 3. Worktree-Layout (final, per #6289)
+## 3. Worktree-Layout (final, per #6289, #6311)
 
 ```
 <worktree>/                                  # git working tree
@@ -59,61 +66,134 @@
 +-- processes/                               # Folder-aware BP-Worktree
 |   +-- Processes/                           # BPATree id=2 (gefiltert)
 |   |   +-- Default/                         # BPAGroup name="Default"
-|   |   |   +-- MP - Subprocess A.xml        # filename = BPAProcess.name + ".xml"
+|   |   |   +-- MP - Subprocess A.xml        # filename = sanitize(BPAProcess.name) + ".xml"
 |   |   |   +-- Test Process.xml
 |   |   +-- dummy/                           # BPAGroup name="dummy"
-|   |   |   +-- bp demo.xml
-|   |   +-- System Update/                   # BPAGroup name="System Update"
-|   |       +-- Microsoft Store.xml          # Process in mehreren Groups -> Duplikat
+|   |       +-- bp demo.xml
 |   +-- Objects/                             # BPATree id=3 (gefiltert)
 |       +-- Default/
 |       |   +-- Data - SQL Server.xml
 |       |   +-- Email - POP3-SMTP-IMAP.xml
-|       +-- ...
 +-- .bpgit/
-|   +-- config.toml                          # BP connection + [cli] auth section
-|   +-- snapshot.json                        # processid -> {hash, name, type, path}
-|   +-- folders.json                         # BPATree + BPAGroup + BPAGroupGroup hierarchy
+|   +-- config.toml                          # BP connection only (no snapshot)
 +-- .git/                                    # Standard git internals
 +-- .gitignore                               # excludes .bpgit/, *.bak, temp files
 ```
 
+### Worktree-Invariante (per #6311)
+
+**Filename = sanitize(BPAProcess.name).xml** — abgeleitet aus dem XML-Root-`name`-Attribut, niemals manuell editierbar.
+
+- BP-Name ist truth (Single Source of Truth).
+- Filename wird beim Pull automatisch normalisiert.
+- User editiert NUR die XML-Datei (Inhalt), nicht den Filename.
+- Manuelle `git mv`-Operationen werden vom Server toleriert, beim naechsten Pull aber rueckgaengig gemacht.
+
 ### Filename-Sanitisierung
 
-Windows verbietet `<>:"/\|?*` in Dateinamen:
+Windows verbietet `<>:"/\|?*` in Dateinamen, fuehrende/trailing Spaces sind unpraktisch:
 
 ```
 sanitize(name):
     return re.sub(r'[<>:"/\\|?*]', '_', name).rstrip('. ')
 ```
 
-**Name-Collision-Handling** (theoretisch, Demo-DB hat 0 Duplikate): bei zwei Processes mit gleichem Namen in derselben Group-Pfad → Suffix ` (guid-short)`, z.B. `MP - Subprocess A (42b5169c).xml`.
+**Beispiele:**
 
-**Filename-Extraktion** aus BPAProcess.processxml (Root-Element):
-```
-Regex: ^\s*<(process|object)\s+[^>]*\bname\s*=\s*"([^"]+)"
-Beispiel: <process name="MP - Subprocess A" ...>  ->  "MP - Subprocess A"
-```
+| BP-Name | Filename |
+|---|---|
+| `MS Excel VBO` | `MS Excel VBO.xml` |
+| `Utility - Environment` | `Utility - Environment.xml` |
+| `Prozess: Test` | `Prozess_ Test.xml` |
+| `Path/Test` | `Path_Test.xml` |
+| `Trailing. ` | `Trailing.xml` |
 
-**Nested Folders** via `BPAGroupGroup(groupid, memberid)` fuer verschachtelte Group-Hierarchie. Aktuell 0 Rows in Demo-DB, Schema vorhanden.
+### Name-Collision-Handling
+
+Theoretisch, Demo-DB hat 0 Duplicates: bei zwei Processes mit gleichem Namen in derselben Group-Pfad → Suffix ` (guid-short)`, z.B. `MP - Subprocess A (42b5169c).xml`.
+
+**Praktisch irrelevant**, weil `BPAProcess.name` in Blue Prism semantisch eindeutig sein muss (sonst scheitern Studio-Operationen).
 
 ---
 
-## 4. Git-Server Stack
+## 4. processid-Mapping (per #6311)
+
+**Kern-Insight:** `BPAProcess.processid` (Tabellen-PK) ist NICHT in `BPAProcess.processxml` enthalten. XML enthaelt nur Sub-Element-IDs (Main Window, Buttons, Stages). Root-Tag `<process name="...">` hat KEIN id-Attribut.
+
+**Mapping-Loesung:** Lookup zur Laufzeit via DB-Query auf `BPAProcess.name`.
+
+### Processid-Aufloesung pro Operation
+
+| Git-Diff-Status | Alter Name (Filename) | Neuer Name (XML-Root) | BP-Aktion |
+|---|---|---|---|
+| `M` | "X" | "X" (gleich) | DB-Lookup `WHERE name='X'` → processid → `/import /forceid /overwrite <file>` |
+| `M` (Rename via XML) | "Old" | "New" (≠) | DB-Lookup `WHERE name='New'` (0 Treffer), dann `WHERE name='Old'` (1 Treffer) → processid → `/import /forceid /overwrite <file>` (Name + Content-Update in einem Schritt) |
+| `A` | — | "New" | DB-Lookup `WHERE name='New'` (0 erwartet) → `/import <file>` (BP legt neuen Prozess an, /forceid NICHT noetig) |
+| `D` | "Gone" | — | DB-Lookup `WHERE name='Gone'` → wenn 1 Treffer: Prozess loeschen (BPAAuditEvent sCode=P005 manuell, oder direkt DELETE) |
+| `R` (git mv) | "Old" | "New" | Wie Modify-Rename-Fall: processid via old-name-Lookup → `/forceid /overwrite <new-path>`; Pull-Normalisierung schreibt spaeter canonical Filename |
+
+### Rename-Walkthrough (komplett)
+
+**Phase 1 — User renamed via XML im Worktree:**
+
+1. User oeffnet `processes/Objects/Default/Old Name.xml`, aendert `<process name="Old Name">` → `<process name="New Name">`. Speichert unter gleichem Filename.
+2. `git add . && git commit -m "rename: Old Name -> New Name" && git push`
+3. Server `pre-receive`:
+   - `git diff oldrev..newrev -- processes/` zeigt **Modify** auf `Old Name.xml`
+   - XML-Root: `<process name="New Name">` → name="New Name"
+   - Filename: `Old Name.xml` → alter Name implizit: "Old Name"
+   - DB-Lookup `WHERE name='New Name'` → 0 Treffer
+   - DB-Lookup `WHERE name='Old Name'` → processid `42b5169c-...`
+   - **`/import /forceid 42b5169c-... /overwrite <tmpfile>`**
+   - BP aktualisiert `BPAProcess.name="New Name"` + `processxml=<...New Name...>`, schreibt BPAAuditEvent (sCode=P006)
+4. Server `post-receive` schreibt canonical Filename:
+   - Schreibt `processes/Objects/Default/New Name.xml` (mit neuem XML)
+   - Loescht `processes/Objects/Default/Old Name.xml`
+   - Git committet dies als **Auto-Rename** (Similarity-Match), History bleibt erhalten
+
+**Phase 2 — User renamed in BP Studio:**
+
+1. User benennt Prozess in BP Studio: "Old Name" → "New Name"
+2. BP aktualisiert `BPAProcess.name` + `processxml`, schreibt BPAAuditEvent (sCode=P006)
+3. User `git pull`
+4. Server `post-checkout` Hook (oder post-receive falls Push-getriggert):
+   - Liest `BPAProcess.name="New Name"` → schreibt `New Name.xml`
+   - Loescht `Old Name.xml`
+   - Git committet als **Auto-Rename** (Similarity-Match)
+
+**Phase 3 — git mv (manuell, unerwuenscht):**
+
+1. User `git mv Old Name.xml Renamed.xml` (kein XML-Content-Edit)
+2. Push
+3. Server `pre-receive`:
+   - Sieht **R100** (pure Rename, kein Content-Change)
+   - Alter Name (aus old path): "Old Name"
+   - Neuer Name (aus XML-Root): "Old Name" (unveraendert)
+   - DB-Lookup `WHERE name='Old Name'` → processid
+   - `/import /forceid <pid> /overwrite Renamed.xml`
+4. Server `post-receive` normalisiert:
+   - Schreibt canonical `Old Name.xml` (weil XML-Name immer noch "Old Name")
+   - Loescht `Renamed.xml`
+   - `git mv` wird effektiv rueckgaengig gemacht
+5. Optional: Warning-Log fuer Diagnostics
+
+---
+
+## 5. Git-Server Stack (Self-hosted C#)
 
 | Schicht | Komponente |
 |---|---|
-| HTTP-Frontend | `git-http-backend` (in git.exe enthalten) als CGI-Wrapper |
-| Webserver | Apache oder IIS (Windows-nativ) als Reverse Proxy |
-| Auth | Windows-Integrated-Auth (mod_auth_windows oder IIS integrated) |
-| Backend | bpgit-git-server (.NET 10) fuer Hooks + Worktree-Materialization |
-| BP-Integration | AutomateC.exe `/import` (writes) + SqlCommand direkt (reads) |
+| HTTP-Frontend | **Kestrel** (.NET 10 in-process HTTP-Server) |
+| Git-Protocol | **LibGit2Sharp** (managed Git-Library) |
+| Auth | **Windows-Integrated-Auth** via Kestrel + Negotiate/NTLM |
+| BP-Integration | AutomateC.exe `/import /forceid /overwrite` (writes) + SqlCommand direkt (reads) |
+| Config | `C:\bpgit\bpgit-server.json` (DB-Connection, Listen-URL, Hook-Config) |
 
-### Endpoints
+### Endpoints (git-smart-HTTP)
 
 | Endpoint | Methode | Zweck | Auth |
 |---|---|---|---|
-| `/info/refs` | GET | git-discovery (refs) | Win-Auth |
+| `/info/refs` | GET | git-discovery (refs advertisement) | Win-Auth |
 | `/git-upload-pack` | POST | git-fetch/clone | Win-Auth |
 | `/git-receive-pack` | POST | git-push | Win-Auth |
 | `/bpgit/status` (optional) | GET | BP-Status, Last-Sync-Zeit | Win-Auth |
@@ -128,216 +208,253 @@ ls processes/Processes/Default/   # folder-aware materialisiert
 ```
 
 Server-Flow:
-1. Auth via Windows-Integrated-Auth (Domänen-Credentials)
-2. git-http-backend servt initial git-protocol (refs, upload-pack)
-3. Server-Hook init-clone: `bpgit pull` materialisiert Worktree aus BP-DB
-4. User erhaelt Worktree mit folder-aware Layout
+1. Auth via Windows-Integrated-Auth (Domaenen-Credentials)
+2. Kestrel handled HTTP-Request, ruft LibGit2Sharp fuer git-smart-HTTP
+3. Bare-Repo servt initial git-protocol (refs, upload-pack)
+4. Server-Hook post-checkout: `bpgit pull` materialisiert Worktree aus BP-DB (alle Processes + Folder-Layout + canonical Filenames)
+5. User erhaelt Worktree mit folder-aware Layout
 
 ### Beispiel: git push
 
 ```bash
 $EDITOR "processes/Processes/Default/MP - Subprocess A.xml"
+# aendere XML-Inhalt (z.B. <process name="..."> oder Sub-Elemente)
 git add .
 git commit -m "Update MP - Subprocess A"
 git push
 ```
 
 Server-Flow:
-1. Auth + push via git-receive-pack
-2. Server-Hook post-receive: fuer jede geaenderte XML-Datei:
-   - Lese Worktree-XML
-   - Look up processid via snapshot.json
-   - StripLeadingXmlComments (per #6277)
-   - `AutomateC.exe /import <tmpfile> /forceid <guid> /overwrite`
-   - BPAAuditEvents wird von BP-Runtime automatisch geschrieben (sCode=P006)
-3. Server aktualisiert snapshot.json + folders.json
-4. User sieht Push-Confirmation
+1. Auth + push via git-receive-pack (LibGit2Sharp)
+2. Server-Hook pre-receive: parse `git diff oldrev..newrev` (siehe #4):
+   - Pro Aenderung: processid-Lookup, dann `AutomateC.exe /import /forceid /overwrite`
+   - BPAAuditEvents wird von BP-Runtime geschrieben (sCode=P006)
+3. Server-Hook post-receive: BP-DB pollen, neue XML-Dateien schreiben, alte loeschen (canonical Filename-Normalisierung)
 
 ---
 
-## 5. Auth-Modell (MVP1)
+## 6. Auth-Modell (MVP1)
 
 **Windows-Integrated-Auth** (SSO via Domaenen-Credentials):
 
-- **Apache**: `mod_auth_windows` mit `SspiOn` Konfiguration
-- **IIS**: integrated Windows Authentication (Negotiate/NTLM)
-- **Kein Passwort-Prompt** fuer Domaenen-User
-
-**Keine separate User-Verwaltung**:
+- Kestrel konfiguriert mit `Authentication.Schemes = Negotiate | NTLM`
 - BP-Studio-Login = BP-DB-Login (Windows User wird via SSPI an SQL Server weitergereicht)
-- bpgit-git-server leitet Windows-User an BP-DB weiter (`[cli] auth = "sso"`)
+- bpgit-git-server leitet Windows-User an BP-DB weiter (`auth = "sso"`)
 - BP-Audit-Log (BPAAuditEvents.gSrcUserID) zeigt den Windows-User
+
+**Keine separate User-Verwaltung** im MVP1.
 
 **MVP1-Limitation**: single-user auf OpenClawPC. Multi-User-Sync erfordert BP-Lizenz-Erweiterung + Locking-Strategie (MVP2+).
 
 ---
 
-## 6. Server-Side Hooks (ersetzen Client-side Hooks)
+## 7. Server-Side Hooks
 
 | Hook | Trigger | Aktion |
 |---|---|---|
-| `init-clone.sh` | einmalig nach `git clone` | `bpgit pull` materialisiert Worktree |
-| `post-receive.sh` | nach jedem `git push` | pro geaenderte XML: `bpgit commit --force` |
-| `post-checkout.sh` | nach `git checkout` (Branch-Wechsel) | `bpgit pull` refresht Worktree |
+| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) |
+| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Aenderung |
+| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files loeschen |
 
-**Keine Client-Side Hooks** im Worktree — `bpgit.exe` ist nicht im Worktree noetig, nur am Server. Phase 2c (`bpgit hook install`) wird obsolet (Card `98e9d43f-...` als obsolet markiert).
+**Hook-Implementierung**: C# DelegatedHandler in bpgit-git-server (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
 
-### Beispiel: post-receive.sh
+### Beispiel: pre-receive (Pseudocode)
 
-```bash
-#!/bin/bash
-# C:/bpgit/repos/bp-git/hooks/post-receive.sh
-while read oldrev newrev refname; do
-    # Diff old..new, finde geaenderte XML-Dateien
-    changed=$(git diff --name-only $oldrev..$newrev | grep '\.xml$')
-    for f in $changed; do
-        # bpgit commit --force liest Worktree-XML und schreibt via AutomateC.exe
-        bpgit commit --force "$f"
-    done
-done
-```
-
----
-
-## 7. Snapshot-Format
-
-Erweitert um `path`-Field fuer processid → worktree-path-Mapping:
-
-```json
+```csharp
+async Task<PreReceiveResult> HandlePreReceiveAsync(string oldrev, string newrev, string refname)
 {
-  "version": 2,
-  "extractedAt": "2026-08-11T18:00:00Z",
-  "processes": {
-    "42b5169c-1fde-4a1a-b912-4d1249805188": {
-      "hash": "sha256:682123330adbfef6765781fa4209ccbe1525e9f08efafbd4e2c5bcfe6bd5ea1c",
-      "name": "MP - Subprocess A",
-      "type": "P",
-      "path": "processes/Processes/Default/MP - Subprocess A.xml"
-    },
-    "e83e413e-b3c7-493b-9f52-3d9d0818b15c": {
-      "hash": "sha256:ad2c957cc1728722c9814834a7c201ca41e166f6b935c0db14ec4c124a7cbfed",
-      "name": "MP - System Update",
-      "type": "P",
-      "path": "processes/Processes/Default/MP - System Update.xml"
+    var diff = await _gitService.GetDiffAsync(oldrev, newrev, "processes/");
+    foreach (var change in diff)
+    {
+        switch (change.Status)
+        {
+            case "M":
+                var xmlContent = await _gitService.GetBlobAsync(newrev, change.NewPath);
+                var newName = ExtractProcessName(xmlContent);
+                var oldName = Path.GetFileNameWithoutExtension(change.OldPath);
+                var processId = await _bpService.LookupProcessIdAsync(newName)
+                                ?? await _bpService.LookupProcessIdAsync(oldName);
+                if (processId is null) { /* Skip or Error */ continue; }
+                await _bpService.ImportAsync(processId.Value, xmlContent, force: true);
+                break;
+
+            case "A":
+                var addName = ExtractProcessName(await _gitService.GetBlobAsync(newrev, change.NewPath));
+                await _bpService.ImportNewAsync(addName, xmlContent);
+                break;
+
+            case "D":
+                var deleteName = Path.GetFileNameWithoutExtension(change.OldPath);
+                var deleteId = await _bpService.LookupProcessIdAsync(deleteName);
+                if (deleteId is not null) await _bpService.DeleteAsync(deleteId.Value);
+                break;
+
+            case "R":
+                // Wie M mit Rename-Logik (old-name → new-name)
+                // Server-Pull normalisiert spaeter auf canonical Filename
+                break;
+        }
     }
-  },
-  "folders": {
-    "trees": [
-      {"id": 2, "name": "Processes"},
-      {"id": 3, "name": "Objects"}
-    ],
-    "groups": [
-      {"id": "FCEF128D-09E9-4AD4-A6F0-37B673BC300A", "treeId": 2, "name": "Default"},
-      {"id": "CCC17E80-9C06-49F6-88C1-98421E09A7D4", "treeId": 3, "name": "dummy"}
-    ],
-    "nestedGroups": [],
-    "memberships": [
-      {"groupId": "FCEF128D-...", "processId": "42b5169c-..."},
-      {"groupId": "CCC17E80-...", "processId": "4AFB82B2-..."}
-    ]
-  }
+    return PreReceiveResult.Ok();
 }
 ```
 
-`folders`-Section ist optional (kann auch nur via BP-Schema on-the-fly ermittelt werden).
+### Hook-Implementierung: post-receive (Pseudocode)
+
+```csharp
+async Task HandlePostReceiveAsync(string oldrev, string newrev, string refname)
+{
+    await _bpService.SyncToGitAsync();  // BPAProcess lesen, canonical Filenames schreiben
+    // Git erkennt Auto-Renames automatisch (Similarity-Match)
+}
+```
 
 ---
 
-## 8. BP-Synchronization-Flow
+## 8. Snapshot-Format
+
+**Kein Snapshot im Worktree.** Processid-Mapping erfolgt zur Laufzeit via DB-Lookup.
+
+**Kein `.bpgit/snapshot.json`** im Worktree, **kein `.bpgit/folders.json`**.
+
+`config.toml` (in `.bpgit/`) enthaelt nur BP-Connection-Config (kein processid-Tracking):
+
+```toml
+[bp]
+server = "(localdb)\\BluePrismLocalDB"
+database = "BluePrism"
+auth = "sso"  # Windows-Integrated-Auth
+
+[paths]
+processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
+```
+
+**Kein Bloat im Worktree** — pure git, pure XML.
+
+---
+
+## 9. BP-Synchronization-Flow
 
 ### Pull-Flow (git clone, git pull)
 
-`bpgit pull` (server-side, von post-checkout Hook aufgerufen):
+`post-checkout` Hook (oder initial-clone Handler):
 
 1. SqlCommand direkt gegen `BPAProcess` (alle Rows, Filter optional)
 2. SqlCommand gegen `BPATree` (Filter: name IN ('Processes', 'Objects'))
 3. SqlCommand gegen `BPAGroup` + `BPAGroupGroup` (rekursiv fuer nested folders)
 4. SqlCommand gegen `BPAGroupProcess` (M:N-Mapping)
-5. Fuer jeden Process:
+5. **Worktree-Cleanup**: alle existierenden Files unter `processes/` loeschen (verhindert stale Filenames)
+6. Fuer jeden Process:
    - Filename aus `BPAProcess.processxml` extrahieren (Regex `<(process|object) ... name="..."`)
-   - Path = `<TreeName>/<GroupName>/.xml`
    - Sanitize filename (Windows-Inkompatible Zeichen ersetzen)
-   - Write XML zu worktree
-   - Update snapshot.json mit path-Field
-6. folders.json mit Hierarchy aktualisieren
+   - Path = `<TreeName>/<GroupName(s)>/<sanitized(name)>.xml`
+   - Write XML zu worktree (canonical Filename)
+7. Git committet Aenderungen als Auto-Renames (wo applicable)
 
 **Performance-Hinweis** (per Martin #6285): NIEMALS AutomateC.exe `/export` fuer Pull — zu langsam. SqlCommand direkt ist Pflicht.
 
 ### Push-Flow (git push)
 
-`post-receive Hook`:
+`pre-receive` Hook (siehe #7 Pseudocode):
 
-1. `git diff --name-only oldrev..newrev` → Liste geaenderter XML-Dateien
-2. Fuer jede geaenderte XML:
-   - Read snapshot.json → processid
-   - StripLeadingXmlComments (BP-Parser toleriert keine Leading Comments — siehe #6277)
-   - Write temp file
-   - `AutomateC.exe /import <tmpfile> /forceid <guid> /overwrite`
-   - BPAAuditEvents wird von BP-Runtime geschrieben (sCode=P006)
-3. Fuer geloeschte XMLs: warnen (CLI unterstuetzt kein Process-Delete, manuell in BP Studio)
+1. Parse `git diff oldrev..newrev -- processes/`
+2. Fuer jede Aenderung (M/A/D/R) → processid-Lookup + `/import` (siehe #4 Tabelle)
+3. Bei Fehler: Push ablehnen mit klarer Fehlermeldung
+4. Bei Erfolg: BPAAuditEvents wird automatisch geschrieben (sCode=P006)
+
+`post-receive` Hook:
+
+1. `bpgit pull`-equivalent: BP-DB pollen, canonical Filenames schreiben
+2. Git erkennt Auto-Renames (Similarity-Match), History bleibt erhalten
 
 ### Initial-Push (leeres Repo)
 
-1. `bpgit init` erstellt Worktree mit folder-aware Layout aus BP-DB
+1. `bpgit init` (server-side Admin-Tool) erstellt Bare-Repo + Bare-Repo-Worktree mit folder-aware Layout
 2. `git add . && git commit -m "Initial import"`
-3. `git push origin main` → Server-Hook ruft `bpgit commit` fuer alle XML-Dateien
+3. User clone: `git clone http://openclawpc:8181/bp-git`
 
 ---
 
-## 9. Conflicts & Lock-Handling
+## 10. Conflicts & Lock-Handling
 
-### Optimistic Locking via lastmodifieddate
+### Optimistic Locking via lastmodifieddate (MVP1)
 
-- `bpgit commit` liest `lastmodifieddate` aus snapshot.json (zum Zeitpunkt des letzten Pull)
+- `pre-receive` Hook liest `BPAProcess.lastmodifieddate` zum Zeitpunkt des letzten Pulls (aus serverseitigem Cache, optional)
 - Vergleicht mit aktuellem Wert in BPAProcess
-- Wenn abweichend → Konflikt → User muss `git pull` zuerst
+- Wenn abweichend → Konflikt → Push ablehnen mit Hinweis "BP process was modified outside bpgit, please pull first"
 
 ### BPAProcessLock
 
-- Vor `bpgit commit` → Check `BPAProcessLock.userid`
-- Wenn Lock vorhanden → Lock-Owner anzeigen, bpgit commit abbrechen
-- `--force` Flag → Lock ignorieren (mit Warnung)
+- Vor `pre-receive` → Check `BPAProcessLock.userid`
+- Wenn Lock vorhanden und nicht von current-user → Lock-Owner anzeigen, Push ablehnen
+- Optional: `--force` Flag fuer Admin-Override
 
 ### Multi-User (MVP2, nicht MVP1)
 
 - Pessimistic Locking via `BPAProcessLock` (BP-Studio setzt automatisch beim Edit)
-- bpgit commit respektiert Locks
+- bpgit-git-server respektiert Locks
 - Konflikt-Resolution: User A locked, User B wartet oder benutzt `--force`
 
 ---
 
-## 10. Deployment (MVP1)
+## 11. CLI-Reduktion (per #6295)
+
+### Subcommands — End-State
+
+| Subcommand | Status | Zweck |
+|---|---|---|
+| `bpgit server start` | Admin | Startet bpgit-git-server (Kestrel) |
+| `bpgit server stop` | Admin | Stoppt bpgit-git-server |
+| `bpgit server status` | Admin | Server-Health (letzte Pull-Zeit, pending Hooks) |
+| `bpgit init` | Admin | Initialisiert Bare-Repo auf Server (einmalig) |
+| `bpgit pull` | Internal | Server-side Materialization (von Hook aufgerufen) |
+| `bpgit log` | Diagnostic | BPAAuditEvents aus BP-DB (per-User-Audit) |
+| `bpgit status` | Deprecated | Nutze stattdessen `git status` |
+| `bpgit diff` | Deprecated | Nutze stattdessen `git diff` |
+| `bpgit commit` | Deprecated | Nutze stattdessen `git push` (server-side Hook macht den Rest) |
+| `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit-git-server (kein Shell-Script noetig) |
+
+### CLI-Executable
+
+- `bpgit.exe` bleibt im PATH **nur auf dem Server** (OpenClawPC)
+- User benoetigt KEIN `bpgit.exe` lokal — nur `git`
+
+---
+
+## 12. Deployment (MVP1)
 
 ### Voraussetzungen
 
 - Windows 10/11 (OpenClawPC, gleicher Rechner wie BP Studio)
 - BP Studio + `(localdb)\BluePrismLocalDB` installiert
-- Git for Windows (mit git-http-backend in `mingw64/libexec/git-core/`)
-- Apache oder IIS als Reverse-Proxy
-- .NET 10 (fuer bpgit-git-server)
+- Git for Windows (fuer Clients — kein git-http-backend noetig, alles in C#)
+- .NET 10 SDK + ASP.NET Core Runtime
+- bpgit-git-server Binary (self-contained .NET 10 Publish)
 
 ### Schritte
 
-1. **Apache/IIS installieren** (falls nicht vorhanden).
-2. **Reverse-Proxy konfigurieren** fuer `git-http-backend`:
-   ```apache
-   # Apache example (Windows)
-   SetEnv GIT_PROJECT_ROOT "C:/bpgit/repos"
-   SetEnv GIT_HTTP_EXPORT_ALL
-   ScriptAliasMatch \
-       "(?x)^/(.*/(HEAD|info/refs|objects/(info/[^/]+|[0-9a-f]{2}/[0-9a-f]{38}|pack/pack-[0-9a-f]{40}\.(pack|idx)))$" \
-       "C:/Program Files/Git/mingw64/libexec/git-core/git-http-backend.exe/$1"
+1. **bpgit-git-server installieren** nach `C:\bpgit\bin\bpgit-server.exe`
+2. **Konfiguration** in `C:\bpgit\bpgit-server.json`:
+   ```json
+   {
+     "ListenUrls": ["http://openclawpc:8181"],
+     "BpServer": "(localdb)\\BluePrismLocalDB",
+     "BpDatabase": "BluePrism",
+     "BpAuth": "sso",
+     "RepoRoot": "C:\\bpgit\\repos",
+     "RepoName": "bp-git"
+   }
    ```
-3. **Windows-Auth aktivieren** (Apache `mod_auth_windows` / IIS integrated).
-4. **bpgit-git-server Binary** installieren nach `C:\bpgit\bin\`.
-5. **PATH-Variable** erweitern um `C:\bpgit\bin\` (fuer AutomateC.exe + bpgit).
-6. **Git-Repository initialisieren**:
+3. **Bare-Repo initialisieren**:
    ```bash
-   cd "C:/bpgit/repos/bp-git"
-   git init --bare
-   bpgit init
+   cd "C:/bpgit/repos"
+   bpgit-server init bp-git   # erstellt bare repo + initial materialization
    ```
-7. **Hooks installieren** in `C:/bpgit/repos/bp-git/hooks/` (siehe #6).
+4. **bpgit-git-server starten** als Windows-Service oder manuell:
+   ```bash
+   bpgit-server start
+   ```
+5. **Windows-Firewall**: Port 8181 (oder gewaehlter Port) fuer lokales Subnetz freigeben.
 
 ### Beispiel-Aufruf (Developer)
 
@@ -351,47 +468,24 @@ ls processes/Processes/Default/
 
 # Edit + push (Standard-git)
 $EDITOR "processes/Processes/Default/MP - Subprocess A.xml"
+# aendere nur XML-Inhalt, NICHT den Filename
 git add .
 git commit -m "Update MP - Subprocess A"
-git push  # server-side bpgit commit --force schreibt in BP-DB
+git push  # server-side bpgit-git-server pre-receives und ruft /import /forceid
 
 # Pull (Standard-git, refresht von BP-DB)
-git pull  # server-side bpgit pull materialisiert Updates
+git pull  # server-side post-checkout materialisiert Updates + canonical Filenames
 ```
 
 ---
 
-## 11. CLI-Reduktion (per #6295)
-
-### Subcommands — End-State
-
-| Subcommand | Status | Zweck |
-|---|---|---|
-| `bpgit init` | Admin | Initialisiert `.bpgit/config.toml` in Worktree (post-clone) |
-| `bpgit server start/stop` | Admin | Startet/stoppt bpgit-git-server |
-| `bpgit server status` | Admin | Server-Health (letzte Pull-Zeit, pending Hooks) |
-| `bpgit pull` | Internal | Server-side materialization (von Hook aufgerufen) |
-| `bpgit commit` | Internal | Server-side write (von Hook aufgerufen) |
-| `bpgit log` | Diagnostic | BPAAuditEvents aus BP-DB (per-User-Audit) |
-| `bpgit status` | Deprecated | Nutze stattdessen `git status` |
-| `bpgit diff` | Deprecated | Nutze stattdessen `git diff` |
-| `bpgit hook install` | **Obsolet** | Server-side Hooks via git-http-backend |
-
-### CLI-Executable
-
-- `bpgit.exe` bleibt im PATH **nur auf dem Server** (OpenClawPC)
-- User benoetigt KEIN `bpgit.exe` lokal — nur `git`
-
----
-
-## 12. Migration Path
+## 13. Migration Path
 
 ### Bestehende CLI-User → Git-Server
 
-1. **Git-Server deployen** (per #10)
-2. **Initial-Repo erstellen** auf einem Workstation: `git clone <server-url>` → Worktree wird materialisiert
-3. **Bestehende Worktrees committen**: `git add . && git commit -m "Initial import"` → `git push`
-4. **Andere User migrieren**: `git remote add bp-server <url> && git push bp-server main`
+1. **Git-Server deployen** (per #12)
+2. **Initial-Repo erstellen**: `bpgit-server init bp-git` → Bare-Repo mit folder-aware Layout
+3. **Andere User migrieren**: `git clone http://openclawpc:8181/bp-git` → Worktree wird materialisiert
 
 ### Ein-Weg-Migration
 
@@ -405,7 +499,7 @@ Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implem
 
 ---
 
-## 13. Open Questions
+## 14. Open Questions
 
 | Frage | Kontext | Entscheidung noetig |
 |---|---|---|
@@ -416,34 +510,49 @@ Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implem
 | Branch-Strategie | main + feature-branches? | Standard-git, User-Entscheidung |
 | Tag-Strategie | Tags fuer Releases? | Optional, Git-Standard |
 | Release-Integration mit BPARelease | git tag → BPARelease? | Nicht MVP1 |
+| Filename-Conflict-Strategie bei Rename + Edit | Similarity < 50% | Martin: ggf. -M30 Threshold, oder User-Commit-Marker |
 
 ---
 
-## 14. Implementation Roadmap
+## 15. Implementation Roadmap
 
 | Schritt | Status | Aufwand |
 |---|---|---|
-| **c) SPEC-git-server.md** (dieses Dokument) | **dieser Schritt** | done |
-| **a) SnapshotEntry + PullCommand folder-aware** | offen | 2-3h |
-| bpgit-git-server Implementation in C# (.NET 10) | offen | 1-2 Wochen |
-| Apache/IIS-Config fuer git-http-backend + Windows-Auth | offen | 2-3h |
-| Hook-Scripts in `C:/bpgit/repos/bp-git/hooks/` | offen | 1-2h |
+| SPEC-git-server.md (dieses Dokument) | done | — |
+| SPEC-adapter-architecture.md updaten (Worktree-Layout + processid-Mapping) | offen | 30 min |
+| README-bpgit-git.md (End-User-Doku) | offen | 1 h |
+| AGENTS.md Status-Update | offen | 10 min |
+| Workboard-Cards fuer Doku-Review + Impl-Phasen | offen | 20 min |
+| **bpgit-git-server** Implementation in C# (.NET 10) | offen | 1-2 Wochen |
+| - Kestrel HTTP + Win-Auth | | |
+| - LibGit2Sharp git-smart-HTTP | | |
+| - pre-receive Hook (processid-Lookup + /import) | | |
+| - post-receive Hook (BP-DB-Sync + canonical Filenames) | | |
+| - post-checkout Hook (Worktree-Materialization) | | |
 | MVP1-Deployment auf OpenClawPC | offen | 1 Tag |
 | End-to-End-Test: clone → edit → commit → push → verify in BP Studio | offen | 1-2 Tage |
-| Dokumentation fuer End-User (`README-bpgit-git.md`) | offen | 1 Tag |
+| Cleanup Demo-DB (1 zusaetzliche BPARelease-Row aus /importrelease-Test) | offen | 10 min |
 
 ---
 
-## 15. References
+## 16. References
 
-- **Martin-Direktive #6295** (18:17): Git-Server > CLI + Hooks
+- **Martin-Direktive #6313** (21:49): Erst Doku/Specs schreiben, danach implementieren
+- **Martin-Direktive #6311** (21:42): Filename ist abgeleitet aus XML-Name, nicht manuell editierbar
+- **Martin-Direktive #6309** (21:25): processid-Mapping via git-diff (alte Filenames verfuegbar via R-Status)
+- **Martin-Direktive #6307** (20:57): UI-Import ohne /forceid (Name-Lookup), CLI-Import mit /forceid moeglich
+- **Martin-Direktive #6295** (18:17): Git-Server > CLI + Hooks, self-hosted
 - **Martin-Direktive #6289** (17:28): Worktree-Layout (kein meta.json, filename = process.name, kein per-Process-Subfolder)
 - **Martin-Direktive #6287** (16:37): Folder-Struktur + git-server lokal auf BP-Studio-Maschine (SSO moeglich)
 - **Martin-Direktive #6285** (16:29): Folder-Struktur existiert, Initial-Pull DB-direct (kein CLI-Export)
-- **Martin-Direktive #6277** (12:43): `StripLeadingXmlComments` Helper in CommitCommand.cs (Leading-Comments brechen BP's /import-Parser)
+- **Martin-Direktive #6277** (12:43): `StripLeadingXmlComments` Helper (Leading-Comments brechen BP's /import-Parser)
 - **Martin-Direktive #6274** (11:42): bpgit commit via AutomateC.exe /import (audit-konform)
-- **Martin-Direktive #6271** (10:00): CLI-Doku 7.5.1 in context/ (siehe `context/bp-cli-reference-7.5.1.md`)
+- **Martin-Direktive #6271** (10:00): CLI-Doku 7.5.1 in context/
 - `SPEC-target-environment.md` (OpenClawPC, .NET 10, git, BP)
 - `SPEC-adapter-architecture.md` (DB-direct write, BP-Cli-Bridge-Architecture)
 - `context/bp-cli-reference-7.5.1.md` (AutomateC.exe CLI-Referenz)
 - `context/bp-database-schema.md` (BP-Schema-Dokumentation)
+- Empirische Befunde:
+  - `processid` ist NICHT in XML (siehe `temp/probe-xml-processid.ps1`)
+  - BPAAuditEvents.oldXML + newXML vorhanden (fuer Historie)
+  - BP-LocalDB nutzt native Auth (`auth = "user"`), nicht SSO

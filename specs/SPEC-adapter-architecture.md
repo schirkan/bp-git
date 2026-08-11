@@ -1,50 +1,47 @@
 # SPEC — BP-Git-Adapter-Architektur
 
-Stand: 2026-08-10 (Martin-Anforderung 17:02 GMT+2)
-Status: draft v2 — License-Guard entfernt, Bridge-Architektur hinzugefügt
-Bezieht sich auf: [SPEC-target-environment.md](./SPEC-target-environment.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
+**Stand:** 2026-08-11 (v3 — Git-Server-Architektur)
+**Status:** draft v3 — Worktree-Layout final, processid-Mapping via git-diff
+**Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [context/SPEC-git-server.md](../context/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
 ## Ziel
 
-Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentationen von Processes / Objects / Releases werden im Dateisystem sicht- und editierbar; Versionsverwaltung über Standard-Git-Befehle (`git diff`, `git commit`, `git log`, `git status`).
+Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentationen von Processes / Objects werden im Dateisystem sicht- und editierbar; Versionsverwaltung über Standard-Git-Befehle. Der Adapter läuft als self-hosted C#-Server (Kestrel + LibGit2Sharp) auf OpenClawPC — kein IIS, kein Apache, kein bpgit-CLI auf Developer-Workstations.
+
+> **Detaillierte Server-Architektur, Hook-Implementation, Deployment**: siehe [`context/SPEC-git-server.md`](../context/SPEC-git-server.md). Dieses Dokument beschreibt die **Adapter-Domain-Logik** (Worktree-Layout, processid-Mapping, XML-Serialisierung, Sanitisierung).
 
 ## High-Level-Architektur
 
-<pre>
-  ┌────────────────────────────────────────────────────────────────────┐
-  │  Developer Workstation (Windows 11 / .NET 10)                       │
-  │                                                                    │
-  │   ┌──────────────┐  ┌──────────────────┐  ┌──────────────────────┐ │
-  │   │  bp-git Repo  │◄─┤  Adapter CLI      │◄─┤  BP DB               │ │
-  │   │  *.bpprocess  │  │  (dotnet bpgit)   │  │  (localdb)\…LocalDB  │ │
-  │   │  *.bpobject   │  └────────┬─────────┘  └──────────────────────┘ │
-  │   │  *.bprelease  │           │                                    │
-  │   └──────┬───────┘           │  SqlClient (Win-Auth)             │
-  │          │                   │  + Dapper-Mapping                   │
-  │          │                   │                                    │
-  │   ┌──────▼───────┐                                                 │
-  │   │  git CLI /    │                                                 │
-  │   │  VS Code      │                                                 │
-  │   └──────────────┘                                                 │
-  └────────────────────────────────────────────────────────────────────┘
-</pre>
+```
++-------------------+    git clone/push/pull       +-------------------------+    AutomateC.exe    +------------------+
+|                   |   (HTTP, Win-Auth/SSO)    |                         |    /import /        |                  |
+|   Developer       | <------------------------> |   bpgit-git-server      |    /forceid /       |  Blue Prism      |
+|   Workstation     |     standard-git-protocol  |   (OpenClawPC)          |    /overwrite       |  Database        |
+|   (kein bpgit)    |                            |                         | <-----------------> |  (localdb)       |
++-------------------+                            |  - Kestrel HTTP         |    SqlCommand       +------------------+
+                                                |  - LibGit2Sharp         |
+                                                |  - pre-/post-receive Hooks|
+                                                +-------------------------+
+```
 
-## Komponenten (.NET, C# 13)
+**Developer Workstation** führt ausschliesslich Standard-git aus — kein `bpgit.exe`, keine Hooks, kein BP-CLI. **bpgit-git-server** auf OpenClawPC hält die BP-DB-Verbindung und führt alle Hooks serverseitig aus.
 
-### 1. Adapter-CLI (`BPGit.Cli`)
+## Komponenten (.NET 10, C# 13)
 
-`dotnet`-basiertes Konsolen-Tool mit Subcommands analog zu Git:
+### 1. bpgit-git-server (`BPGit.Server`)
 
-| Subcommand | Funktion |
+Kestrel-basierter HTTP-Server mit LibGit2Sharp für git-smart-HTTP-Protocol:
+
+| Modul | Aufgabe |
 |---|---|
-| `bpgit init` | Initialisiert bp-git-Worktree aus BP-Instanz (konfiguriert `config.toml`, ggf. Hooks, initialer Pull + git-Initial-Commit) |
-| `bpgit status` | Zeigt Diffs Worktree ↔ DB (lokal modifiziert + DB-Drift) |
-| `bpgit pull` | Exportiert aktuellen BP-Stand → Worktree, schreibt Snapshot |
-| `bpgit commit` | Worktree → DB-Import (Round-Trip-Write) — explizit `--force`-Flag |
-| `bpgit log` | BP-History aus `BPAProcessBackup` (statt git-log) |
-| `bpgit diff` | Unified-Diff Worktree vs. DB-Snapshot |
-
-Package: `BPGit.Cli` mit `<OutputType>Exe</OutputType>`, referenziert die anderen Packages.
+| `KestrelListener` | HTTP-Listener auf konfigurierbarem Port (Default 8181) |
+| `WindowsAuthHandler` | Negotiate/NTLM-Authentifizierung |
+| `GitHttpHandler` | git-smart-HTTP (`/info/refs`, `/git-upload-pack`, `/git-receive-pack`) via LibGit2Sharp |
+| `PreReceiveHook` | Processid-Lookup + `AutomateC.exe /import /forceid /overwrite` |
+| `PostReceiveHook` | BP-DB → canonical Filenames schreiben |
+| `PostCheckoutHook` | Worktree-Materialization bei `git clone` und `git checkout` |
+| `BpDbService` | SqlCommand-Zugriff auf BPAProcess + BPATree + BPAGroup + BPAGroupProcess + BPAAuditEvents |
+| `AutomateCRunner` | Process.Start-Wrapper für AutomateC.exe `/import /importrelease /export` |
 
 ### 2. Data-Layer (`BPGit.Data`)
 
@@ -53,303 +50,238 @@ POCOs für die Kern-BPA*-Tabellen, Dapper-Mapping:
 | DTO | Quell-Tabellen |
 |---|---|
 | `Process` | `BPAProcess`, `BPAProcessAttribute`, `BPAProcessBackup` |
+| `ProcessAuditEvent` | `BPAAuditEvents`, LEFT JOIN `BPAUser`, LEFT JOIN `BPAProcess` |
+| `Tree` | `BPATree` (gefiltert auf Processes/Objects) |
+| `Group` | `BPAGroup` (+ rekursiv `BPAGroupGroup` für nested) |
+| `ProcessMembership` | `BPAGroupProcess` (M:N) |
 | `ProcessDependency` | 9 `BPAProcess*Dependency`-Tabellen |
 | `ProcessEnvVar` | `BPAProcessEnvVar` |
 | `ProcessLock` | `BPAProcessLock` |
-| `Environment` | `BPAEnvironment`, `BPAEnvironmentVar` |
-| `WorkQueue` | `BPAWorkQueue`, `BPAWorkQueueFilter`, `BPAWorkQueueItem` |
 | `Release` | `BPARelease`, `BPAReleaseEntry` |
-| `Package` | `BPAPackage`, `BPAPackageProcess` |
 
 ### 3. XML-Serializer (`BPGit.Format`)
 
 Kanonisches Mapping BP-DB-Zeilen ↔ XML-Repräsentation:
 
-- **Input:** DTOs aus `BPGit.Data`
-- **Output:** `*.bpprocess.xml`, `*.bpobject.xml`, `*.bprelease.xml` (oder nach BP-Convention; TBD nach Sample)
-- **Validierung:** Self-Consistency-Check (`XmlReader` strict, dann Re-Parse und Property-Bag-Vergleich)
-- **Diff-Format:** Unified-Diff (Line-basierter XML-Diff mit Whitespace-Normalisierung)
+- **Input:** `BPAProcess.processxml` (bereits XML, 1:1 aus BP Studio)
+- **Output:** XML-Datei mit unverändertem `processxml`-Inhalt
+- **Validierung:** XML-Parse-Check + Root-Element-Typ (`<process>` oder `<object>`) + Name-Extraktion
+- **Sanitization:** Windows-Dateinamen-Sanitization für abgeleitete Filenames (siehe unten)
+
+## Worktree-Layout (final, per #6289, #6311)
+
+```
+<worktree>/                                  # git working tree
+|
++-- processes/                               # Folder-aware BP-Worktree
+|   +-- Processes/                           # BPATree id=2 (gefiltert)
+|   |   +-- Default/                         # BPAGroup name="Default"
+|   |   |   +-- MP - Subprocess A.xml        # filename = sanitize(BPAProcess.name) + ".xml"
+|   |   |   +-- Test Process.xml
+|   |   +-- dummy/                           # BPAGroup name="dummy"
+|   |       +-- bp demo.xml
+|   +-- Objects/                             # BPATree id=3 (gefiltert)
+|       +-- Default/
+|       |   +-- Data - SQL Server.xml
+|       |   +-- Email - POP3-SMTP-IMAP.xml
++-- .bpgit/
+|   +-- config.toml                          # BP connection + [cli] auth section
++-- .git/                                    # Standard git internals
++-- .gitignore                               # excludes .bpgit/, *.bak, temp files
+```
+
+### Worktree-Invariante (per #6311)
+
+**`filename = sanitize(BPAProcess.name) + ".xml"`** — abgeleitet aus dem XML-Root-`name`-Attribut.
+
+- BP-Name ist Single Source of Truth.
+- Filename wird beim Pull automatisch normalisiert (Post-Receive-Hook schreibt canonical Filenames, löscht veraltete).
+- User editiert NUR die XML-Datei (Inhalt), nicht den Filename.
+- Manuelle `git mv`-Operationen werden vom Server toleriert, beim nächsten Pull aber rückgängig gemacht.
+
+### Filename-Sanitisierung
+
+```
+sanitize(name):
+    return re.sub(r'[<>:"/\\|?*]', '_', name).rstrip('. ')
+```
+
+**Beispiele:**
+
+| BP-Name | Filename |
+|---|---|
+| `MS Excel VBO` | `MS Excel VBO.xml` |
+| `Utility - Environment` | `Utility - Environment.xml` |
+| `Prozess: Test` | `Prozess_ Test.xml` |
+| `Path/Test` | `Path_Test.xml` |
+| `Trailing. ` | `Trailing.xml` |
+
+### Folder-Hierarchie
+
+`BPATree` → `BPAGroup` → `BPAGroupGroup` (nested) → `BPAGroupProcess` (M:N):
+
+- **Trees**: nur `"Processes"` (id=2) und `"Objects"` (id=3) materialisieren. Andere Trees (Tiles, Queues, Resources, users) werden ignoriert.
+- **Groups**: jeder `BPAGroup` mit `treeid IN (2, 3)` wird zu einem Folder.
+- **Nested Groups**: `BPAGroupGroup(groupid, memberid)` für Folder-in-Folder (Schema vorhanden, Demo-DB hat 0 Rows).
+- **Memberships**: `BPAGroupProcess` ist M:N — derselbe Process kann in mehreren Groups liegen (Datei-Duplikation akzeptiert).
+
+### Filename-Extraktion
+
+Regex auf `BPAProcess.processxml` (Root-Element):
+
+```
+^\s*<(process|object)\s+[^>]*\bname\s*=\s*"([^"]+)"
+```
+
+Beispiel: `<process name="MP - Subprocess A" ...>` → `"MP - Subprocess A"`
+
+**Wichtig:** Vor Regex-Match `StripLeadingXmlComments` anwenden (per #6277) — BP Studio kann Leading Comments in processxml schreiben, die das Regex brechen.
+
+## processid-Mapping (per #6311)
+
+**Kern-Insight:** `BPAProcess.processid` (Tabellen-PK, UNIQUEIDENTIFIER) ist NICHT in `BPAProcess.processxml` enthalten. Root-Tag `<process name="...">` hat kein id-Attribut. XML enthält nur Sub-Element-IDs (Main Window, Buttons, Stages).
+
+**Mapping-Lösung:** Lookup zur Laufzeit über `git diff` (alter + neuer Pfad verfügbar via R/M/A/D-Status) + DB-Query auf `BPAProcess.name`.
+
+### Processid-Auflösung pro Operation
+
+| Git-Diff-Status | Alter Name (Filename) | Neuer Name (XML-Root) | BP-Aktion |
+|---|---|---|---|
+| `M` | "X" | "X" (gleich) | DB-Lookup `WHERE name='X'` → processid → `/import /forceid /overwrite <file>` |
+| `M` (Rename via XML) | "Old" | "New" (≠) | DB-Lookup `WHERE name='New'` (0 Treffer), dann `WHERE name='Old'` (1 Treffer) → processid → `/import /forceid /overwrite <file>` |
+| `A` | — | "New" | DB-Lookup `WHERE name='New'` (0 erwartet) → `/import <file>` (BP legt neuen Prozess an) |
+| `D` | "Gone" | — | DB-Lookup `WHERE name='Gone'` → wenn 1 Treffer: Prozess löschen |
+| `R` (git mv) | "Old" | "New" | Wie Modify-Rename-Fall, danach Pull-Normalisierung |
+
+### Rename-Walkthrough (komplett)
+
+**Phase 1 — User renamed via XML im Worktree:**
+
+1. User öffnet `processes/Objects/Default/Old Name.xml`, ändert `<process name="Old Name">` → `<process name="New Name">`. **Speichert unter gleichem Filename** (kein `git mv`).
+2. `git add . && git commit -m "rename Old -> New" && git push`
+3. Server `pre-receive`:
+   - `git diff oldrev..newrev -- processes/` zeigt **Modify** auf `Old Name.xml`
+   - XML-Root: `<process name="New Name">` → name="New Name"
+   - Filename: `Old Name.xml` → alter Name implizit: "Old Name"
+   - DB-Lookup `WHERE name='New Name'` → 0 Treffer
+   - DB-Lookup `WHERE name='Old Name'` → processid `42b5169c-...`
+   - **`/import /forceid 42b5169c-... /overwrite <tmpfile>`**
+   - BP aktualisiert `BPAProcess.name="New Name"` + `processxml=<...New Name...>`, schreibt BPAAuditEvent (sCode=P006)
+4. Server `post-receive` schreibt canonical Filename:
+   - Schreibt `processes/Objects/Default/New Name.xml`
+   - Löscht `processes/Objects/Default/Old Name.xml`
+   - Git committet dies als **Auto-Rename** (Similarity-Match), History bleibt erhalten
+
+**Phase 2 — User renamed in BP Studio:**
+
+1. User benennt Prozess in BP Studio: "Old Name" → "New Name"
+2. BP aktualisiert `BPAProcess.name` + `processxml`, schreibt BPAAuditEvent (sCode=P006)
+3. User `git pull`
+4. Server `post-checkout` Hook:
+   - Liest `BPAProcess.name="New Name"` → schreibt `New Name.xml`
+   - Löscht `Old Name.xml`
+   - Git committet als **Auto-Rename** (Similarity-Match)
+
+**Phase 3 — git mv (manuell, unerwünscht):**
+
+1. User `git mv Old Name.xml Renamed.xml` (kein XML-Content-Edit)
+2. Push
+3. Server `pre-receive`:
+   - Sieht **R100** (pure Rename, kein Content-Change)
+   - Alter Name (aus old path): "Old Name"
+   - Neuer Name (aus XML-Root): "Old Name" (unverändert)
+   - DB-Lookup `WHERE name='Old Name'` → processid
+   - `/import /forceid <pid> /overwrite Renamed.xml`
+4. Server `post-receive` normalisiert:
+   - Schreibt canonical `Old Name.xml`
+   - Löscht `Renamed.xml`
+   - `git mv` wird effektiv rückgängig gemacht
 
 ## Bridge-Architektur (git ↔ BP-DB)
 
-bpgit ist der Synchronisations-Layer zwischen zwei Welten:
-- **VS Code / git:** datei-basiert, Working-Tree, Hashes, Commits, Diffs
-- **BP-DB:** SQL-basiert, `BPAProcess` / `BPARelease` / `BPA*`-Tabellen, Identity-PKs (`UNIQUEIDENTIFIER`)
+bpgit-git-server übersetzt zwischen zwei Welten:
 
-bpgit übersetzt zwischen beiden: **DB → XML-Dateien** (`pull`) und **XML → DB-UPSERT** (`commit`). VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit XML-Dateien. bpgit läuft als externer Sync-Step zwischen git-Operationen.
+- **VS Code / git**: datei-basiert, Working-Tree, Hashes, Commits, Diffs
+- **BP-DB**: SQL-basiert, `BPAProcess` / `BPARelease` / `BPA*`-Tabellen, Identity-PKs (`UNIQUEIDENTIFIER`)
 
-### Pattern: File-Based Adapter, git als Versions-Layer
+**DB → XML-Dateien** (Pull): Post-Checkout-Hook liest BP-DB via SqlCommand, schreibt XML-Dateien mit canonical Filenames.
 
-```
-<pre>
-   ┌──────────────────────────────────────────────────────────────────┐
-   │  VS Code (oder jedes Git-fähige Tool)                            │
-   │  • Datei-Editor mit XML-Highlighting                              │
-   │  • Integrierte Git-UI (Source-Control-Panel, Diff-View)           │
-   │  • Terminal: bpgit …                                              │
-   └──────────────────────────┬───────────────────────────────────────┘
-                              │  liest / schreibt
-                              ▼
-   ┌──────────────────────────────────────────────────────────────────┐
-   │  Working-Tree (von git versioniert)                               │
-   │                                                                  │
-   │   .bpgit/                                                         │
-   │   ├── config.toml         # DB-Credentials, Profile, …            │
-   │   ├── snapshot.json       # Pull-Snapshot (Hashes + IDs)          │
-   │   └── lock                                                       │
-   │                                                                  │
-   │   processes/<processid>/                                         │
-   │   ├── process.xml         # = BPAProcess.processxml              │
-   │   ├── attributes.xml      # = BPAProcessAttribute-Zeilen         │
-   │   ├── envvars.xml         # = BPAProcessEnvVar-Zeilen            │
-   │   └── meta.json           # {name, type, version, lastmodified}  │
-   │                                                                  │
-   │   releases/<releaseid>/release.xml                              │
-   │   objects/<objectid>/process.xml                                │
-   │   environments/<envid>/env.xml                                   │
-   │                                                                  │
-   │   .gitattributes       # registriert *.xml als diffbares Text     │
-   └──────────────────────────┬───────────────────────────────────────┘
-                              │  SqlClient (Win-Auth oder SQL-Auth)
-                              ▼
-   ┌──────────────────────────────────────────────────────────────────┐
-   │  Blue Prism DB (BPAProcess, BPARelease, BPA*Identity-PKs)       │
-   └──────────────────────────────────────────────────────────────────┘
-</pre>
-```
+**XML → DB-UPSERT** (Push): Pre-Receive-Hook parsed `git diff`, ermittelt processid via DB-Lookup, ruft `/import /forceid /overwrite`.
 
-**Naming-Strategie** (`config.toml.worktree.naming`):
+VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit XML-Dateien. Der Adapter läuft serverseitig als automatischer Sync-Layer, transparent für den User.
 
-- **`by-uuid`** (Default): `processes/<processid>/` — deterministisch, immun gegen Renames in BP.
-- **`by-name`** (optional): `processes/<sanitized-name>/` — menschenlesbar, aber Renames in BP brechen das Mapping (Reconciler muss datei umbenennen).
+### Naming-Strategie
 
-### User Flow (VS-Code-Workflow)
+**`by-name`** (verbindlich, per #6289): `processes/<TreeName>/<GroupName(s)>/<sanitize(BPAProcess.name)>.xml`.
 
-| Schritt | Kommando / Aktion | Was passiert |
-|---|---|---|
-| 1 | `bpgit init` (einmalig) | `.bpgit/config.toml`, `.gitattributes`, ggf. Hooks. Initialer `pull` + git-Initial-Commit. |
-| 2 | `bpgit pull` | SqlClient öffnet BP-DB → `SELECT * FROM BPAProcess` + abhängige Tabellen → XML-Dateien in Worktree → Snapshot in `.bpgit/snapshot.json` → `git add . && git commit -m "bpgit: pull YYYY-MM-DD"`. |
-| 3 | User editiert `processes/<guid>/process.xml` in VS Code | Normaler Datei-Edit. `git diff` zeigt XML-Unified-Diff. |
-| 4 | `bpgit status` | Parst lokale XMLs, vergleicht Hashes mit `.bpgit/snapshot.json` → modified / added / deleted. Außerdem DB-Drift (was seit letztem pull in BP geändert wurde). |
-| 5 | `git add . && git commit -m "Edit HellWorld validation"` | Standard-git-Versionierung. VS Code Source-Control-Panel macht das automatisch. |
-| 6 | `bpgit commit` | Parst geänderte XMLs → pro Process SqlCommand-Transaktion: `UPSERT BPAProcess.processxml` + Reconcile in `BPAProcessAttribute` / `BPAProcess*Dependency` / `BPAProcessEnvVar` → Snapshot-Update → `git add . && git commit -m "bpgit: commit YYYY-MM-DD"`. |
-| 7 | `git push` (optional, wenn Remote konfiguriert) | Standard-git. |
+- Menschenlesbar
+- Deterministisch (BP-Name + Folder-Pfad → Filename)
+- Renames werden via Post-Receive-Normalisierung behandelt
 
-**Wichtig:** bpgit läuft **zwischen** den git-Schritten, nicht parallel. Es werden keine git-Hooks installiert, die Commits blockieren.
-
-### Identity-Layer
-
-| Konzept | BP-DB | Worktree | Zuordnung |
-|---|---|---|---|
-| Process | `BPAProcess.processid UNIQUEIDENTIFIER` | `<processid>` als Verzeichnis-Name | 1:1 |
-| Object | `BPAProcess.processid` (ProcessType='O') | `<processid>` als Verzeichnis-Name | 1:1 |
-| Release | `BPARelease.id` | `<releaseid>` als Verzeichnis-Name | 1:1 |
-| Versionen | `BPAProcessBackup.backupdate` + diff in `processxml` | git-Commits | über `bpgit log` |
-
-`meta.json` führt menschenlesbare Identität (`name`, `type`, `version`, `lastmodified`) parallel zum UUID-Pfad — für UX-Anzeige in bpgit-Status.
+`by-uuid` wird **nicht** mehr unterstützt — hätte eine Registry erfordert (processid → Pfad-Mapping), die mit der "kein snapshot.json"-Direktive unvereinbar wäre.
 
 ### Sync-Sicherheit
 
-- **`BPAProcessLock`** wird vor jedem `bpgit commit` geprüft → Lock aktiv → Exit mit Hinweis auf Lock-Owner.
-- **`lastmodifieddate` als Optimistic-Lock** — wenn der DB-Stand vom Snapshot abweicht → Konflikt-Meldung (Merge-Workflow nötig).
-- **Override-Flag:** `--allow-stale` (Legacy-Mode, klares WARNING-Log) umgeht den Stale-Check.
+- **`BPAProcessLock`** wird vor jedem `/import` geprüft → Lock aktiv → Push ablehnen mit Hinweis auf Lock-Owner.
+- **`lastmodifieddate` als Optimistic-Lock** (MVP2) — wenn der DB-Stand vom Snapshot abweicht → Konflikt-Meldung.
+- **Override-Flag:** `--force` für Admin-Override (Lock + Stale ignoriert).
 - **Atomare Transaktion pro Process** — Rollback bei XML-/Schema-Validierungsfehler.
-- **Idempotenz** — zweimaliges Commit desselben XML ändert die DB nicht (Hash-Vergleich vor UPSERT).
 
 ### VS-Code-Integration
 
 | Phase | Mechanismus | Aufwand |
 |---|---|---|
-| **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting. `bpgit` ist ein externes CLI in der Shell. | ✓ fertig, kein Code |
+| **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting. | ✓ fertig, kein Code |
 | **Phase 2** | Custom Diff-Driver via `.gitattributes`: `*.xml diff=bp-xml-clean` → git nutzt `bpgit diff-xml` für semantische Diffs (Stage-Order, Inputs/Outputs) statt Text-Diffs. | ~50 LoC |
 | **Phase 3** | VS-Code-Extension: Snippets für BP-Stages, `BPAValCheck`-Validierung, Inline-Vorschau der Stage-Effekte. | separates Extension-Projekt |
 
-### Hooks (optional, installierbar per `bpgit init --install-hooks`)
-
-#### Ziele
-
-- **Drift-Detection:** Warnung wenn Working-Tree nach `git checkout` / `git merge` nicht mehr zur BP-DB passt.
-- **Keine Blockaden:** Hooks geben Warnungen aus, brechen aber nie `git commit`/`git push` ab. bpgit läuft als expliziter Sync-Step zwischen den git-Befehlen.
-- **Cross-Platform:** Windows (NTFS) und Unix (POSIX x-Bit) werden identisch unterstützt.
-- **Update-fähig:** Hook-Wrapper sind dünn, die Logik liegt in `bpgit hook run` — bpgit-Updates wirken automatisch.
-
-#### Installierte Hooks (Phase 1)
-
-| Hook | Trigger | Aktion |
-|---|---|---|
-| `post-checkout` | Branch-Wechsel, File-Restore | Drift-Warnung auf stderr, **nie** Auto-Pull |
-| `post-merge` | Branch-Merge | Drift-Warnung auf stderr, **nie** Auto-Pull |
-
-**Explizit nicht installiert:**
-
-- `pre-commit` / `commit-msg` — würden Commit blockieren, UX-Verschlechterung
-- `pre-push` / `pre-receive` — würden Push blockieren, UX-Verschlechterung
-- `post-rewrite` (rebase) — kann Working-Tree korrumpieren wenn BP-DB mitspielt; verschoben auf Phase 3, falls Use-Cases das rechtfertigen
-
-#### Subcommands
-
-| Subcommand | Funktion |
-|---|---|
-| `bpgit hook install [--force] [--hooks post-checkout,post-merge]` | Installiert Hook-Wrapper nach `.git/hooks/`. Default: beide. |
-| `bpgit hook uninstall [--hooks ...]` | Entfernt die bpgit-Hook-Wrapper. Andere Hooks bleiben unberührt. |
-| `bpgit hook list` | Listet installierte bpgit-Hooks (markiert via `bpgit-hook: yes`-Header) |
-| `bpgit hook run <name> [args...]` | Manueller Trigger — wird auch intern von `.git/hooks/*` aufgerufen |
-
-#### Hook-Wrapper-Architektur
-
-Die installierten `.git/hooks/post-checkout` und `.git/hooks/post-merge` sind **dünne Wrapper**, die nur `bpgit hook run` aufrufen. Die Drift-Detection-Logik lebt in `bpgit hook run post-checkout` (C#-Code, plattformunabhängig).
-
-**Windows-Wrapper** (`.git/hooks/post-checkout`):
-
-```cmd
-@echo off
-bpgit hook run post-checkout %*
-exit /b %ERRORLEVEL%
-```
-
-**Unix-Wrapper** (`.git/hooks/post-checkout`):
-
-```sh
-#!/bin/sh
-exec bpgit hook run post-checkout "$@"
-```
-
-**Begründung Wrapper-Pattern:**
-
-1. **Updates zentral:** bpgit-Updates wirken automatisch auf alle Repos mit installierten Hooks.
-2. **Plattform-Pflege:** Eine plattformunabhängige Logik in C#, plattformspezifische Pfade nur im 5-Zeilen-Wrapper.
-3. **Testbarkeit:** `bpgit hook run post-checkout` ist ohne Git-Kontext testbar (CI-tauglich).
-4. **PowerShell-Konsistenz:** Wrapper-Pattern vermeidet, dass Hook-Scripts in PowerShell neu geschrieben werden müssen — die C#-Logik kennt nur Strings/Args, egal ob von `cmd` oder `sh` aufgerufen.
-
-#### Drift-Detection-Algorithmus
-
-```
-1. Lade .bpgit/snapshot.json (Hashes + IDs aus letztem pull/commit)
-2. Iteriere über alle processes/<guid>/*.{xml,json} im Working-Tree
-3. Pro Datei: SHA-256 berechnen, mit Snapshot vergleichen
-4. Drift erkannt wenn:
-     - Datei-Hash weicht von Snapshot ab           -> "modified"
-     - Datei existiert in Worktree, nicht in Snapshot -> "untracked"
-     - Datei existiert in Snapshot, nicht in Worktree -> "missing"
-5. Ausgabe auf stderr (post-checkout/post-merge):
-     "bpgit: working tree out of sync with BP database"
-     "bpgit:   modified:  <count>"
-     "bpgit:   untracked: <count>"
-     "bpgit:   missing:   <count>"
-     "bpgit: run `bpgit pull` to update, `bpgit status` for details"
-6. Exit-Code 0 — Hook blockiert nicht
-```
-
-**Niemals Auto-Pull:** post-checkout/post-merge führen **kein** `bpgit pull` aus — Working-Tree-Drift könnte gewollt sein (z.B. Feature-Branch mit lokalen Edits), Auto-Pull würde ungewollt überschreiben.
-
-#### Bypass-Mechanismen
-
-| Mechanismus | Wirkung |
-|---|---|
-| `bpgit init --no-hooks` | Überspringt Hook-Installation komplett |
-| `[hooks] enabled = false` in `config.toml` | Drift-Check disabled, Hook bleibt installiert (silent no-op) |
-| `BPGIT_SKIP_DRIFT_CHECK=1` (env) | Skip für CI/Scripts, gilt pro Aufruf |
-| `[hooks] skip_on_ci = true` | Auto-Disable wenn `CI`-Env-Var gesetzt |
-
-#### Permissions
-
-| Plattform | Anforderung | Mechanismus |
-|---|---|---|
-| Windows | Keine (Git ignoriert Unix-Bit) | Wrapper als `.cmd` / `.bat` / ohne Extension |
-| Unix | `chmod +x .git/hooks/post-*` | `bpgit hook install` ruft `File.SetUnixFileMode(0o755)` auf Wrapper |
-
-#### Backup bestehender Hooks
-
-`bpgit hook install` macht **vor** dem Überschreiben ein Backup:
-
-```
-.git/hooks/post-checkout -> .git/hooks/post-checkout.bpgit.bak.<timestamp>
-```
-
-Mit `--force` wird das Backup überschrieben. Ohne `--force` bricht die Installation ab, wenn ein user-defined Hook ohne `.bpgit.bak.`-Marker existiert (Schutz für bestehende Setups wie husky/lefthook).
-
-#### Konfiguration (`config.toml`)
-
-```toml
-[hooks]
-enabled = true                              # globale An/Aus-Schalter
-drift_warnings = ["post-checkout", "post-merge"]  # aktive Drift-Hooks
-skip_on_ci = true                           # BPGIT_SKIP_DRIFT_CHECK bei CI=true
-backup_existing = true                      # Backup vor Überschreiben
-wrapper_style = "auto"                      # "auto" | "unix" | "windows"
-```
-
-#### Tests (`BPGit.Cli.Tests`, xunit)
-
-| Test | Verifikation |
-|---|---|
-| `HookInstaller_Installs_PostCheckout_Script()` | nach `bpgit hook install`: `.git/hooks/post-checkout` existiert |
-| `HookInstaller_Idempotent()` | zweimal installieren = kein Fehler, kein Datenverlust |
-| `HookInstaller_Backup_Existing_Hook()` | user-Hook wird nach `.bpgit.bak.<ts>` verschoben |
-| `HookInstaller_Respects_NoForce()` | ohne `--force`: bestehender bpgit-Hook bleibt unverändert |
-| `HookUninstaller_Removes_Bpgit_Hooks_Only()` | user-Hook bleibt nach uninstall |
-| `HookRun_PostCheckout_Warns_On_Drift_But_Does_Not_Modify()` | kritisch: post-checkout darf Working-Tree NICHT ändern |
-| `HookRun_PostCheckout_Respects_BPGIT_SKIP_DRIFT_CHECK()` | env-bypass funktioniert |
-| `HookRun_PostCheckout_Respects_CI_Env()` | `CI=true` + `skip_on_ci=true` -> silent |
-| `HookList_Reports_Installed_Bpgit_Hooks()` | listet nur bpgit-markierte Hooks |
-
-#### Phase-Plan
-
-- **Phase 1 (MVP):** `bpgit hook install` + Drift-Detection-Bibliothek, Tests gegen die Library.
-- **Phase 2:** Wrapper-Templates in `src/BPGit.Cli/Hooks/` als Embedded Resources; bpgit-Self-Update regeneriert Wrapper.
-- **Phase 3:** Optional `post-rewrite` (rebase-aware Drift-Warnung), nur wenn Use-Cases das rechtfertigen.
-
-#### Sicherheit
-
-- **Backup-Pattern** verhindert versehentliches Überschreiben user-defined Hooks (z.B. pre-commit-Framework wie husky/lefthook).
-- **Wrapper-Exit-Code** wird 1:1 durchgereicht — wenn `bpgit hook run` fehlschlägt (z.B. fehlender `bpgit` im PATH), zeigt Git das in seinem Output, bricht aber **nicht** den Checkout/Merge ab.
-- **Idempotenz:** `bpgit hook install` ist safe, beliebig oft aufrufbar.
-
-### Erkennungs-Heuristik für `bpgit init`
-
-Wenn im aktuellen Ordner bereits ein `.git/`-Verzeichnis existiert und dort BP-XML-Files mit der typischen Struktur (`<process name="..." version="...">`-Root) liegen, erkennt `bpgit init` das bestehende Repo und bietet `bpgit pull --add-missing` (nur neue BP-Items in den Worktree legen) statt eines Voll-`init`.
-
 ## Datenfluss
 
-### `bpgit pull`
+### Pull-Flow (git clone, git pull)
 
-<pre>
-SqlClient öffnet (localdb)\BluePrismLocalDB (Win-Integrated-Auth)
-     ↓
-Dapper-Mapping BPAProcess → List&lt;Process&gt;
-     ↓
-XML-Serializer schreibt processes/&lt;processid&gt;/process.xml + Sidecar-Files
-     ↓
-Snapshot in .bpgit/snapshot.json (Hashes + IDs)
-     ↓
-git add . && git commit (Stage-Modus mit --no-commit möglich)
-</pre>
+`post-checkout` Hook:
 
-### `bpgit commit`
+```
+SqlCommand öffnet (localdb)\BluePrismLocalDB (Win-Integrated-Auth)
+     ↓
+Dapper-Mapping BPAProcess → List<Process>
+     ↓
+Für jeden Process:
+  - Filename aus processxml extrahieren (Regex)
+  - Sanitize + Path ableiten
+  - XML zu worktree schreiben (canonical Filename)
+     ↓
+Alte Files im processes/ löschen (canonical Filename-Normalisierung)
+     ↓
+git add . && git commit (auto-detected Renames)
+```
 
-<pre>
-Liest Worktree-XMLs → parsed → mapped auf BPA*-Tabellen
-     ↓
-Pro Process: SqlCommand-Transaktion
-   • UPSERT BPAProcess.processxml (Haupt-XML) + Head-Metadaten
-   • Reconcile-Loop ueber BPAProcessAttribute, BPAProcess*Dependency,
-     BPAProcessEnvVar, BPAProcessLock usw.
-   • Atomare Commit-Transaktion (Rollback bei Validierungsfehler)
-     ↓
-Snapshot-Update
-     ↓
-git add . && git commit
-</pre>
+### Push-Flow (git push)
 
-> **Implementierungs-Hinweis:** Schreibpfad ist **direkter SqlCommand**, kein `automateC.exe /import`-Round-Trip — Martin-Direktive (16:44 GMT+2): CLI-Round-Trip bei grossen Process-XMLs zu langsam.
+`pre-receive` Hook:
+
+```
+git diff oldrev..newrev -- processes/
+     ↓
+Für jede Änderung (R/M/A/D):
+  - processid via DB-Lookup (siehe Tabelle oben)
+  - AutomateC.exe /import /forceid <pid> /overwrite <tmpfile>
+  - Bei Fehler: Push ablehnen
+     ↓
+post-receive Hook:
+  - BP-DB pollen, canonical Filenames schreiben
+  - Alte Files löschen
+```
+
+**Performance-Hinweis** (per Martin #6285): NIEMALS AutomateC.exe `/export` für Pull — zu langsam. SqlCommand direkt ist Pflicht.
 
 ## Sicherheitsgrenzen
 
-- **Credentials ausschließen:** `BPACredentials`, `BPAKeyStore`, `BPAPassword`, alle Spalten mit `encryptid` als FK — niemals in Worktree ausgeben (Whitelist via `ignore_tables` in `config.toml`)
-- **Read-Only by Default:** `commit`-Subcommand scharf explizit (`--force`-Flag erforderlich); sonst nur `pull`/`status`/`log`/`diff`
-- **Keine impliziten Mutationen:** Der Adapter mutiert die BP-DB nur auf expliziten User-Befehl (`commit`)
-- **Administrativer Account:** Adapter läuft mit dem gleichen Windows-Konto wie der laufende BP-Service; keine künstliche Berechtigungs-Eskalation
-- **Audit-Trail:** Jeder `commit` legt einen Eintrag in der Log-Konfiguration ab (Datum, Versionen, Tabellen-Diffs)
+- **Credentials ausschließen:** `BPACredentials`, `BPAKeyStore`, `BPAPassword`, alle Spalten mit `encryptid` als FK — niemals in Worktree ausgeben (Whitelist via `ignore_tables` in `config.toml`).
+- **Kein bpgit.exe auf Client-Workstations** — nur Server (OpenClawPC) hat DB-Credentials + AutomateC.exe.
+- **Windows-Integrated-Auth** für Server-Zugriff — BP-DB-Login = Windows-User (Audit-Trail via BPAAuditEvents.gSrcUserID).
+- **Keine impliziten Mutationen** — Adapter mutiert BP-DB nur auf expliziten User-Befehl (`git push`).
+- **Audit-Trail** — jeder `/import` schreibt BPAAuditEvent (sCode=P006) mit Windows-User als `gSrcUserID`.
 
 ## Konfiguration: `~/.bpgit/config.toml`
 
@@ -362,8 +294,7 @@ connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI
 
 # Auth-Modus B: SQL-Auth (für CI oder wenn keine Windows-Identity verfügbar)
 # Aktiv, sobald `sql_user` gesetzt ist. Password NIEMALS ins Repo — kommt
-# via env-var BPGIT_DB_PASSWORD oder `dotnet user-secrets` (Substitution ${BPGIT_DB_PASSWORD}).
-# connection_string_sql_auth = "Server=bp-prod.acme.local;Database=BluePrism;User Id=bpgit_readonly;Password=${BPGI…ORD}"
+# via env-var BPGIT_DB_PASSWORD oder `dotnet user-secrets`.
 # sql_user = "bpgit_readonly"
 
 # Tabellen, die der Adapter ignoriert (Credentials, Session-Logs, System-Seed)
@@ -393,49 +324,33 @@ ignore_tables = [
   "BPAStatus",
   "BPAAliveResources",
   "BPAAliveAutomateC",
-  "BPAAuditEvents",
   "BPAScreenshot"
 ]
 
-[git]
-remote = null  # lokal-only für v1
-author_name = "BP-Git Adapter"
-author_email = "bp-git@local"
-commit_msg_template = "bpgit: {action} {count} items ({date})"
+[paths]
+# Wo XML-Dateien im Worktree liegen
+processes_root = "processes"
 
 [worktree]
-# Naming-Strategie: "by-uuid" (Default, stabil gegen Renames) oder "by-name" (menschenlesbar)
-naming = "by-uuid"
+# Sanitization-Regex für Filename-Derivation
+filename_invalid_chars = '<>:"/\\|?*'
+
+# Naming-Strategie (aktuell nur "by-name" unterstützt)
+naming = "by-name"
 ```
 
-## MVP-Phasen
-
-### Phase 1: Read-Only Export (Scope diese Woche)
-
-- Subcommands: `init`, `pull`, `status`, `log`, `diff`
-- Tabellen-Scope: `BPAProcess` + Attribute + Dependencies + EnvVar, `BPAEnvironment` (Variable only), `BPAWorkQueue` + Filter + Item, `BPARelease` + Entry
-- Round-Trip-Test: Adapter exportiert BP-Demo-Process → XML → manuelle Studio-`Import` → Diff = leer
-
-### Phase 2: Round-Trip-Write (DB-direct)
-
-- Subcommand: `commit --force`
-- **Schreibpfad: direkter SqlCommand + Transaktion** (kein CLI-Round-Trip)
-- Begründung (Martin 16:44 GMT+2): `automateC.exe /import` zu langsam für grosse Process-XMLs
-- UPSERT in `BPAProcess.processxml` (Haupt-XML) + Reconcile in allen abhängigen `BPAProcess*`-Tabellen (Attribute, Dependencies, EnvVar, Lock, …)
-- Atomare Transaktion pro Process (Rollback bei XSD-/Self-Check-Fehler)
-- Validierung vor Commit: Version-Konflikt-Erkennung + Identity-Lock-Check
-- Idempotenz-Prüfung (gleiches XML zweimal committen = kein DB-Drift)
-- Optionale Phase-2b-Erweiterung: `automateC.exe /import` als Fallback für sehr grosse/komplexe Prozesse (später, falls Performance-Daten das rechtfertigen)
-
-### Phase 3: VS-Code-Integration
-
-- VS-Code-Extension für In-IDE-Diff
-- Pre-Commit-Hook gegen versehentliche Credential-Diffs
-
-## Out-of-Scope (für alle Phasen)
+## Out-of-Scope
 
 - **Live-Editing von BP-Processes im Adapter** (zu riskant; immer Studio/automateC)
 - **Multi-Instance-Replikation**
 - **Performance-Optimierung für >10k Processes**
-- **Encryption-Layer für exportierte XMLs** (optional, später; klar markiert mit `[[unencrypted]]`-Hinweis in `config.toml`)
-- **Web-Service-Endpoint** (BP hat eigene API; separater Adapter dafür, nicht Scope dieses Tools)
+- **Encryption-Layer für exportierte XMLs** (optional, später)
+- **Client-side Hooks** (per #6295 obsolet — Hooks laufen serverseitig)
+- **`bpgit.exe` auf Client-Workstations** (per #6295 — nur `git` lokal nötig)
+
+## Mitgeltende Specs
+
+- [`SPEC-target-environment.md`](./SPEC-target-environment.md) — Windows 11, .NET 10, BP 7.5.1, OpenClawPC
+- [`context/SPEC-git-server.md`](../context/SPEC-git-server.md) — **git-server-Architektur, Hooks, Auth, Deployment (autoritativ für Server-Aspekte)**
+- [`context/bp-cli-reference-7.5.1.md`](../context/bp-cli-reference-7.5.1.md) — AutomateC.exe CLI-Referenz
+- [`context/bp-database-schema.md`](../context/bp-database-schema.md) — BP-Schema-Dokumentation
