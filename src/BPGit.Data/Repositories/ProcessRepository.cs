@@ -1,4 +1,5 @@
 using BPGit.Data.Connection;
+using BPGit.Data.Models;
 using Dapper;
 using System;
 using System.Collections.Generic;
@@ -80,5 +81,81 @@ public class ProcessRepository
         const string sql = "SELECT userid FROM BPAProcessLock WHERE ProcessID = @processId";
         return await conn.QueryFirstOrDefaultAsync<Guid?>(
             new CommandDefinition(sql, new { processId }, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// BP-side history timeline. BPAProcessBackup is written by the BP runtime
+    /// on each Save (full XML snapshot). Joined with BPAProcess for name and
+    /// LEFT JOIN BPAUser (UserID has no FK in BP's schema, so users can be
+    /// orphaned after deletions) for the author display.
+    /// </summary>
+    public async Task<IReadOnlyList<ProcessBackup>> GetHistoryAsync(
+        int limit,
+        Guid? processId = null,
+        DateTime? since = null,
+        CancellationToken ct = default)
+    {
+        using var conn = _factory.Create();
+        await conn.OpenAsync(ct);
+
+        var sql = @"
+            SELECT TOP (@limit)
+                bk.processid       AS ProcessId,
+                p.name             AS Name,
+                bk.backupdate      AS BackupDate,
+                bk.UserID          AS UserId,
+                u.username         AS Username,
+                CASE WHEN bk.compressedxml IS NOT NULL THEN 1 ELSE 0 END AS HasCompressedXml,
+                CASE WHEN bk.processxml    IS NOT NULL THEN 1 ELSE 0 END AS HasXml
+            FROM dbo.BPAProcessBackup bk
+            JOIN dbo.BPAProcess p ON p.processid = bk.processid
+            LEFT JOIN dbo.BPAUser u ON u.userid = bk.UserID
+            WHERE 1 = 1
+                AND (@processId IS NULL OR bk.processid = @processId)
+                AND (@since    IS NULL OR bk.backupdate >= @since)
+            ORDER BY bk.backupdate DESC";
+
+        var rows = await conn.QueryAsync<ProcessBackup>(
+            new CommandDefinition(
+                sql,
+                new { limit, processId, since },
+                cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// Loads the XML for a specific backup row. Prefers processxml (readable),
+    /// falls back to a marker "[compressedxml: N bytes]" if only the IMAGE
+    /// payload is present.
+    /// </summary>
+    public async Task<string?> GetBackupXmlAsync(
+        Guid processId,
+        DateTime backupDate,
+        CancellationToken ct = default)
+    {
+        using var conn = _factory.Create();
+        await conn.OpenAsync(ct);
+        const string sql = @"
+            SELECT
+                processxml    AS Xml,
+                DATALENGTH(compressedxml) AS CompressedBytes
+            FROM dbo.BPAProcessBackup
+            WHERE processid = @processId AND backupdate = @backupDate";
+        var row = await conn.QueryFirstOrDefaultAsync<BackupXmlRow>(
+            new CommandDefinition(
+                sql,
+                new { processId, backupDate },
+                cancellationToken: ct));
+        if (row is null) return null;
+        if (!string.IsNullOrEmpty(row.Xml)) return row.Xml;
+        if (row.CompressedBytes is > 0)
+            return $"[compressedxml: {row.CompressedBytes} bytes - decompression not implemented in v1]";
+        return null;
+    }
+
+    private sealed class BackupXmlRow
+    {
+        public string? Xml { get; set; }
+        public int? CompressedBytes { get; set; }
     }
 }
