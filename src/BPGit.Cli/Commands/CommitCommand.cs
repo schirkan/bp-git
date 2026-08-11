@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BPGit.Cli.Commands;
@@ -16,12 +17,25 @@ namespace BPGit.Cli.Commands;
 /// bpgit commit --force
 /// Schreibt Worktree-XMLs zurueck in BP-DB via AutomateC.exe /import
 /// (statt direkt SqlCommand). Dadurch schreibt BP's Runtime automatisch
-/// korrekte Audit-Eintraege in BPAAuditEvents (oldXML/newXML).
+/// korrekte Audit-Eintraege in BPAAuditEvents (newXML).
 /// Lock-Check bleibt SqlCommand-basiert (Read-Only OK).
 /// Process-Delete via CLI nicht unterstuetzt — nur Warnung.
 /// </summary>
 public static class CommitCommand
 {
+    // BP's /import-Parser ist strikt: Leading XML-Comments brechen den Parser
+    // ("Failed to create... already exists"), obwohl /overwrite gesetzt ist.
+    // Wir strippen sie vor dem Temp-Write, behalten die Original-XML im Worktree.
+    // Pattern: optionaler Whitespace, dann 1+ Leading-Comments (jeweils gefolgt von Whitespace).
+    private static readonly Regex LeadingXmlCommentsRegex =
+        new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
+
+    private static string StripLeadingXmlComments(string xml)
+    {
+        if (string.IsNullOrEmpty(xml)) return xml;
+        return LeadingXmlCommentsRegex.Replace(xml, string.Empty);
+    }
+
     public static async Task<int> RunAsync(string workdir, bool force = false)
     {
         var configPath = Path.Combine(workdir, ".bpgit", "config.toml");
@@ -108,16 +122,17 @@ public static class CommitCommand
                     continue;
                 }
 
+                // Leading-XML-Comments strippen (BP's /import ist strikt, siehe oben)
+                var importXml = StripLeadingXmlComments(procXml);
+
                 // Temp-File fuer AutomateC.exe /import
                 var tmpFile = Path.Combine(Path.GetTempPath(), $"bpgit-import-{id}.xml");
-                await File.WriteAllTextAsync(tmpFile, procXml);
+                await File.WriteAllTextAsync(tmpFile, importXml);
                 tmpFiles.Add(tmpFile);
 
-                // CLI-Args: /import + /forceid <guid> + /overwrite
-                // Wichtig: /forceid und /overwrite MUESSEN zusammen verwendet werden.
-                // Ohne /forceid schlaegt /import mit "Failed to create... already exists" fehl
-                // (selbst fuer existierende Processes/Objects).
-                var args = new List<string> { "/import", tmpFile, "/forceid", id, "/overwrite" };
+                // CLI-Args: /import + /overwrite (reicht fuer existierende Processes/Objects
+                // bei sauberer XML — empirisch verifiziert 2026-08-11 mit canonical export).
+                var args = new List<string> { "/import", tmpFile, "/overwrite" };
 
                 AutomateCRunner.RunResult result;
                 try
