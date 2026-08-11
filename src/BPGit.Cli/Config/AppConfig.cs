@@ -6,10 +6,17 @@ namespace BPGit.Cli.Config;
 
 public class AppConfig
 {
+    // [bp] section - SQL connection (used for read-only operations: pull, status, lock-check)
     public string ConnectionString { get; set; } = "";
     public string? SqlUser { get; set; }
     public string? SqlPasswordEnvVar { get; set; }
     public List<string> IgnoreTables { get; set; } = new();
+
+    // [cli] section - AutomateC.exe integration (used for write operations: commit)
+    public string AutomateCPath { get; set; } = @"C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe";
+    public string CliAuthMode { get; set; } = "sso"; // "sso" | "user"
+    public string? CliUsername { get; set; }
+    public string? CliPasswordEnvVar { get; set; } = "BPGIT_CLI_PASSWORD";
 
     public string GetEffectiveConnectionString()
     {
@@ -19,6 +26,19 @@ public class AppConfig
             return ConnectionString.Replace("{BPGIT_DB_PASSWORD}", pwd);
         }
         return ConnectionString;
+    }
+
+    /// <summary>
+    /// Returns the CLI password from the configured env var (only used when auth = "user").
+    /// Null if auth != "user" or env var not set.
+    /// </summary>
+    public string? GetCliPassword()
+    {
+        if (!string.Equals(CliAuthMode, "user", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (string.IsNullOrWhiteSpace(CliPasswordEnvVar))
+            return null;
+        return Environment.GetEnvironmentVariable(CliPasswordEnvVar);
     }
 
     public static AppConfig Load(string path)
@@ -57,6 +77,16 @@ public class AppConfig
                         cfg.IgnoreTables.AddRange(value.Split(',',
                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
                         break;
+                }
+            }
+            else if (section == "cli")
+            {
+                switch (key)
+                {
+                    case "automatec_path": cfg.AutomateCPath = value; break;
+                    case "auth": cfg.CliAuthMode = value; break;
+                    case "username": cfg.CliUsername = value; break;
+                    case "password_env": cfg.CliPasswordEnvVar = value; break;
                 }
             }
         }

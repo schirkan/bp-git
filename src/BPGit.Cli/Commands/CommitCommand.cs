@@ -1,16 +1,25 @@
 using BPGit.Cli.Config;
+using BPGit.Cli.Services;
 using BPGit.Cli.Worktree;
-using BPGit.Data;
 using BPGit.Data.Connection;
 using BPGit.Data.Repositories;
 using BPGit.Format;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace BPGit.Cli.Commands;
 
+/// <summary>
+/// bpgit commit --force
+/// Schreibt Worktree-XMLs zurueck in BP-DB via AutomateC.exe /import
+/// (statt direkt SqlCommand). Dadurch schreibt BP's Runtime automatisch
+/// korrekte Audit-Eintraege in BPAAuditEvents (oldXML/newXML).
+/// Lock-Check bleibt SqlCommand-basiert (Read-Only OK).
+/// Process-Delete via CLI nicht unterstuetzt — nur Warnung.
+/// </summary>
 public static class CommitCommand
 {
     public static async Task<int> RunAsync(string workdir, bool force = false)
@@ -23,10 +32,6 @@ public static class CommitCommand
         }
 
         var cfg = AppConfig.Load(configPath);
-        var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
-        var repo = new BPGit.Data.Repositories.ProcessRepository(factory);
-        var xml = new ProcessXmlSerializer();
-
         var snapshot = SnapshotStore.Load(workdir);
         if (snapshot == null)
         {
@@ -47,125 +52,137 @@ public static class CommitCommand
             return 1;
         }
 
+        // Connection factory for read-only operations (Lock-Check)
+        var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
+        var repo = new ProcessRepository(factory);
+        var xml = new ProcessXmlSerializer();
+
         int committed = 0;
         int skipped = 0;
         int errors = 0;
+        var tmpFiles = new List<string>();
 
-        foreach (var dir in Directory.GetDirectories(procDir))
+        try
         {
-            var id = Path.GetFileName(dir);
-            if (!Guid.TryParse(id, out var processId))
+            foreach (var dir in Directory.GetDirectories(procDir))
             {
-                skipped++;
-                continue;
-            }
+                var id = Path.GetFileName(dir);
+                if (!Guid.TryParse(id, out var processId))
+                {
+                    skipped++;
+                    continue;
+                }
 
-            var procFile = Path.Combine(dir, "process.xml");
-            var metaFile = Path.Combine(dir, "meta.json");
+                var procFile = Path.Combine(dir, "process.xml");
+                var metaFile = Path.Combine(dir, "meta.json");
 
-            if (!File.Exists(procFile) || !File.Exists(metaFile))
-            {
-                skipped++;
-                continue;
-            }
+                if (!File.Exists(procFile) || !File.Exists(metaFile))
+                {
+                    skipped++;
+                    continue;
+                }
 
-            // Idempotenz: Hash-Vergleich Worktree-XML gegen Snapshot-Hash
-            var currentHash = SnapshotStore.ComputeHash(File.ReadAllText(procFile));
-            if (snapshot.Processes.TryGetValue(id, out var snap) && snap.Hash == currentHash)
-            {
-                skipped++;
-                continue;
-            }
+                // Idempotenz: Hash-Vergleich Worktree-XML gegen Snapshot-Hash
+                var currentHash = SnapshotStore.ComputeHash(File.ReadAllText(procFile));
+                if (snapshot.Processes.TryGetValue(id, out var snap) && snap.Hash == currentHash)
+                {
+                    skipped++;
+                    continue;
+                }
 
-            // BPAProcessLock-Check
-            var lockOwner = await repo.GetLockOwnerAsync(processId);
-            if (lockOwner.HasValue && lockOwner.Value != Guid.Empty)
-            {
-                Console.Error.WriteLine($"  locked: {id} (by {lockOwner.Value})");
-                skipped++;
-                continue;
-            }
+                // BPAProcessLock-Check (Read-Only SqlCommand OK)
+                var lockOwner = await repo.GetLockOwnerAsync(processId);
+                if (lockOwner.HasValue && lockOwner.Value != Guid.Empty)
+                {
+                    Console.Error.WriteLine($"  locked: {id} (by {lockOwner.Value})");
+                    skipped++;
+                    continue;
+                }
 
-            // Parse meta.json
-            MetaInfo? meta;
-            try
-            {
-                meta = JsonSerializer.Deserialize<MetaInfo>(File.ReadAllText(metaFile),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"  meta.json parse error for {id}: {ex.Message}");
-                errors++;
-                continue;
-            }
-            if (meta == null)
-            {
-                errors++;
-                continue;
-            }
+                // XML-Validierung
+                var procXml = File.ReadAllText(procFile);
+                if (!xml.IsValid(procXml))
+                {
+                    Console.Error.WriteLine($"  invalid XML: {id}");
+                    errors++;
+                    continue;
+                }
 
-            // Validate XML
-            var procXml = File.ReadAllText(procFile);
-            if (!xml.IsValid(procXml))
-            {
-                Console.Error.WriteLine($"  invalid XML: {id}");
-                errors++;
-                continue;
-            }
+                // Temp-File fuer AutomateC.exe /import
+                var tmpFile = Path.Combine(Path.GetTempPath(), $"bpgit-import-{id}.xml");
+                await File.WriteAllTextAsync(tmpFile, procXml);
+                tmpFiles.Add(tmpFile);
 
-            // Load existing DB row to preserve FK-referenced columns (lastmodifiedby, AttributeID, createdby, runmode, etc.)
-            var dbProcess = await repo.FindByIdAsync(processId);
-            if (dbProcess == null)
-            {
-                Console.Error.WriteLine($"  process not found in DB: {id}");
-                errors++;
-                continue;
-            }
+                // CLI-Args: /import + /forceid <guid> + /overwrite
+                // Wichtig: /forceid und /overwrite MUESSEN zusammen verwendet werden.
+                // Ohne /forceid schlaegt /import mit "Failed to create... already exists" fehl
+                // (selbst fuer existierende Processes/Objects).
+                var args = new List<string> { "/import", tmpFile, "/forceid", id, "/overwrite" };
 
-            // Build Process: keep FK-referenced columns from DB, update XML + lastmodifieddate
-            var process = new Process
-            {
-                processid = processId,
-                ProcessType = string.IsNullOrEmpty(meta.type) ? "P" : meta.type,
-                name = meta.name ?? "",
-                description = meta.description,
-                version = meta.version,
-                AttributeID = dbProcess.AttributeID,
-                processxml = procXml,
-                runmode = dbProcess.runmode,
-                sharedObject = dbProcess.sharedObject,
-                forceLiteralForm = dbProcess.forceLiteralForm,
-                useLegacyNamespace = dbProcess.useLegacyNamespace,
-                hasStartupParameters = dbProcess.hasStartupParameters,
-                wspublishname = dbProcess.wspublishname,
-                createdate = dbProcess.createdate,
-                createdby = dbProcess.createdby,
-                lastmodifieddate = DateTime.UtcNow,
-                lastmodifiedby = dbProcess.lastmodifiedby
-            };
+                AutomateCRunner.RunResult result;
+                try
+                {
+                    result = AutomateCRunner.Run(cfg, args.ToArray());
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  CLI failed for {id}: {ex.Message}");
+                    errors++;
+                    continue;
+                }
 
-            try
-            {
-                await repo.UpdateAsync(process);
+                if (result.ExitCode != 0)
+                {
+                    Console.Error.WriteLine($"  AutomateC exit {result.ExitCode} for {id}");
+                    if (!string.IsNullOrWhiteSpace(result.StdErr))
+                        Console.Error.WriteLine($"    stderr: {result.StdErr.Trim()}");
+                    if (!string.IsNullOrWhiteSpace(result.StdOut))
+                        Console.Error.WriteLine($"    stdout: {result.StdOut.Trim()}");
+                    errors++;
+                    continue;
+                }
+
+                // Snapshot-Update nach erfolgreichem Commit
+                MetaInfo? meta = null;
+                try
+                {
+                    meta = JsonSerializer.Deserialize<MetaInfo>(File.ReadAllText(metaFile),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+                catch { /* meta is optional for snapshot */ }
+
                 snapshot.Processes[id] = new SnapshotEntry
                 {
                     Hash = currentHash,
-                    Name = meta.name ?? "",
-                    Type = meta.type ?? ""
+                    Name = meta?.name ?? "",
+                    Type = meta?.type ?? ""
                 };
                 committed++;
-                Console.WriteLine($"  committed: {id} ({meta.name})");
+                Console.WriteLine($"  committed: {id} (via AutomateC.exe /import)");
             }
-            catch (Exception ex)
+
+            // Detect deletions (snapshot entry but no worktree dir)
+            foreach (var snapId in new List<string>(snapshot.Processes.Keys))
             {
-                Console.Error.WriteLine($"  error committing {id}: {ex.Message}");
-                errors++;
+                if (!Directory.Exists(Path.Combine(procDir, snapId)))
+                {
+                    Console.Error.WriteLine($"  deletion detected: {snapId} ({snapshot.Processes[snapId].Name})");
+                    Console.Error.WriteLine($"    AutomateC.exe hat kein Process-Delete. Manuell in BP Studio loeschen oder --allow-delete (SQL-Direct, Bypasst Audit-Log) — noch nicht implementiert.");
+                }
+            }
+        }
+        finally
+        {
+            // Cleanup temp files
+            foreach (var f in tmpFiles)
+            {
+                try { File.Delete(f); } catch { /* best effort */ }
             }
         }
 
         SnapshotStore.Save(workdir, snapshot);
         Console.WriteLine($"\n{committed} committed, {skipped} skipped, {errors} errors");
+        Console.WriteLine("Tip: query 'SELECT TOP 5 * FROM BPAAuditEvents ORDER BY eventid DESC' to verify audit entries.");
         return errors == 0 ? 0 : 1;
     }
 
