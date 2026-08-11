@@ -155,4 +155,43 @@ public class ProcessRepository
         public string? OldXml { get; set; }
         public string? NewXml { get; set; }
     }
+
+    /// <summary>
+    /// Folder-aware read of BP's folder hierarchy. Per #6287, only "Processes" (id=2)
+    /// and "Objects" (id=3) are returned (the other 4 Trees are BP-Studio-specific).
+    /// Nested groups via BPAGroupGroup are NOT traversed here — for MVP1 the demo DB
+    /// has 0 BPAGroupGroup rows, so flat group structure is sufficient. When nested
+    /// groups exist, callers can compose a multi-segment path manually.
+    /// </summary>
+    public async Task<FolderStructure> GetFolderStructureAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Create();
+        await conn.OpenAsync(ct);
+
+        var trees = (await conn.QueryAsync<Tree>(new CommandDefinition(
+            "SELECT id AS Id, name AS Name FROM dbo.BPATree WHERE name IN ('Processes', 'Objects') ORDER BY id",
+            cancellationToken: ct))).ToList();
+
+        if (trees.Count == 0)
+            return new FolderStructure(new List<Tree>(), new List<Group>(), new List<ProcessMembership>());
+
+        var treeIds = trees.Select(t => t.Id).ToArray();
+
+        var groups = (await conn.QueryAsync<Group>(new CommandDefinition(
+            "SELECT id AS Id, treeid AS TreeId, name AS Name, isrestricted AS IsRestricted " +
+            "FROM dbo.BPAGroup WHERE treeid IN @treeIds ORDER BY treeid, name",
+            new { treeIds }, cancellationToken: ct))).ToList();
+
+        if (groups.Count == 0)
+            return new FolderStructure(trees, new List<Group>(), new List<ProcessMembership>());
+
+        var groupIds = groups.Select(g => g.Id).ToArray();
+
+        var memberships = (await conn.QueryAsync<ProcessMembership>(new CommandDefinition(
+            "SELECT processid AS ProcessId, groupid AS GroupId " +
+            "FROM dbo.BPAGroupProcess WHERE groupid IN @groupIds",
+            new { groupIds }, cancellationToken: ct))).ToList();
+
+        return new FolderStructure(trees, groups, memberships);
+    }
 }

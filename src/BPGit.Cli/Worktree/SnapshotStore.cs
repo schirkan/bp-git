@@ -13,11 +13,17 @@ public class SnapshotEntry
     [JsonPropertyName("hash")] public string Hash { get; set; } = "";
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("type")] public string Type { get; set; } = "";
+    /// <summary>
+    /// Worktree-relative path to the process XML, e.g. "processes/Processes/Default/MP - Subprocess A.xml".
+    /// Per #6289: filename is process.name + ".xml", no per-process subfolder, no meta.json.
+    /// Snapshot is the source of truth for processid -> worktree-path mapping.
+    /// </summary>
+    [JsonPropertyName("path")] public string? Path { get; set; }
 }
 
 public class Snapshot
 {
-    [JsonPropertyName("version")] public int Version { get; set; } = 1;
+    [JsonPropertyName("version")] public int Version { get; set; } = 2;
     [JsonPropertyName("extractedAt")] public DateTime ExtractedAt { get; set; }
     [JsonPropertyName("processes")] public Dictionary<string, SnapshotEntry> Processes { get; set; } = new();
 }

@@ -7,26 +7,27 @@ using BPGit.Format;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BPGit.Cli.Commands;
 
 /// <summary>
-/// bpgit commit --force
-/// Schreibt Worktree-XMLs zurueck in BP-DB via AutomateC.exe /import
-/// (statt direkt SqlCommand). Dadurch schreibt BP's Runtime automatisch
-/// korrekte Audit-Eintraege in BPAAuditEvents (newXML).
-/// Lock-Check bleibt SqlCommand-basiert (Read-Only OK).
-/// Process-Delete via CLI nicht unterstuetzt — nur Warnung.
+/// bpgit commit --force — Write worktree XMLs back to BP-DB via AutomateC.exe /import.
+///
+/// Folder-aware layout (per #6289): walks processes/**/*.xml, resolves each file's
+/// processid via snapshot.json (path → processid), strips leading XML comments
+/// (per #6277 / BP's strict /import parser), and invokes AutomateC.exe
+/// /import + /forceid &lt;guid&gt; + /overwrite.
+///
+/// Lock-check stays on SqlCommand (read-only is fine). Process-Delete via CLI is
+/// not supported (BP-CLI limitation, per #6276) — only warning.
 /// </summary>
 public static class CommitCommand
 {
     // BP's /import-Parser ist strikt: Leading XML-Comments brechen den Parser
     // ("Failed to create... already exists"), obwohl /overwrite gesetzt ist.
-    // Wir strippen sie vor dem Temp-Write, behalten die Original-XML im Worktree.
-    // Pattern: optionaler Whitespace, dann 1+ Leading-Comments (jeweils gefolgt von Whitespace).
     private static readonly Regex LeadingXmlCommentsRegex =
         new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
 
@@ -66,6 +67,19 @@ public static class CommitCommand
             return 1;
         }
 
+        // Build path → processid reverse-map from snapshot (forward-slash normalized)
+        var pathToId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var pathToEntry = new Dictionary<string, SnapshotEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in snapshot.Processes)
+        {
+            if (!string.IsNullOrEmpty(kv.Value.Path))
+            {
+                var normalized = kv.Value.Path.Replace('\\', '/');
+                pathToId[normalized] = Guid.Parse(kv.Key);
+                pathToEntry[normalized] = kv.Value;
+            }
+        }
+
         // Connection factory for read-only operations (Lock-Check)
         var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
         var repo = new ProcessRepository(factory);
@@ -78,27 +92,20 @@ public static class CommitCommand
 
         try
         {
-            foreach (var dir in Directory.GetDirectories(procDir))
+            foreach (var file in Directory.EnumerateFiles(procDir, "*.xml", SearchOption.AllDirectories))
             {
-                var id = Path.GetFileName(dir);
-                if (!Guid.TryParse(id, out var processId))
+                var relPath = Path.GetRelativePath(workdir, file).Replace('\\', '/');
+
+                if (!pathToId.TryGetValue(relPath, out var processId))
                 {
+                    Console.WriteLine($"  skipped (not in snapshot): {relPath}");
                     skipped++;
                     continue;
                 }
 
-                var procFile = Path.Combine(dir, "process.xml");
-                var metaFile = Path.Combine(dir, "meta.json");
-
-                if (!File.Exists(procFile) || !File.Exists(metaFile))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                // Idempotenz: Hash-Vergleich Worktree-XML gegen Snapshot-Hash
-                var currentHash = SnapshotStore.ComputeHash(File.ReadAllText(procFile));
-                if (snapshot.Processes.TryGetValue(id, out var snap) && snap.Hash == currentHash)
+                // Idempotency: Hash-Vergleich Worktree-XML gegen Snapshot-Hash
+                var currentHash = SnapshotStore.ComputeHash(File.ReadAllText(file));
+                if (pathToEntry.TryGetValue(relPath, out var snap) && snap.Hash == currentHash)
                 {
                     skipped++;
                     continue;
@@ -108,31 +115,30 @@ public static class CommitCommand
                 var lockOwner = await repo.GetLockOwnerAsync(processId);
                 if (lockOwner.HasValue && lockOwner.Value != Guid.Empty)
                 {
-                    Console.Error.WriteLine($"  locked: {id} (by {lockOwner.Value})");
+                    Console.Error.WriteLine($"  locked: {relPath} ({processId})");
                     skipped++;
                     continue;
                 }
 
                 // XML-Validierung
-                var procXml = File.ReadAllText(procFile);
+                var procXml = File.ReadAllText(file);
                 if (!xml.IsValid(procXml))
                 {
-                    Console.Error.WriteLine($"  invalid XML: {id}");
+                    Console.Error.WriteLine($"  invalid XML: {relPath}");
                     errors++;
                     continue;
                 }
 
-                // Leading-XML-Comments strippen (BP's /import ist strikt, siehe oben)
+                // Leading-XML-Comments strippen
                 var importXml = StripLeadingXmlComments(procXml);
 
                 // Temp-File fuer AutomateC.exe /import
-                var tmpFile = Path.Combine(Path.GetTempPath(), $"bpgit-import-{id}.xml");
+                var tmpFile = Path.Combine(Path.GetTempPath(), $"bpgit-import-{processId}.xml");
                 await File.WriteAllTextAsync(tmpFile, importXml);
                 tmpFiles.Add(tmpFile);
 
-                // CLI-Args: /import + /overwrite (reicht fuer existierende Processes/Objects
-                // bei sauberer XML — empirisch verifiziert 2026-08-11 mit canonical export).
-                var args = new List<string> { "/import", tmpFile, "/overwrite" };
+                // CLI-Args: /import + /forceid <guid> + /overwrite
+                var args = new List<string> { "/import", tmpFile, "/forceid", processId.ToString(), "/overwrite" };
 
                 AutomateCRunner.RunResult result;
                 try
@@ -141,14 +147,14 @@ public static class CommitCommand
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"  CLI failed for {id}: {ex.Message}");
+                    Console.Error.WriteLine($"  CLI failed for {relPath}: {ex.Message}");
                     errors++;
                     continue;
                 }
 
                 if (result.ExitCode != 0)
                 {
-                    Console.Error.WriteLine($"  AutomateC exit {result.ExitCode} for {id}");
+                    Console.Error.WriteLine($"  AutomateC exit {result.ExitCode} for {relPath}");
                     if (!string.IsNullOrWhiteSpace(result.StdErr))
                         Console.Error.WriteLine($"    stderr: {result.StdErr.Trim()}");
                     if (!string.IsNullOrWhiteSpace(result.StdOut))
@@ -158,37 +164,19 @@ public static class CommitCommand
                 }
 
                 // Snapshot-Update nach erfolgreichem Commit
-                MetaInfo? meta = null;
-                try
-                {
-                    meta = JsonSerializer.Deserialize<MetaInfo>(File.ReadAllText(metaFile),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                }
-                catch { /* meta is optional for snapshot */ }
-
-                snapshot.Processes[id] = new SnapshotEntry
+                snapshot.Processes[processId.ToString()] = new SnapshotEntry
                 {
                     Hash = currentHash,
-                    Name = meta?.name ?? "",
-                    Type = meta?.type ?? ""
+                    Name = snap?.Name ?? "",
+                    Type = snap?.Type ?? "",
+                    Path = relPath
                 };
                 committed++;
-                Console.WriteLine($"  committed: {id} (via AutomateC.exe /import)");
-            }
-
-            // Detect deletions (snapshot entry but no worktree dir)
-            foreach (var snapId in new List<string>(snapshot.Processes.Keys))
-            {
-                if (!Directory.Exists(Path.Combine(procDir, snapId)))
-                {
-                    Console.Error.WriteLine($"  deletion detected: {snapId} ({snapshot.Processes[snapId].Name})");
-                    Console.Error.WriteLine($"    AutomateC.exe hat kein Process-Delete. Manuell in BP Studio loeschen oder --allow-delete (SQL-Direct, Bypasst Audit-Log) — noch nicht implementiert.");
-                }
+                Console.WriteLine($"  committed: {relPath} ({processId})");
             }
         }
         finally
         {
-            // Cleanup temp files
             foreach (var f in tmpFiles)
             {
                 try { File.Delete(f); } catch { /* best effort */ }
@@ -199,16 +187,5 @@ public static class CommitCommand
         Console.WriteLine($"\n{committed} committed, {skipped} skipped, {errors} errors");
         Console.WriteLine("Tip: query 'SELECT TOP 5 * FROM BPAAuditEvents ORDER BY eventid DESC' to verify audit entries.");
         return errors == 0 ? 0 : 1;
-    }
-
-    private class MetaInfo
-    {
-        public string? processid { get; set; }
-        public string? name { get; set; }
-        public string? type { get; set; }
-        public string? description { get; set; }
-        public string? version { get; set; }
-        public int AttributeID { get; set; }
-        public DateTime lastmodifieddate { get; set; }
     }
 }
