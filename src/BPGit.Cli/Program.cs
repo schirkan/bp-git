@@ -24,6 +24,7 @@ public class Program
         int limit = 50;
         Guid? processId = null;
         DateTime? since = null;
+        string? sCode = null;
         string? positionalArg = null;
 
         for (int i = 0; i < args.Length; i++)
@@ -56,6 +57,10 @@ public class Program
                     if (i + 1 < args.Length &&
                         DateTime.TryParse(args[++i], CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var s))
                         since = s;
+                    break;
+                case "--event":
+                    if (i + 1 < args.Length)
+                        sCode = args[++i];
                     break;
                 case "--help":
                 case "-h":
@@ -91,7 +96,7 @@ public class Program
                     DiffCommand.Run(output, positionalArg);
                     return 0;
                 case "log":
-                    await LogCommand.RunAsync(output, limit, processId, since);
+                    await LogCommand.RunAsync(output, limit, processId, since, sCode);
                     return 0;
                 case "commit":
                     return await CommitCommand.RunAsync(output, force);
@@ -122,7 +127,8 @@ public class Program
         Console.WriteLine("      --force            Required for `commit` (explicit write)");
         Console.WriteLine("  -n, --limit N          Limit rows for `log` (default 50)");
         Console.WriteLine("      --processid <guid> Filter by processid for `log`");
-        Console.WriteLine("      --since YYYY-MM-DD Only entries with backupdate >= since for `log`");
+        Console.WriteLine("      --since YYYY-MM-DD Only entries with eventdatetime >= since for `log`");
+        Console.WriteLine("      --event <sCode> Filter by event-type code (e.g. P006, L001) for `log`");
         Console.WriteLine("  -h, --help             Show this help message");
         Console.WriteLine();
         Console.WriteLine("Commands:");
@@ -130,7 +136,7 @@ public class Program
         Console.WriteLine("  pull                   Export BP processes from DB to worktree");
         Console.WriteLine("  status                 Show diff between worktree and snapshot");
         Console.WriteLine("  diff [<processid>]     Hash-based drift report (worktree vs snapshot)");
-        Console.WriteLine("  log                    Show BP backup history from BPAProcessBackup");
+        Console.WriteLine("  log                    Show BP per-edit audit history from BPAAuditEvents");
         Console.WriteLine("  commit                 Write worktree changes back to BP DB (requires --force)");
     }
 }

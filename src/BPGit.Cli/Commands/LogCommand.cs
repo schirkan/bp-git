@@ -1,5 +1,4 @@
 using BPGit.Cli.Config;
-using BPGit.Cli.Worktree;
 using BPGit.Data.Connection;
 using BPGit.Data.Repositories;
 using System;
@@ -15,7 +14,8 @@ public static class LogCommand
         string workdir,
         int limit,
         Guid? processId,
-        DateTime? since)
+        DateTime? since,
+        string? sCode)
     {
         var configPath = Path.Combine(workdir, ".bpgit", "config.toml");
         if (!File.Exists(configPath))
@@ -27,31 +27,45 @@ public static class LogCommand
         var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
         var repo = new ProcessRepository(factory);
 
-        var rows = await repo.GetHistoryAsync(limit, processId, since);
+        var rows = await repo.GetAuditHistoryAsync(limit, processId, since, sCode);
 
         if (rows.Count == 0)
         {
-            Console.WriteLine("No backup history. Backups are written by BP on every Save.");
+            Console.WriteLine("No audit history matches the filter.");
             return;
         }
 
-        Console.WriteLine($"Showing {rows.Count} backup(s)");
+        var filterDesc = BuildFilterDescription(processId, since, sCode);
+        Console.WriteLine($"Showing {rows.Count} audit event(s){filterDesc}");
         Console.WriteLine();
-        Console.WriteLine($"  {"BACKUPDATE",-19}  {"PROCESS",-40}  {"AUTHOR",-20}  ID");
-        Console.WriteLine($"  {new string('-', 19)}  {new string('-', 40)}  {new string('-', 20)}  {new string('-', 36)}");
+        Console.WriteLine($"  {"WHEN",-19}  {"EVENT",-6}  {"DESCRIPTION",-60}  {"PROCESS",-36}  AUTHOR");
+        Console.WriteLine($"  {new string('-', 19)}  {new string('-', 6)}  {new string('-', 60)}  {new string('-', 36)}  {new string('-', 20)}");
         foreach (var r in rows)
         {
-            var ts = r.BackupDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "(null)";
-            var name = Truncate(r.Name ?? "(no name)", 40);
-            var author = r.Username ?? (r.UserId?.ToString()[..8] ?? "(unknown)");
+            var ts = r.EventDateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            var code = r.SCode ?? "(no code)";
+            var narrative = Truncate(r.SNarrative ?? "", 60);
+            var proc = r.TgtProcId.HasValue
+                ? $"{r.TgtProcName ?? "(deleted)"}  {Truncate(r.TgtProcId.Value.ToString(), 8)}"
+                : "(n/a)";
+            proc = Truncate(proc, 36);
+            var author = r.Username ?? Truncate(r.SrcUserId.ToString()[..8], 8);
             author = Truncate(author, 20);
-            var idShort = r.ProcessId.ToString();
-            Console.WriteLine($"  {ts,-19}  {name,-40}  {author,-20}  {idShort}");
+            Console.WriteLine($"  {ts,-19}  {code,-6}  {narrative,-60}  {proc,-36}  {author}");
         }
         Console.WriteLine();
-        Console.WriteLine("Tip: 'bpgit diff --xml <processid>' to inspect a backup XML payload.");
+        Console.WriteLine("Tip: 'bpgit log --event P006' shows only process imports. 'bpgit log --processid <guid>' filters to one process.");
+    }
+
+    private static string BuildFilterDescription(Guid? processId, DateTime? since, string? sCode)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+        if (processId.HasValue) parts.Add($"processid={processId.Value}");
+        if (since.HasValue) parts.Add($"since={since.Value:yyyy-MM-dd}");
+        if (!string.IsNullOrEmpty(sCode)) parts.Add($"event={sCode}");
+        return parts.Count == 0 ? "" : " (" + string.Join(", ", parts) + ")";
     }
 
     private static string Truncate(string s, int max)
-        => s.Length <= max ? s : s[..(max - 1)] + "\u2026";
+        => string.IsNullOrEmpty(s) ? s : (s.Length <= max ? s : s[..(max - 1)] + "\u2026");
 }

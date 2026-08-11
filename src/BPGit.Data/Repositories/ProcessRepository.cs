@@ -84,15 +84,18 @@ public class ProcessRepository
     }
 
     /// <summary>
-    /// BP-side history timeline. BPAProcessBackup is written by the BP runtime
-    /// on each Save (full XML snapshot). Joined with BPAProcess for name and
-    /// LEFT JOIN BPAUser (UserID has no FK in BP's schema, so users can be
-    /// orphaned after deletions) for the author display.
+    /// BP-side per-edit audit history. BPAAuditEvents is written by the BP runtime
+    /// for every action (login, license change, process import, release overwrite, etc.)
+    /// and includes oldXML + newXML columns for full version reconstruction.
+    /// LEFT JOIN BPAUser (SrcUserID has no FK in BP's schema, so users can be
+    /// orphaned after deletions) for the acting-user display.
+    /// LEFT JOIN BPAProcess for the target process name when TgtProcID is set.
     /// </summary>
-    public async Task<IReadOnlyList<ProcessBackup>> GetHistoryAsync(
+    public async Task<IReadOnlyList<ProcessAuditEvent>> GetAuditHistoryAsync(
         int limit,
         Guid? processId = null,
         DateTime? since = null,
+        string? sCode = null,
         CancellationToken ct = default)
     {
         using var conn = _factory.Create();
@@ -100,62 +103,56 @@ public class ProcessRepository
 
         var sql = @"
             SELECT TOP (@limit)
-                bk.processid       AS ProcessId,
-                p.name             AS Name,
-                bk.backupdate      AS BackupDate,
-                bk.UserID          AS UserId,
-                u.username         AS Username,
-                CASE WHEN bk.compressedxml IS NOT NULL THEN 1 ELSE 0 END AS HasCompressedXml,
-                CASE WHEN bk.processxml    IS NOT NULL THEN 1 ELSE 0 END AS HasXml
-            FROM dbo.BPAProcessBackup bk
-            JOIN dbo.BPAProcess p ON p.processid = bk.processid
-            LEFT JOIN dbo.BPAUser u ON u.userid = bk.UserID
+                a.eventid             AS EventId,
+                a.eventdatetime       AS EventDateTime,
+                a.sCode               AS SCode,
+                a.sNarrative          AS SNarrative,
+                a.gSrcUserID          AS SrcUserId,
+                u.username            AS Username,
+                a.gTgtProcID          AS TgtProcId,
+                p.name                AS TgtProcName,
+                a.gTgtResourceID      AS TgtResourceId,
+                a.EditSummary         AS EditSummary,
+                a.comments            AS Comments,
+                CASE WHEN a.oldXML IS NOT NULL THEN 1 ELSE 0 END AS HasOldXml,
+                CASE WHEN a.newXML IS NOT NULL THEN 1 ELSE 0 END AS HasNewXml
+            FROM dbo.BPAAuditEvents a
+            LEFT JOIN dbo.BPAUser u ON u.userid = a.gSrcUserID
+            LEFT JOIN dbo.BPAProcess p ON p.processid = a.gTgtProcID
             WHERE 1 = 1
-                AND (@processId IS NULL OR bk.processid = @processId)
-                AND (@since    IS NULL OR bk.backupdate >= @since)
-            ORDER BY bk.backupdate DESC";
+                AND (@processId IS NULL OR a.gTgtProcID = @processId)
+                AND (@since    IS NULL OR a.eventdatetime >= @since)
+                AND (@sCode    IS NULL OR a.sCode = @sCode)
+            ORDER BY a.eventdatetime DESC, a.eventid DESC";
 
-        var rows = await conn.QueryAsync<ProcessBackup>(
+        var rows = await conn.QueryAsync<ProcessAuditEvent>(
             new CommandDefinition(
                 sql,
-                new { limit, processId, since },
+                new { limit, processId, since, sCode },
                 cancellationToken: ct));
         return rows.ToList();
     }
 
     /// <summary>
-    /// Loads the XML for a specific backup row. Prefers processxml (readable),
-    /// falls back to a marker "[compressedxml: N bytes]" if only the IMAGE
-    /// payload is present.
+    /// Loads the oldXML + newXML for a specific audit event (full payload for diff
+    /// or rollback scenarios). oldXML can be NULL for "create" events (e.g. P006 on
+    /// a brand-new process); newXML contains the full XML after the action.
     /// </summary>
-    public async Task<string?> GetBackupXmlAsync(
-        Guid processId,
-        DateTime backupDate,
-        CancellationToken ct = default)
+    public async Task<AuditXmlPayload?> GetAuditXmlAsync(int eventId, CancellationToken ct = default)
     {
         using var conn = _factory.Create();
         await conn.OpenAsync(ct);
         const string sql = @"
-            SELECT
-                processxml    AS Xml,
-                DATALENGTH(compressedxml) AS CompressedBytes
-            FROM dbo.BPAProcessBackup
-            WHERE processid = @processId AND backupdate = @backupDate";
-        var row = await conn.QueryFirstOrDefaultAsync<BackupXmlRow>(
-            new CommandDefinition(
-                sql,
-                new { processId, backupDate },
-                cancellationToken: ct));
-        if (row is null) return null;
-        if (!string.IsNullOrEmpty(row.Xml)) return row.Xml;
-        if (row.CompressedBytes is > 0)
-            return $"[compressedxml: {row.CompressedBytes} bytes - decompression not implemented in v1]";
-        return null;
+            SELECT oldXML AS OldXml, newXML AS NewXml
+            FROM dbo.BPAAuditEvents
+            WHERE eventid = @eventId";
+        return await conn.QueryFirstOrDefaultAsync<AuditXmlPayload>(
+            new CommandDefinition(sql, new { eventId }, cancellationToken: ct));
     }
 
-    private sealed class BackupXmlRow
+    public class AuditXmlPayload
     {
-        public string? Xml { get; set; }
-        public int? CompressedBytes { get; set; }
+        public string? OldXml { get; set; }
+        public string? NewXml { get; set; }
     }
 }
