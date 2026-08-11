@@ -1,0 +1,200 @@
+﻿Blue Prism Command-line Interface Version 7.5.1.18099
+Copyright Blue Prism Limited 2004 - 2026
+HELP - 
+  Actions:
+    /help
+
+    /locale xx-XX (set non-default locale)
+
+    /createdb <password> (drop if already exists, then recreate database)
+    /replacedb <password> (clear if already exists, then rebuild tables)
+    /upgradedb <password>
+    /license <licensefile>
+    /removelicense <licensefile>
+    /regobject <clsid>
+    /regwebservice <name> <url>
+    /unregwebservice <name>
+    /report <filespec>
+    /rolereport <filespec> - Writes out a report on all the roles and associated permissions
+                             for each user in the system to the specified file.
+    /elementusage <filespec>
+    /listprocesses
+    /refreshdependencies {force}
+
+    /import <filespec> [/forceid {new|<guid>}] [/overwrite]
+    /importrelease <filespec>
+    /export <processname>
+    /exportpackage <packagename> [/release <releasename>]
+    /publish <processname>
+    /unpublish <processname>
+    /publishws <processname> <servicename> [/forcedoclitencoding] [/useGlobalNamespace]
+                    - If the optional /forcedoclitencoding is present then the Web Service
+                      will always return SOAP messages in Document\Literal form.
+                    - If the /forcedoclitencoding parameter is not present, then
+                      you can force the use of a Global Namespace.
+    /unpublishws <processname>
+
+    /fontimport <filespec>
+
+    /createqueue <keyfield> <running> <maxattempts>
+    /setencrypt <encrypter-name>
+    /resetencrypt
+    /exportqueue <filespec>
+    /queueclearworked /queuename <name> [/age <age>]
+                    - Delete items marked as completed or exception from the named queue
+                      If /age switch is used, only worked items which are older than the
+                      specified age are deleted from the queue.
+                      Otherwise all worked items are deleted from the queue.
+    /deletequeue
+
+    /poolcreate /pool <name> - create a resource pool with the specified name
+    /pooldelete /pool <name> - delete the specified resource pool
+    /pooladd /pool <name> [/resource <name>] - add a resource to the specified pool.
+                                               If no resource name is specified,
+                                               the local resource is added.
+    /poolremove [/resource <name>] - remove a resource from the pool in which it resides.
+                                     If no resource name is specified, the local
+                                     resource is removed from its pool.
+
+    /startschedule      [/schedule <name>|...]
+    /deleteschedule     [/schedule <name>|...]
+    /viewschedtimetable {<name> | <no-of-days> <date>} [/schedule <name>|...]
+        [/format {csv|txt}]
+    /viewschedreport    {<name> | <no-of-days> <date>} [/schedule <name>|...]
+        [/format {csv|txt}]
+
+    /setev <name> <datatype> <value> <description>
+    /deleteev <name>
+    /archive
+    /restorearchive
+    /setarchivepath <path>
+
+    /run <processname>
+    /getauthtoken [/process <processname>]
+        - The optional /process parameter is required for the token to authenticate Resource PC commands containing a process ID
+    /status <sessionid>
+    /resourcestatus <resourcename> <limit number> <limit type>
+                      - Report sessions for a given resource name, the results can be limited to a specific period
+                      - to list all resources use [All] as the resource name
+                      - by providing a limit number and type (m = minutes, h = hours, d = days, mm = months)
+                      - e.g.  /resourcestatus ABC:8181 1 d would return all sessions for the named resource that started in the last day
+                      - Requires user credentials to be supplied via the /user switch
+    /getlog <sessionid>
+    /requeststop <sessionid|sessionnumber>
+    /wslog on|off
+    /getauditlog
+    /getbod <objectname>
+    /genivbowrapper <name> - generate a wrapper VBO for the specified Internal
+                             Business Object. ? can be specified to list the
+                             available object names.
+    /serverconfig <name> <connection> <port>
+               - Creates or updates the Blue Prism application server configuration identified by the specified name, setting the database connection name and listening port to the provided values.
+               - If no encryption schemes have been configured for the server configuration, a new encryption scheme record will be created.
+                 By default the scheme will be named Default Encryption Scheme and it will be configured to use AES 256 (AESCryptoService) and a randomly generated key. 
+                 Alternatively use the /encryptionscheme switch to define the settings that will be used.
+               - An optional /connectionmode switch can be used to set the connection mode.
+               - An optional /serviceaccount switch can be used to set the client credentials for the service account that is used by Blue Prism to communicate with Authentication Server.
+
+    /ascrconfig <servername> <conntype> [1 - grpc | 2 - wcf] <hostname> <port> <outbound port (WCF only)> <connectionmode> [1 - Certificate | 2 - Windows (WCF only) | 3 - Insecure] <certificatename> <clientcertificatename> <ascrservercertstore> <ascrclientcertstore> Certificate parameters are only required if certificate(1) is selected for mode [/loadbalancername <string>]
+    /reencryptdata [/batchsize <size>] [/maxbatches <number>]
+    /configencrypt [default | thumbprint] [/forceconfigencrypt] - show configencrypt method, or encrypt server config using default Blue Prism encryption, or own certificate with specified thumbprint. Force override of error - a warning is displayed if possible.
+    /createcredential <credname> <username> <password> [/description <string>] 
+                                            [/expirydate <date>] [/invalid <flag>] [/credentialtype <string>]
+                             - Use "" to set an empty username or password
+                             - credentialtype must be one of the following;
+                                 - General, BasicAuthentication, OAuth2ClientCredentials, OAuth2JwtBearerToken, BearerToken, DataGatewayCredentials.
+    /updatecredential <credname> [/username <username>] [/password <password>] 
+                                 [/description <string>] [/expirydate <date>] [/invalid <flag>] [/credentialtype <string>]
+                             - credentialtype must be one of the following;
+                                 - General, BasicAuthentication, OAuth2ClientCredentials, OAuth2JwtBearerToken, BearerToken, DataGatewayCredentials.
+    /setcredentialproperty <credname> <propertyname> <propertyvalue> 
+                    - Create a New credential property or update it if it already exists
+    /mapauthenticationserverusers <inputcsvpath> <outputcsvpath>
+        - Map users between Blue Prism and Authentication Server
+        - inputcsvpath: The path to a csv file which contains details of the users to be mapped. Read access required by AutomateC.
+        - outputcsvpath: The path to which a csv file containing the users that could not be mapped will be written. Read and write access required by AutomateC. 
+    /getblueprismtemplateforusermapping <outputcsvpath>
+        - Create a csv template populated with Blue Prism native users for mapping to Authentication Server users.
+        - outputcsvpath: The path to the csv file. Read and write access required by AutomateC.
+    /getauthenticationservertemplateforusermapping <outputcsvpath>
+        - Create Authentication Server user template csv file for user mapping.
+        - outputcsvpath: The path to the csv file. Read and write access required by AutomateC.
+    /setkerberosrealm <kerberosrealm> 
+        - Sets the Kerberos realm for a connection. The realm will be set for the last used connection or the connection specified with /dboconname.
+        - kerberosrealm: The Kerberos realm of the Service Principal Name configured for Blue Prism Server.
+    /forcentlm <flag> 
+        - Sets the force NTLM flag for a connection. The flag will be set for the last used connection or the connection specified with /dboconname.
+    /resetdefaultadminpassword <new password> 
+        - Resets the default password for the admin user.
+    /setactivedirectoryauth <flag> 
+        - Enables or disables Active Directory authentication.
+    /setactivedirectorygroupbasedroles <flag> 
+        - Enables or disables the mapping between Active Directory security groups and Blue Prism roles.
+    /mapactivedirectorygrouptorole <role> <group SID> <group DN> 
+        - Maps an Active Directory security group, specified by SID and Distinguished Name, to an existing Blue Prism role.
+
+  Options:
+    /dbconname <name> - specify the connection to use
+    /user <name> <pwd> - specify Blue Prism authentication details
+    /sso - authentication with Blue Prism using single sign-on
+    /wsauth <name> <pwd> - specify authentication details for web service, with
+                           /regwebservice
+    /maxdbver - specifies maximum database version to go to when creating or 
+                upgrading
+    /startp <xml> - use with /run to set startup parameters
+    /resource <target>
+    /port <portnumber>
+    /forceid {new|<guid>} - force an /import'ed process to use the specified
+                            guid or a new one
+    /overwrite - overwrites a process/object with the same ID as the one being
+                 /imported
+    /queuename <name> - use with /createqueue /exportqueue and /deletequeue
+    /queuefilter <filtername> - use with /exportqueue to specify the data of
+                                interest
+    /clearexported - delete exported items from the database as part of
+                     /exportqueue
+    /from yyyyMMdd - set inclusive minimum date cutoff for archiving
+    /to yyyyMMdd - set non-inclusive maximum date cutoff for archiving
+    /age <value> - set maximum age for archiving or clearing worked items from queues
+                   e.g. 1y=1 year, 6m=6 months, 2w=2 weeks, 7d=7 days
+    /process <name> - optionally, with /archive, only archive logs for this
+                      particular process
+    /timeout <millis> - set timeout - optionally used with /regwebservice
+    /objectname <name> - use with /regwebservice to set the name used for the
+                         business object
+    /connectionmode <value> - use with /serverconfig to set connection mode of server.
+                      Default value is 0. Available connection modes are - 
+                      0 = WCF: SOAP with Message Encryption & Windows Authentication
+                      1 = WCF: SOAP with Transport Encryption & Windows Authentication
+                      2 = WCF: SOAP with Transport Encryption
+                      3 = .NET Remoting: Secure
+                      4 = .NET Remoting: Insecure
+                      5 = WCF: Insecure
+    /encryptionscheme <name> [<encryptionmethod>] - use with /serverconfig to create an encryption scheme with the specified name on the server.
+                                           Default encryption method value is 3. Available methods are - 
+                                           1 = Triple DES (192 bit) (Retired)
+                                           2 = AES-256 RijndaelManaged (256 bit)
+                                           3 = AES-256 AesCryptoService (256 bit)
+    /ordered <value> - use with /serverconfig to enable ordered sessions (True by default)
+    /secure <value> - use with /serverconfig to set security - True (default)
+                      or False. NOTE: this has now been deprecated and you should
+                      now use /connectionmode instead.
+    /delete - use with /archive to delete only, without exporting first
+    /setallowanonresources <value> - set resources to allow anonymous logins
+    /password <password> - use with /updatecredential to update the password for an existing credential. Use "" to set an empty password.
+    /description <string> - use with /updatecredential or /createcredential to update/set the credential description.
+    /username <username> - use with /updatecredential to update the credential username. Use "" to set an empty username.
+    /expirydate <date> - use with /updatecredential or /createcredential to update/set the credential's expiry date.
+                     Date must be in format yyyyMMdd.
+    /invalid <flag> - use with /updatecredential or /createcredential to specify whether a credential should be marked as invalid.
+    /credentialtype <string> - use with /updatecredential or /createcredential to specify the credential's type.
+                     Must be one of the following credential types: General, BasicAuthentication, OAuth2ClientCredentials, OAuth2JwtBearerToken, BearerToken, DataGatewayCredentials
+    /requestactivedirectorycacherefresh - use with /user <name> <pwd> or /sso  to refresh Active Directory cache.
+    /serviceaccount <clientid> <clientsecret>
+                     Use with /serverconfig to specify the client id and the client secret of the service account that is used by Blue Prism to communicate with Authentication Server.
+
+  Notes:
+    When using the /createdb, /replacedb and /upgradedb options with Windows
+    Authentication the <password> parameter is ignored, but something 
+    (anything!) must be supplied
+
