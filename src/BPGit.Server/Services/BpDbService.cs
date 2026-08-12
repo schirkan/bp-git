@@ -1,13 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using BPGit.Data.Models;
 using Microsoft.Data.SqlClient;
 
 namespace BPGit.Server.Services;
 
 /// <summary>
-/// DB-Wrapper fuer BP-DB-Lookups (BPAProcess + BPAProcessLock).
-/// Wird vom pre-receive Hook verwendet, um <c>processid</c> via Name zu ermitteln
-/// und Lock-Konflikte vor dem <c>/import</c> zu erkennen.
+/// DB-Wrapper fuer BP-DB-Lookups (BPAProcess + BPAProcessLock + BPATree + BPAGroup + BPAGroupProcess).
+/// Wird vom pre-receive Hook (processid-Lookup) und von WorktreeSyncService
+/// (Materialization BP-DB → Worktree) verwendet.
 ///
 /// Connection-Pooling laeuft automatisch via .NET's built-in <see cref="SqlConnection"/>
 /// pool (Connection-String identisch fuer mehrere Calls).
@@ -81,6 +83,89 @@ public sealed class BpDbService
         var result = await cmd.ExecuteScalarAsync();
         return result is string s ? s : null;
     }
+
+    /// <summary>
+    /// Read all processes with name + xml content. Used by WorktreeSyncService for materialization.
+    /// </summary>
+    public async Task<IReadOnlyList<BpProcessRow>> GetAllProcessesAsync()
+    {
+        var results = new List<BpProcessRow>();
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT processid, name, processxml
+            FROM BPAProcess
+            WHERE name IS NOT NULL AND name <> ''";
+        await using var rdr = await cmd.ExecuteReaderAsync();
+        while (await rdr.ReadAsync())
+        {
+            results.Add(new BpProcessRow(
+                ProcessId: rdr.GetGuid(0),
+                Name: rdr.GetString(1),
+                XmlContent: rdr.IsDBNull(2) ? null : rdr.GetString(2)));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Read folder structure: filtered Trees (Processes + Objects only), their Groups,
+    /// and the M:N ProcessMemberships. Used by WorktreeSyncService for materialization.
+    /// BPAGroupGroup (nested folders) is supported via flat M:N — we resolve nested paths
+    /// in WorktreeSyncService by walking the chain.
+    /// </summary>
+    public async Task<FolderStructure> GetFolderStructureAsync()
+    {
+        var trees = new List<Tree>();
+        var groups = new List<Group>();
+        var memberships = new List<ProcessMembership>();
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Trees (only Processes=2 and Objects=3)
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT id, name FROM BPATree WHERE id IN (2, 3) ORDER BY id";
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
+                trees.Add(new Tree { Id = rdr.GetInt32(0), Name = rdr.GetString(1) });
+        }
+
+        // Groups (only for our Trees)
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT id, treeid, name FROM BPAGroup WHERE treeid IN (2, 3)";
+            await using var rdr = await cmd.ExecuteReaderAsync();
+            while (await rdr.ReadAsync())
+                groups.Add(new Group
+                {
+                    Id = rdr.GetGuid(0),
+                    TreeId = rdr.GetInt32(1),
+                    Name = rdr.GetString(2),
+                    IsRestricted = false
+                });
+        }
+
+        // Memberships (M:N Process-Group)
+        if (groups.Count > 0)
+        {
+            var groupIds = string.Join(",", groups.Select(g => $"'{g.Id}'"));
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT groupid, processid FROM BPAGroupProcess WHERE groupid IN ({groupIds})";
+                await using var rdr = await cmd.ExecuteReaderAsync();
+                while (await rdr.ReadAsync())
+                    memberships.Add(new ProcessMembership
+                    {
+                        GroupId = rdr.GetGuid(0),
+                        ProcessId = rdr.GetGuid(1)
+                    });
+            }
+        }
+
+        return new FolderStructure(trees, groups, memberships);
+    }
 }
 
 public sealed record BpaProcessLockInfo(
@@ -88,3 +173,5 @@ public sealed record BpaProcessLockInfo(
     Guid UserId,
     string? MachineName,
     string? Username);
+
+public sealed record BpProcessRow(Guid ProcessId, string Name, string? XmlContent);

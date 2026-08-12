@@ -63,6 +63,13 @@ builder.Services.AddSingleton(sp =>
     return sync;
 });
 builder.Services.AddSingleton<PreReceiveHandler>();
+builder.Services.AddSingleton(sp =>
+{
+    var db = sp.GetRequiredService<BpDbService>();
+    return new WorktreeSyncService(db);
+});
+builder.Services.AddSingleton<PostReceiveHandler>();
+builder.Services.AddSingleton<PostCheckoutHandler>();
 
 var app = builder.Build();
 
@@ -105,6 +112,33 @@ app.MapGet("/admin/db-lock", async (Guid processId, BpDbService db) =>
         machineName = lockInfo.MachineName,
         lockDateTime = lockInfo.LockDateTime
     });
+}).AllowAnonymous();
+
+// Admin-Endpoint: Worktree-Syncronisation (Phase 4c — BP-DB → Worktree).
+// Trigger via POST /admin/sync-worktree?root=<worktree-path>
+// Returns counts of written/deleted/skipped files + errors.
+app.MapPost("/admin/sync-worktree", async (HttpContext ctx, WorktreeSyncService sync) =>
+{
+    var root = ctx.Request.Query["root"].ToString();
+    if (string.IsNullOrWhiteSpace(root))
+        return Results.BadRequest(new { error = "Query parameter 'root' (worktree path) required" });
+
+    try
+    {
+        var result = await sync.MaterializeAsync(root);
+        return Results.Ok(new
+        {
+            worktreeRoot = root,
+            written = result.Written,
+            deleted = result.Deleted,
+            skipped = result.Skipped,
+            errors = result.Errors
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
 }).AllowAnonymous();
 
 // Git smart-HTTP endpoints. Auth required via Negotiate (Win Integrated).
