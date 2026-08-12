@@ -52,10 +52,10 @@ public static class AutomateCRunner
                 throw new InvalidOperationException("auth = \"user\" erfordert bpUser in bpgit-server.json");
             psi.ArgumentList.Add("/user");
             psi.ArgumentList.Add(cfg.BpUser);
-            var pwd = Environment.GetEnvironmentVariable(cfg.BpPasswordEnv);
+            var pwd = cfg.BpPassword;
             if (string.IsNullOrEmpty(pwd))
                 throw new InvalidOperationException(
-                    $"auth = \"user\" erfordert password in env var {cfg.BpPasswordEnv}");
+                    $"auth = \"user\" erfordert bpPassword in bpgit-server.json (per Martin #6359, nicht mehr in env var)");
             psi.ArgumentList.Add(pwd);
         }
         else

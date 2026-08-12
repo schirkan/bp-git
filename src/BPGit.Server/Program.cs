@@ -25,7 +25,7 @@ if (args.Length > 0 && args[0].Equals("init", StringComparison.OrdinalIgnoreCase
             BpDatabase = cfg.BpDatabase,
             BpAuth = cfg.BpAuth,
             BpUser = cfg.BpUser,
-            BpPasswordEnv = cfg.BpPasswordEnv,
+            BpPassword = cfg.BpPassword,
         };
     }
     return InitCommand.Run(cfg);
@@ -50,7 +50,7 @@ builder.Services.AddSingleton(cfg);
 string BuildConnectionString(ServerConfig c) =>
     c.BpAuth.Equals("sso", StringComparison.OrdinalIgnoreCase)
         ? $"Server={c.BpServer};Database={c.BpDatabase};Integrated Security=SSPI;TrustServerCertificate=true;"
-        : $"Server={c.BpServer};Database={c.BpDatabase};User Id={c.BpUser};Password={Environment.GetEnvironmentVariable(c.BpPasswordEnv)};TrustServerCertificate=true;";
+        : $"Server={c.BpServer};Database={c.BpDatabase};User Id={c.BpUser};Password={c.BpPassword};TrustServerCertificate=true;";
 
 builder.Services.AddSingleton<BpDbService>(sp =>
     new BpDbService(BuildConnectionString(sp.GetRequiredService<ServerConfig>())));

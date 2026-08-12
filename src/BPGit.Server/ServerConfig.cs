@@ -38,9 +38,11 @@ public sealed class ServerConfig
     [JsonPropertyName("bpUser")]
     public string? BpUser { get; init; }
 
-    /// <summary>BP SQL password (env-var reference, never in config file directly).</summary>
-    [JsonPropertyName("bpPasswordEnv")]
-    public string BpPasswordEnv { get; init; } = "BPGIT_DB_PASSWORD";
+    /// <summary>BP SQL password (plaintext in config file, only used when <see cref="BpAuth"/> = <c>user</c>).
+    /// Per Martin #6359: password belongs in config, NOT in env var (env was BPGIT_DB_PASSWORD).
+    /// Sensitive file — see <c>.gitignore</c> for <c>bpgit-server.json</c>.</summary>
+    [JsonPropertyName("bpPassword")]
+    public string? BpPassword { get; init; }
 
     /// <summary>Absolute path to the bare repo (derived from <see cref="RepoRoot"/> + <see cref="RepoName"/>).</summary>
     [JsonIgnore]
