@@ -50,7 +50,7 @@ public static class GitHttpHandler
         var uploadMatch = MatchRoute(path, suffix: "/git-upload-pack");
         if (uploadMatch is { } repo2 && HttpMethods.IsPost(ctx.Request.Method))
         {
-            return await HandleUploadPackStubAsync(ctx, repo2);
+            return await HandleUploadPackAsync(ctx, repo2, cfg);
         }
 
         // Route: /{repo}/git-receive-pack  (POST)
@@ -155,13 +155,58 @@ public static class GitHttpHandler
         return true;
     }
 
-    private static async Task<bool> HandleUploadPackStubAsync(HttpContext ctx, string repoName)
+    /// <summary>
+    /// Delegates to native <c>git upload-pack --stateless-rpc</c> via Process spawn
+    /// (symmetric to <see cref="HandleReceivePackAsync"/> for the push direction).
+    ///
+    /// Client sends: pkt-line with wants/haves + flush + PACK data.
+    /// Server returns: pack data + flush.
+    /// </summary>
+    private static async Task<bool> HandleUploadPackAsync(HttpContext ctx, string repoName, ServerConfig cfg)
     {
-        ctx.Response.StatusCode = StatusCodes.Status501NotImplemented;
-        ctx.Response.ContentType = "text/plain; charset=utf-8";
-        await ctx.Response.WriteAsync(
-            $"bpgit-server: POST /{repoName}/git-upload-pack is not yet implemented.\n" +
-            $"This endpoint will be implemented in Phase 4b — see context/SPEC-git-server.md Kapitel 7.\n");
+        var repoPath = ResolveRepoPath(cfg, repoName);
+        if (repoPath is null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            await ctx.Response.WriteAsync($"Repository '{repoName}' not found.");
+            return true;
+        }
+
+        ctx.Response.StatusCode = StatusCodes.Status200OK;
+        ctx.Response.ContentType = UploadPackContentType;
+
+        var psi = new ProcessStartInfo("git")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("-C");
+        psi.ArgumentList.Add(repoPath);
+        psi.ArgumentList.Add("upload-pack");
+        psi.ArgumentList.Add("--stateless-rpc");
+
+        using var proc = Process.Start(psi);
+        if (proc is null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await ctx.Response.WriteAsync("bpgit-server: failed to start git upload-pack process.");
+            return true;
+        }
+
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+        await ctx.Request.Body.CopyToAsync(proc.StandardInput.BaseStream);
+        proc.StandardInput.Close();
+        await proc.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body);
+        await proc.WaitForExitAsync();
+
+        var stderr = await stderrTask;
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            Console.Error.WriteLine($"[bpgit-server /git-upload-pack] {stderr.TrimEnd()}");
+        }
+
         return true;
     }
 
