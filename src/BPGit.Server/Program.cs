@@ -1,6 +1,7 @@
 using BPGit.Server;
 using BPGit.Server.Commands;
 using BPGit.Server.GitHttp;
+using BPGit.Server.Services;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 
 var cfg = ServerConfig.Load(args);
@@ -45,6 +46,24 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddSingleton(cfg);
 
+// BP-DB Connection String (Windows Integrated Auth default für localdb)
+string BuildConnectionString(ServerConfig c) =>
+    c.BpAuth.Equals("sso", StringComparison.OrdinalIgnoreCase)
+        ? $"Server={c.BpServer};Database={c.BpDatabase};Integrated Security=SSPI;TrustServerCertificate=true;"
+        : $"Server={c.BpServer};Database={c.BpDatabase};User Id={c.BpUser};Password={Environment.GetEnvironmentVariable(c.BpPasswordEnv)};TrustServerCertificate=true;";
+
+builder.Services.AddSingleton<BpDbService>(sp =>
+    new BpDbService(BuildConnectionString(sp.GetRequiredService<ServerConfig>())));
+builder.Services.AddSingleton(sp =>
+{
+    var db = sp.GetRequiredService<BpDbService>();
+    var srvCfg = sp.GetRequiredService<ServerConfig>();
+    var sync = new BpSyncService(db);
+    sync.BindConfig(srvCfg);
+    return sync;
+});
+builder.Services.AddSingleton<PreReceiveHandler>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -55,11 +74,38 @@ app.MapGet("/healthz", () => Results.Ok(new
 {
     status = "ok",
     server = "bpgit-server",
-    version = "0.1.0-phase4a",
+    version = "0.1.0-phase4b",
     repoRoot = cfg.RepoRoot,
     repoName = cfg.RepoName,
     bareRepo = cfg.BareRepoPath,
 })).AllowAnonymous();
+
+// Admin-Endpoint: BP-DB-Lookup per Name (Phase 4b MVP — Smoke-Test-Zweck).
+// Liefert {found, processId, name} oder 404. Auth via FallbackPolicy erforderlich.
+app.MapGet("/admin/db-lookup", async (string name, BpDbService db) =>
+{
+    var processId = await db.LookupProcessIdByNameAsync(name);
+    if (processId is null)
+        return Results.NotFound(new { name, found = false });
+    var dbName = await db.GetProcessNameAsync(processId.Value);
+    return Results.Ok(new { name, found = true, processId, dbName });
+}).AllowAnonymous();
+
+// Admin-Endpoint: Process-Lock-Check
+app.MapGet("/admin/db-lock", async (Guid processId, BpDbService db) =>
+{
+    var lockInfo = await db.GetProcessLockAsync(processId);
+    if (lockInfo is null)
+        return Results.Ok(new { processId, locked = false });
+    return Results.Ok(new
+    {
+        processId,
+        locked = true,
+        username = lockInfo.Username,
+        machineName = lockInfo.MachineName,
+        lockDateTime = lockInfo.LockDateTime
+    });
+}).AllowAnonymous();
 
 // Git smart-HTTP endpoints. Auth required via Negotiate (Win Integrated).
 app.Map("/{repo}/**", async (HttpContext ctx, string repo, ServerConfig srvCfg) =>

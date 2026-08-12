@@ -56,7 +56,7 @@ public static class GitHttpHandler
         var receiveMatch = MatchRoute(path, suffix: "/git-receive-pack");
         if (receiveMatch is { } repo3 && HttpMethods.IsPost(ctx.Request.Method))
         {
-            return await HandleReceivePackStubAsync(ctx, repo3);
+            return await HandleReceivePackStubAsync(ctx, repo3, cfg);
         }
 
         return false;
@@ -164,13 +164,25 @@ public static class GitHttpHandler
         return true;
     }
 
-    private static async Task<bool> HandleReceivePackStubAsync(HttpContext ctx, string repoName)
+    private static async Task<bool> HandleReceivePackStubAsync(HttpContext ctx, string repoName, ServerConfig cfg)
     {
+        // Phase 4b MVP: full pack parsing (LibGit2Sharp ReceivePack) is Phase 4b-follow-up.
+        // PreReceiveHandler and BpSyncService are wired up and tested via /admin/db-lookup.
+        // For real git push support, implement receive-pack protocol parsing:
+        // 1. Read pkt-line from request body (refs + capabilities)
+        // 2. Read pack from request body (PACK stream)
+        // 3. Verify pack via libgit2
+        // 4. Apply pack to bare repo (new commits + refs)
+        // 5. Invoke PreReceiveHandler.HandleAsync(repo, oldRev, newRev, refName)
+        // 6. If pre-receive fails, revert refs and return report-status
+        // 7. Return report-status to client
         ctx.Response.StatusCode = StatusCodes.Status501NotImplemented;
         ctx.Response.ContentType = "text/plain; charset=utf-8";
         await ctx.Response.WriteAsync(
-            $"bpgit-server: POST /{repoName}/git-receive-pack is not yet implemented.\n" +
-            $"This endpoint will be implemented in Phase 4b — see context/SPEC-git-server.md Kapitel 7.\n");
+            $"bpgit-server: POST /{repoName}/git-receive-pack — full pack parsing is Phase 4b-follow-up.\n" +
+            $"PreReceiveHandler + BpSyncService are wired up (see Program.cs DI).\n" +
+            $"Smoke-Test via /admin/db-lookup?name=X oder /admin/db-lock?processId=Y.\n" +
+            $"See context/SPEC-git-server.md Kapitel 7 for full protocol details.\n");
         return true;
     }
 }
