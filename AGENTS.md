@@ -9,11 +9,14 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
 - **Architektur-Switch zu Git-Server** (Martin #6295, 18:17): Hooks laufen serverseitig, kein Client-Bloat.
 - **processid-Mapping final** (Martin #6311, 21:42): Filename = `sanitize(BPAProcess.name)`, abgeleitet nicht autoritativ. Mapping via `git diff`-Status (R/M/A/D) + `BPAProcess.name`-DB-Lookup.
 - **Kein** `snapshot.json`, **kein** `folders.json` im Worktree. Pure XML + git.
-- **Specs/Doku komplett** (2026-08-11 21:55):
-  - `context/SPEC-git-server.md` — Git-Server-Architektur, Hooks, Auth, Deployment (autoritativ für Server-Aspekte)
-  - `specs/SPEC-adapter-architecture.md` — Worktree-Layout, processid-Mapping, XML-Serialisierung
-  - `README-bpgit-git.md` — End-User-Quickstart (Standard-git-Befehle)
-- **Implementation ausstehend** — wartet auf Martins Freigabe nach Doku-Review (#6313).
+- **Specs + Doku up-to-date** (Stand 2026-08-12, Martin #6401-Doku-Pass):
+  - `context/SPEC-git-server.md` — **v0.3 Draft** (Phase-4c + 4b-follow-up + xunit-Tests + LibGit2Sharp-0.32.0-Limitationen; Kapitel 9 added `cbaa279`)
+  - `specs/SPEC-adapter-architecture.md` — **v4** (Worktree-Layout, processid-Mapping, XML-Serialisierung; Phase 4c + xunit-Tests)
+  - `specs/SPEC-target-environment.md` — **v2** (OpenClawPC, .NET 10, BP 7.5.1; verifiziert nach xunit-Tests-Welle)
+  - `README-bpgit-git.md` — End-User-Quickstart (Footer mit Test-Stand + Spec-Versionen angereichert 2026-08-12)
+- **Implementation: Phasen 4a (Kestrel) + 4b (pre-receive) + 4b-follow-up (git-CLI receive-pack + upload-pack delegation) + 4c (PostReceive/PostCheckout Hooks + WorktreeSyncService) done.**
+- **xunit-Tests-Welle done** (12 Test-Commits, 65 gruen + 4 skipped in 3 Test-Projekten).
+- **Backlog Phase 5+** (Martin #6401 nach Doku-Pass): (i) 3 PreReceive HEAD-Tracking-Tests scheitern mit `Assert.Single() collection empty` (Issue-#802 workaround in commit `2fa730d`; tree.Count vs parents[0].tree.Count vergleichen); (ii) LibGit2Sharp 0.32.0 ist einzige stabile Version auf NuGet (libgit2-v1.8.6-Security-Release in Vorbereitung, noch nicht stable); (iii) MVP1-Deployment (`bpgit-server.exe` als Windows-Service + SPN + Firewall) + Demo-DB-Cleanup (1 `BPARelease`-Row `releaseid=2` + 35 `BPAReleaseEntry`-Rows DELETE) — gestrichen per #6385.
 
 ## Project Files
 
@@ -29,7 +32,7 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
 - `src/BPGit.Cli/` — Adapter-CLI (für Admin-Tasks am Server: `init`, `server start/stop`, `log`)
 - `src/BPGit.Data/` — Data-Layer (POCOs, Dapper, Repository)
 - `src/BPGit.Format/` — XML-Serialisierung
-- `tests/` — xunit-Tests
+- `tests/` — xunit-Tests (`BPGit.Server.Tests`, `BPGit.Data.Tests`, `BPGit.Cli.Tests`)
 
 ## Git
 
@@ -53,7 +56,12 @@ Erledigt:
 - Phase 2b `bpgit log` + `bpgit diff` (`41842c7`, `76da584`)
 - Phase 3 SnapshotEntry + PullCommand folder-aware (`e0e0109`) — **durch Git-Server-Architektur obsolet**
 - Phase 2c Hooks (`98e9d43f`) — **obsolet** per #6295 (Hooks laufen serverseitig)
-- Doku-Round (SPEC-git-server, SPEC-adapter-architecture, README-bpgit-git)
+- Doku-Round v0.2 (SPEC-git-server, SPEC-adapter-architecture, README-bpgit-git)
+- **Phase 4a** bpgit-git-server Kestrel + LibGit2Sharp (commit `9c53960`)
+- **Phase 4b** pre-receive Hook (processid-Lookup + `/import /forceid /overwrite`) (commits `d0f87b3`, `37fc525`)
+- **Phase 4b-follow-up** receive-pack + upload-pack delegation via `git -C <bare> ... --stateless-rpc` (commits `18ec5db`, `f7dc718`)
+- **Phase 4c** WorktreeSyncService + PostReceive/PostCheckout Hooks (BP-DB Sync) (commits `d2fd04f`, `f399ad1`)
+- **xunit-Tests-Welle** (Martin #6385+#6401): xunit scaffold (`8b4ee35`), `IBpDbService` extrahieren + `MaterializeAsync` Tests (`666e6f7`), `IBpSyncService` extrahieren + PreReceive-Tests (`4c8c8e9`), `BpSyncService` `IBpDbService` ctor + Fehler-Pfad-Tests (`e194869`), `AssemblyInfo` + `StripLeadingXmlComments` internal Helpers (`0a668e1`), `PreReceiveHandler`-internals (`4de3138`), `ServerConfig.Load` (`a2e2b32`), `Pkt` pkt-line (`0141ff9`), `IsZeroSha` nullable + `ConnectionFactory` (`47b2417`), `Data.Tests` `ProjectReference` (`226fc38`), `Cli.Tests` scaffold + `SnapshotStore` V2 (`e7de7bb`), `PreReceive` HEAD-Tracking mit Issue-#802 workaround skip-attributed (`2fa730d`).
 
 ## Mitgeltende Docs
 
@@ -76,3 +84,7 @@ Erledigt:
 | 2026-08-11 | processid-Mapping via git-diff R/M/A/D + DB-Lookup by name | Martin #6309 |
 | 2026-08-11 | Filename = sanitize(BPAProcess.name), User editiert XML nicht Filename | Martin #6311 |
 | 2026-08-11 | Erst Doku/Specs, dann Implementation | Martin #6313 |
+| 2026-08-12 | BP-Passwort aus env in `bpgit-server.json` (kein env-var mehr) | Martin (impliziert aus #6359) |
+| 2026-08-12 | LibGit2Sharp 0.32.0: `ObjectDatabase.CreateCommit(Signature, Signature, string, Tree, Commit[], bool)` 6-arg positional; `CreateBlob(Stream)`; `TreeDefinition.Add(path, blob, Mode)`; `Refs.Add(string, ObjectId)` + `Refs.UpdateTarget(Reference, ObjectId)` | Diagnose-Befund |
+| 2026-08-12 | MVP1-Deployment + Demo-DB-Cleanup gestrichen | Martin #6385 |
+| 2026-08-12 | Doku + Tests + Refactoring komplettieren (Phase 1/2/3) | Martin #6401 |

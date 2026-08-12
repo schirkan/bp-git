@@ -1,7 +1,7 @@
 # SPEC — Zielumgebung für den BP-Git-Adapter
 
-Stand: 2026-08-10 (Martin-Anforderung 16:13 GMT+2)  
-Status: draft v1
+Stand: 2026-08-12 (Martin #6401 verifiziert nach xunit-Tests-Welle: BP-Demo-LocalDB-SSO funktional, .NET 10 LibGit2Sharp 0.32.0 + Issue-#802 workaround stabil, 12 Test-Commits, 65 gruen + 4 skipped)  
+Status: draft v2 (verifiziert 2026-08-12 - BP-LocalDB-Test funktional mit SSO, .NET 10 LibGit2Sharp 0.32.0 Issue-#802 workaround build-stabil)
 
 ## Host-Plattform
 

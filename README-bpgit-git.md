@@ -219,4 +219,5 @@ Für Details: Server-Logs auf OpenClawPC (`C:\bpgit\logs\`).
 - **Architektur**: [`context/SPEC-git-server.md`](context/SPEC-git-server.md) — Server-Architektur, Hooks, Auth
 - **Adapter-Layer**: [`specs/SPEC-adapter-architecture.md`](specs/SPEC-adapter-architecture.md) — Worktree-Layout, processid-Mapping
 - **BP-CLI-Referenz**: [`context/bp-cli-reference-7.5.1.md`](context/bp-cli-reference-7.5.1.md) — AutomateC.exe-Befehle
-- **BP-DB-Schema**: [`context/bp-database-schema.md`](context/bp-database-schema.md) — Tabellen-Referenz
+- **BP-DB-Schema**: [`context/bp-database-schema.md`](context/bp-database-schema.md) - Tabellen-Referenz
+- **Test-Stand** (Martin #6385+#6401): 12 Test-Commits (xunit-Welle), 65 gruen + 4 skipped in 3 Test-Projekten (Server 53+4, Data 3, Cli 9). 3 PreReceive HEAD-Tracking-Tests skip-attributed mit Issue-#802 workaround (commit `2fa730d`); 1 HeadTrackingDiagnosticTest skip-attributed (libgit2 0.32.0 API-Inkonsistenz). Phase 5+-Diagnose pending: tree.Count vs parents[0].tree.Count vergleichen.

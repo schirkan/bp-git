@@ -1,7 +1,7 @@
 # SPEC — BP-Git-Adapter-Architektur
 
-**Stand:** 2026-08-11 (v3 — Git-Server-Architektur)
-**Status:** draft v3 — Worktree-Layout final, processid-Mapping via git-diff
+**Stand:** 2026-08-12 (v4 — Git-Server-Architektur + Phase 4c + xunit-Tests-Welle)
+**Status:** draft v4 — Worktree-Layout final, processid-Mapping via git-diff; PostReceive/PostCheckout Hooks done (Phase 4c); git-CLI receive-pack + upload-pack delegation done (Phase 4b-follow-up); xunit-Tests-Welle done (12 Commits, 65 gruen + 4 skipped)
 **Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [context/SPEC-git-server.md](../context/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
 ## Ziel

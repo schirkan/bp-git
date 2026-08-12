@@ -1,7 +1,7 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
-**Status:** Draft v0.2
-**Datum:** 2026-08-11
+**Status:** v0.3 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen)
+**Datum:** 2026-08-12 (Phase-4c PostReceive/PostCheckout Hooks done + Phase-4b-follow-up git-CLI receive-pack/upload-pack delegation done + xunit-Tests-Welle 12 Test-Commits done + LibGit2Sharp-0.32.0 Issue-#802 workaround fix-kompiliert aber Tests scheitern noch mit "Assert.Single() collection empty", Phase 5+ Diagnose pending)
 **Autor:** bpgit-Projekt
 **Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
 **Mitgeltend:** `SPEC-target-environment.md`, `SPEC-adapter-architecture.md`, `context/bp-cli-reference-7.5.1.md`, `context/bp-database-schema.md`
