@@ -18,4 +18,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BPGit.Data\BPGit.Data.csproj" />
+  </ItemGroup>
+
 </Project>
