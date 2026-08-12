@@ -14,6 +14,9 @@ namespace BPGit.Server.GitHttp;
 /// 2. pre-receive-Hook: pro XML-Aenderung processid-Lookup + /import /forceid /overwrite
 /// 3. post-receive-Hook: BP-DB pollen, canonical XML-Files in Worktree schreiben,
 ///    stale Files löschen (für Renames/Deletes)
+///
+/// Phase 4b-follow-up: wird vom smart-HTTP receive-pack Endpoint aufgerufen.
+/// Phase 4c-MVP: manueller Aufruf via /admin/sync-worktree (Smoke-Test).
 /// </summary>
 public sealed class PostReceiveHandler
 {

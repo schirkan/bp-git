@@ -15,6 +15,9 @@ namespace BPGit.Server.GitHttp;
 /// 3. post-checkout-Hook: BP-DB pollen, canonical XML-Files in Worktree schreiben
 ///
 /// Kein git commit noetig — der Checkout selbst aktualisiert die Worktree.
+///
+/// Phase 4b-follow-up: wird vom smart-HTTP upload-pack Endpoint aufgerufen.
+/// Phase 4c-MVP: manueller Aufruf via /admin/sync-worktree (Smoke-Test).
 /// </summary>
 public sealed class PostCheckoutHandler
 {

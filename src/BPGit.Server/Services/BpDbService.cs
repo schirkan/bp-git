@@ -87,7 +87,7 @@ public sealed class BpDbService
     /// <summary>
     /// Read all processes with name + xml content. Used by WorktreeSyncService for materialization.
     /// </summary>
-    public async Task<IReadOnlyList<BpProcessRow>> GetAllProcessesAsync()
+    public async Task<IReadOnlyList<BpProcessRow>> GetAllProcessesAsync(CancellationToken ct = default)
     {
         var results = new List<BpProcessRow>();
         await using var conn = new SqlConnection(_connectionString);
@@ -114,7 +114,7 @@ public sealed class BpDbService
     /// BPAGroupGroup (nested folders) is supported via flat M:N — we resolve nested paths
     /// in WorktreeSyncService by walking the chain.
     /// </summary>
-    public async Task<FolderStructure> GetFolderStructureAsync()
+    public async Task<FolderStructure> GetFolderStructureAsync(CancellationToken ct = default)
     {
         var trees = new List<Tree>();
         var groups = new List<Group>();

@@ -13,22 +13,25 @@ namespace BPGit.Server.Services;
 /// Materializes BP-DB state to a target worktree directory.
 ///
 /// Filename invariant (per Martin #6311): filename = sanitize(BPAProcess.name) + ".xml"
-/// Folder hierarchy: &lt;targetRoot&gt;/&lt;TreeName&gt;/&lt;GroupName&gt;/&lt;processname&gt;.xml
+/// Folder hierarchy: &lt;targetRoot&gt;/&lt;TreeName&gt;/&lt;GroupName(s)&gt;/&lt;processname&gt;.xml
 ///
 /// Tree filter: only BPATree id IN (2=Processes, 3=Objects) — others excluded
 /// (Tiles, Queues, Resources, users — BP-Studio-specific per #6287).
 ///
 /// M:N duplication: a single Process in multiple Groups → file in each folder.
+/// Stale-file detection: existing files not in kept-set are deleted (renames/deletes
+/// in BP-DB propagate to worktree).
 /// </summary>
 public sealed class WorktreeSyncService
 {
     private readonly BpDbService _db;
 
-    // Windows-Dateinamen verbotene Zeichen (per Martin #6311 + alle Path.GetInvalidFileNameChars inkl. / und \)
-    private static readonly char[] InvalidChars = Path.GetInvalidFileNameChars();
+    // Windows-Dateinamen verbotene Zeichen (per Martin #6311). Path.GetInvalidFileNameChars()
+    // enthaelt ALLE Windows-inkompatiblen Zeichen inkl. / \ : * ? " < > | und Steuerzeichen.
+    private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
 
-    // Leading XML-Comments brechen BP's /import-Parser (per Martin #6277)
-    private static readonly Regex LeadingComments =
+    // Leading XML-Comments brechen BP's /import-Parser (per Martin #6277).
+    private static readonly Regex LeadingCommentsRegex =
         new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
 
     public WorktreeSyncService(BpDbService db)
@@ -38,7 +41,7 @@ public sealed class WorktreeSyncService
 
     /// <summary>
     /// Reads BP-DB and writes canonical XML files to <paramref name="targetRoot"/>.
-    /// Stale XML files (in processes/ subdirs) are deleted so renames propagate.
+    /// Stale XML files (in processes/ subdirs) are deleted so renames/deletes propagate.
     /// </summary>
     public async Task<MaterializeResult> MaterializeAsync(string targetRoot, CancellationToken ct = default)
     {
@@ -47,8 +50,8 @@ public sealed class WorktreeSyncService
 
         Directory.CreateDirectory(targetRoot);
 
-        var processes = await _db.GetAllProcessesAsync();
-        var folderStruct = await _db.GetFolderStructureAsync();
+        var processes = await _db.GetAllProcessesAsync(ct);
+        var folderStruct = await _db.GetFolderStructureAsync(ct);
 
         var groupsById = folderStruct.Groups.ToDictionary(g => g.Id);
         var treesById = folderStruct.Trees.ToDictionary(t => t.Id);
@@ -126,8 +129,8 @@ public sealed class WorktreeSyncService
     }
 
     /// <summary>
-    /// Windows-safe filename sanitization. Ersetzt alle Zeichen aus <see cref="Path.GetInvalidFileNameChars"/>
-    /// (inkl. &lt;, &gt;, :, ", /, \, |, ?, *) durch _ und trimmt trailing dots/spaces.
+    /// Windows-safe filename sanitization. Replaces every char from
+    /// <see cref="Path.GetInvalidFileNameChars"/> with _, trims trailing dots/spaces.
     /// </summary>
     public static string SanitizeFilename(string name)
     {
@@ -135,7 +138,7 @@ public sealed class WorktreeSyncService
         var chars = name.ToCharArray();
         for (int i = 0; i < chars.Length; i++)
         {
-            if (Array.IndexOf(InvalidChars, chars[i]) >= 0)
+            if (Array.IndexOf(InvalidFileNameChars, chars[i]) >= 0)
                 chars[i] = '_';
         }
         return new string(chars).TrimEnd('.', ' ');
@@ -147,7 +150,7 @@ public sealed class WorktreeSyncService
     public static string StripLeadingXmlComments(string xml)
     {
         if (string.IsNullOrEmpty(xml)) return xml;
-        return LeadingComments.Replace(xml, string.Empty);
+        return LeadingCommentsRegex.Replace(xml, string.Empty);
     }
 }
 
