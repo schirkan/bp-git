@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BPGit.Server.Services;
@@ -21,11 +20,6 @@ namespace BPGit.Server.Services;
 /// </summary>
 public sealed class BpSyncService : IBpSyncService
 {
-    // BP's /import-Parser ist strikt: Leading XML-Comments brechen den Parser
-    // ("Failed to create... already exists"), obwohl /overwrite gesetzt ist.
-    private static readonly Regex LeadingXmlCommentsRegex =
-        new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
-
     private readonly IBpDbService _db;
 
     public BpSyncService(IBpDbService db)
@@ -104,7 +98,7 @@ public sealed class BpSyncService : IBpSyncService
 
     private async Task<ImportResult> ImportAsync(string xmlContent, Guid? forceId, string label)
     {
-        var cleanXml = StripLeadingXmlComments(xmlContent);
+        var cleanXml = XmlSanitizer.StripLeadingXmlComments(xmlContent);
         var tmpFileName = $"bpgit-server-import-{(forceId?.ToString() ?? Guid.NewGuid().ToString("N"))}.xml";
         var tmpFile = Path.Combine(Path.GetTempPath(), tmpFileName);
         await File.WriteAllTextAsync(tmpFile, cleanXml);
@@ -144,11 +138,7 @@ public sealed class BpSyncService : IBpSyncService
         }
     }
 
-    internal static string StripLeadingXmlComments(string xml)
-    {
-        if (string.IsNullOrEmpty(xml)) return xml;
-        return LeadingXmlCommentsRegex.Replace(xml, string.Empty);
-    }
+    // StripLeadingXmlComments moved to XmlSanitizer (refactoring Martin #6401, dedup'd with WorktreeSyncService).
 
     // _cfg wird spaeter injiziert (Phase 4b MVP: hardcoded null, folgt in Program.cs-DI-Wiring)
     // Wir nutzen eine Property damit ModifyAsync etc. darauf zugreifen koennen

@@ -90,7 +90,7 @@ public sealed class WorktreeSyncService
             if (!processFolders.TryGetValue(proc.ProcessId, out var folders)) { skipped++; continue; }
 
             var safeName = SanitizeFilename(proc.Name) + ".xml";
-            var cleanXml = StripLeadingXmlComments(proc.XmlContent);
+            var cleanXml = XmlSanitizer.StripLeadingXmlComments(proc.XmlContent);
 
             foreach (var folder in folders)
             {

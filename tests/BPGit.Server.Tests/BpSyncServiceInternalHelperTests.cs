@@ -9,7 +9,7 @@ public class BpSyncServiceInternalHelperTests
     public void StripLeadingXmlComments_RemovesAllLeadingComments()
     {
         var withLeading = "<!-- c1 --><!-- c2 -->\n<process name=\"X\"/>";
-        var stripped = BpSyncService.StripLeadingXmlComments(withLeading);
+        var stripped = XmlSanitizer.StripLeadingXmlComments(withLeading);
         Assert.StartsWith("<process", stripped);
         Assert.DoesNotContain("<!--", stripped);
     }
@@ -18,20 +18,20 @@ public class BpSyncServiceInternalHelperTests
     public void StripLeadingXmlComments_PreservesNonLeadingComments()
     {
         var withMiddle = "<process><!-- middle --></process>";
-        Assert.Equal(withMiddle, BpSyncService.StripLeadingXmlComments(withMiddle));
+        Assert.Equal(withMiddle, XmlSanitizer.StripLeadingXmlComments(withMiddle));
     }
 
     [Fact]
     public void StripLeadingXmlComments_NoComments_ReturnsUnchanged()
     {
         var noComments = "<process name=\"X\"/>";
-        Assert.Equal(noComments, BpSyncService.StripLeadingXmlComments(noComments));
+        Assert.Equal(noComments, XmlSanitizer.StripLeadingXmlComments(noComments));
     }
 
     [Fact]
     public void StripLeadingXmlComments_EmptyString_ReturnsEmpty()
     {
-        Assert.Equal("", BpSyncService.StripLeadingXmlComments(""));
+        Assert.Equal("", XmlSanitizer.StripLeadingXmlComments(""));
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public class BpSyncServiceInternalHelperTests
     [InlineData("<!--a--><!--b-->\n<!--c-->  <process name=\"P\"/>", "<process")]
     public void StripLeadingXmlComments_VariousLeadingShapes_AllStripped(string input, string expectedPrefix)
     {
-        var result = BpSyncService.StripLeadingXmlComments(input);
+        var result = XmlSanitizer.StripLeadingXmlComments(input);
         Assert.StartsWith(expectedPrefix, result);
     }
 }
