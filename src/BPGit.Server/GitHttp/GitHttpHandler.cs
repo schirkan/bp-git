@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using LibGit2Sharp;
@@ -56,7 +57,7 @@ public static class GitHttpHandler
         var receiveMatch = MatchRoute(path, suffix: "/git-receive-pack");
         if (receiveMatch is { } repo3 && HttpMethods.IsPost(ctx.Request.Method))
         {
-            return await HandleReceivePackStubAsync(ctx, repo3, cfg);
+            return await HandleReceivePackAsync(ctx, repo3, cfg);
         }
 
         return false;
@@ -164,25 +165,68 @@ public static class GitHttpHandler
         return true;
     }
 
-    private static async Task<bool> HandleReceivePackStubAsync(HttpContext ctx, string repoName, ServerConfig cfg)
+    /// <summary>
+    /// Delegates to native <c>git receive-pack --stateless-rpc</c> via Process spawn.
+    /// Marshals request body to git's stdin, git's stdout back to response, drains stderr.
+    ///
+    /// MVP scope: PostReceive trigger happens as a side-effect after git has applied the
+    /// pack (we cannot interpose a pre-emptive PreReceive when delegating to the native
+    /// binary). For validate-then-apply semantics, the next iteration will replace this
+    /// with a LibGit2Sharp-native pack parser + repository.WriteRef.
+    ///
+    /// Why spawn <c>git</c>: libgit2 0.32.0 has no public API for the server side of
+    /// receive-pack (Network.Fetch is client-side). Spawning the official CLI delegates
+    /// pkt-line parsing, ref update, pack index/apply, and report-status generation.
+    /// </summary>
+    private static async Task<bool> HandleReceivePackAsync(HttpContext ctx, string repoName, ServerConfig cfg)
     {
-        // Phase 4b MVP: full pack parsing (LibGit2Sharp ReceivePack) is Phase 4b-follow-up.
-        // PreReceiveHandler and BpSyncService are wired up and tested via /admin/db-lookup.
-        // For real git push support, implement receive-pack protocol parsing:
-        // 1. Read pkt-line from request body (refs + capabilities)
-        // 2. Read pack from request body (PACK stream)
-        // 3. Verify pack via libgit2
-        // 4. Apply pack to bare repo (new commits + refs)
-        // 5. Invoke PreReceiveHandler.HandleAsync(repo, oldRev, newRev, refName)
-        // 6. If pre-receive fails, revert refs and return report-status
-        // 7. Return report-status to client
-        ctx.Response.StatusCode = StatusCodes.Status501NotImplemented;
-        ctx.Response.ContentType = "text/plain; charset=utf-8";
-        await ctx.Response.WriteAsync(
-            $"bpgit-server: POST /{repoName}/git-receive-pack — full pack parsing is Phase 4b-follow-up.\n" +
-            $"PreReceiveHandler + BpSyncService are wired up (see Program.cs DI).\n" +
-            $"Smoke-Test via /admin/db-lookup?name=X oder /admin/db-lock?processId=Y.\n" +
-            $"See context/SPEC-git-server.md Kapitel 7 for full protocol details.\n");
+        var repoPath = ResolveRepoPath(cfg, repoName);
+        if (repoPath is null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            await ctx.Response.WriteAsync($"Repository '{repoName}' not found.");
+            return true;
+        }
+
+        ctx.Response.StatusCode = StatusCodes.Status200OK;
+        ctx.Response.ContentType = ReceivePackContentType;
+
+        var psi = new ProcessStartInfo("git")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("-C");
+        psi.ArgumentList.Add(repoPath);
+        psi.ArgumentList.Add("receive-pack");
+        psi.ArgumentList.Add("--stateless-rpc");
+
+        using var proc = Process.Start(psi);
+        if (proc is null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await ctx.Response.WriteAsync("bpgit-server: failed to start git receive-pack process.");
+            return true;
+        }
+
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+
+        // Pipe request body -> git's stdin, then close so git can process the pack.
+        await ctx.Request.Body.CopyToAsync(proc.StandardInput.BaseStream);
+        proc.StandardInput.Close();
+
+        // Pipe git's stdout -> response (report-status pkt-line + any data).
+        await proc.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body);
+        await proc.WaitForExitAsync();
+
+        var stderr = await stderrTask;
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            Console.Error.WriteLine($"[bpgit-server /git-receive-pack] {stderr.TrimEnd()}");
+        }
+
         return true;
     }
 }
