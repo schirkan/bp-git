@@ -14,7 +14,7 @@ namespace BPGit.Server.Services;
 /// Connection-Pooling laeuft automatisch via .NET's built-in <see cref="SqlConnection"/>
 /// pool (Connection-String identisch fuer mehrere Calls).
 /// </summary>
-public sealed class BpDbService
+public sealed class BpDbService : IBpDbService
 {
     private readonly string _connectionString;
 

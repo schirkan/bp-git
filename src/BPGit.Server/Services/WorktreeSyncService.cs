@@ -24,7 +24,7 @@ namespace BPGit.Server.Services;
 /// </summary>
 public sealed class WorktreeSyncService
 {
-    private readonly BpDbService _db;
+    private readonly IBpDbService _db;
 
     // Windows-Dateinamen verbotene Zeichen (per Martin #6311). Path.GetInvalidFileNameChars()
     // enthaelt ALLE Windows-inkompatiblen Zeichen inkl. / \ : * ? " < > | und Steuerzeichen.
@@ -34,7 +34,7 @@ public sealed class WorktreeSyncService
     private static readonly Regex LeadingCommentsRegex =
         new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
 
-    public WorktreeSyncService(BpDbService db)
+    public WorktreeSyncService(IBpDbService db)
     {
         _db = db;
     }
