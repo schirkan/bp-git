@@ -140,7 +140,7 @@ public sealed class PreReceiveHandler
             : PreReceiveResult.Failure(failures);
     }
 
-    internal static bool IsZeroSha(string sha) =>
+    internal static bool IsZeroSha(string? sha) =>
         string.IsNullOrEmpty(sha) || sha.All(c => c == '0');
 
     internal static string? ExtractProcessName(string xml)
