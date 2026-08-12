@@ -337,35 +337,42 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 ### Pull-Flow (git clone, git pull)
 
-`post-checkout` Hook (oder initial-clone Handler):
+`post-checkout` Hook (oder initial-clone Handler) ruft `WorktreeSyncService.MaterializeAsync(targetRoot, ct)` auf. Phase-4c-Algorithmus (Commits `d2fd04f`, `f7dc718`):
 
-1. SqlCommand direkt gegen `BPAProcess` (alle Rows, Filter optional)
-2. SqlCommand gegen `BPATree` (Filter: name IN ('Processes', 'Objects'))
-3. SqlCommand gegen `BPAGroup` + `BPAGroupGroup` (rekursiv fuer nested folders)
+1. SqlCommand gegen `BPAProcess` (alle Rows, liest `name` + `processxml`)
+2. SqlCommand gegen `BPATree` (Filter: `id IN (2, 3)` — nur Processes + Objects; andere Trees per #6287 ausgeschlossen)
+3. SqlCommand gegen `BPAGroup` (fuer Trees 2, 3)
 4. SqlCommand gegen `BPAGroupProcess` (M:N-Mapping)
-5. **Worktree-Cleanup**: alle existierenden Files unter `processes/` loeschen (verhindert stale Filenames)
-6. Fuer jeden Process:
-   - Filename aus `BPAProcess.processxml` extrahieren (Regex `<(process|object) ... name="..."`)
-   - Sanitize filename (Windows-Inkompatible Zeichen ersetzen)
-   - Path = `<TreeName>/<GroupName(s)>/<sanitized(name)>.xml`
-   - Write XML zu worktree (canonical Filename)
-7. Git committet Aenderungen als Auto-Renames (wo applicable)
+5. **Snapshot existing XML files** unter `targetRoot` (fuer stale-Detection, kein Full-Reinit)
+6. Pro Process:
+   - Skip wenn `name` leer oder keine Folder-Membership
+   - **Sanitize filename** via `Path.GetInvalidFileNameChars()` + `TrimEnd('.', ' ')` — deckt ALLE Windows-inkompatiblen Zeichen ab inkl. / \ : * ? " < > |
+   - **StripLeadingXmlComments** vor jedem Write (per #6277, BP `/import`-Parser bricht sonst mit "Failed to create ... already exists" ab)
+   - **M:N-Duplikation**: Process in mehreren Groups → File in jedem Folder
+   - Path = `<TreeName>/<GroupName>/<sanitized(name)>.xml`
+   - Write XML zu worktree — Skip wenn Content identisch (kein Re-Write noetig)
+7. **Delete stale XML files**: alles in Snapshot aber nicht in kept-set loeschen (Renames/Deletes in BP-DB propagieren automatisch in Worktree)
 
-**Performance-Hinweis** (per Martin #6285): NIEMALS AutomateC.exe `/export` fuer Pull — zu langsam. SqlCommand direkt ist Pflicht.
+**Performance-Hinweis** (per Martin #6285): NIEMALS `AutomateC.exe /export` fuer Pull — zu langsam. SqlCommand direkt ist Pflicht.
+
+**Worktree-Invariante** (per Martin #6311): `filename = sanitize(BPAProcess.name) + ".xml"` — derived, niemals manuell editierbar. Worktree enthaelt pure XML + git (kein `snapshot.json`, kein `folders.json`, keine Registry).
 
 ### Push-Flow (git push)
 
-`pre-receive` Hook (siehe #7 Pseudocode):
+**Architektur-Update Phase 4b-follow-up**: Smart-HTTP receive-pack delegiert an `git -C <bare-repo> receive-pack --stateless-rpc` (libgit2 0.32.0 hat keine public Server-seite fuer receive-pack; native CLI delegiert pkt-line parsing + ref-update + pack-index/apply + report-status). pre-receive laeuft aktuell als **side-effect post-apply**, nicht pre-emptive validate-then-apply.
 
-1. Parse `git diff oldrev..newrev -- processes/`
-2. Fuer jede Aenderung (M/A/D/R) → processid-Lookup + `/import` (siehe #4 Tabelle)
-3. Bei Fehler: Push ablehnen mit klarer Fehlermeldung
-4. Bei Erfolg: BPAAuditEvents wird automatisch geschrieben (sCode=P006)
+`pre-receive` Hook (siehe #7 Pseudocode) ist Pre-Receive-Validation:
+
+1. Parse `git diff oldrev..newrev -- processes/` (LibGit2Sharp manueller Tree-Walker)
+2. Pro Aenderung (M/A/D/R) → processid-Lookup + `AutomateC.exe /import /forceid <guid> /overwrite`
+3. Bei Fehler (Lock/Conflict): Push ablehnen mit klarer Fehlermeldung + Owner-Info
+4. Bei Erfolg: `BPAAuditEvents` mit `sCode=P006` wird automatisch von BP-Runtime geschrieben
 
 `post-receive` Hook:
 
-1. `bpgit pull`-equivalent: BP-DB pollen, canonical Filenames schreiben
-2. Git erkennt Auto-Renames (Similarity-Match), History bleibt erhalten
+1. Ruft `WorktreeSyncService.MaterializeAsync(targetRoot)` auf (gleicher Service wie `post-checkout`)
+2. BPAAuditEvents wurden bereits geschrieben (pre-receive)
+3. Server-seitige Auto-Rename-Erkennung via `git diff --find-renames` (alter Pfad-Name → neuer XML-`process name`)
 
 ### Initial-Push (leeres Repo)
 
