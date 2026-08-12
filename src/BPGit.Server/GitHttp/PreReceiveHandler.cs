@@ -36,9 +36,9 @@ public sealed class PreReceiveHandler
 
     private static readonly UTF8Encoding Utf8NoBom = new(false);
 
-    private readonly BpSyncService _sync;
+    private readonly IBpSyncService _sync;
 
-    public PreReceiveHandler(BpSyncService sync) => _sync = sync;
+    public PreReceiveHandler(IBpSyncService sync) => _sync = sync;
 
     public async Task<PreReceiveResult> HandleAsync(
         Repository repo,

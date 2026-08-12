@@ -19,7 +19,7 @@ namespace BPGit.Server.Services;
 ///   <item>Temp-File wird in <c>%TEMP%\bpgit-server-import-{guid}.xml</c> abgelegt.</item>
 /// </list>
 /// </summary>
-public sealed class BpSyncService
+public sealed class BpSyncService : IBpSyncService
 {
     // BP's /import-Parser ist strikt: Leading XML-Comments brechen den Parser
     // ("Failed to create... already exists"), obwohl /overwrite gesetzt ist.
