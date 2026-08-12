@@ -21,4 +21,10 @@ public interface IBpDbService
 {
     Task<IReadOnlyList<BpProcessRow>> GetAllProcessesAsync(CancellationToken ct = default);
     Task<FolderStructure> GetFolderStructureAsync(CancellationToken ct = default);
+
+    /// <summary>Lookup BPAProcess.processid by name. Returns null wenn nicht gefunden (Phase 4b pre-receive).</summary>
+    Task<Guid?> LookupProcessIdByNameAsync(string name);
+
+    /// <summary>Lookup BPAProcessLock fuer eine processid. Returns null wenn kein Lock (Phase 4b pre-receive).</summary>
+    Task<BpaProcessLockInfo?> GetProcessLockAsync(Guid processId);
 }

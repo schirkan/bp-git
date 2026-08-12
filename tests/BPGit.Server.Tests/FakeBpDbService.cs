@@ -19,6 +19,11 @@ public sealed class FakeBpDbService : IBpDbService
     public IReadOnlyList<BpProcessRow> Processes { get; }
     public FolderStructure Folders { get; }
 
+    /// <summary>Lookup-Map: BPAProcess.name -> processid. Tests setzen Werte hier rein.</summary>
+    public Dictionary<string, Guid> NameToProcessId { get; } = new();
+    /// <summary>Lock-Map: processid -> lock-info. Tests setzen Werte hier rein.</summary>
+    public Dictionary<Guid, BpaProcessLockInfo> Locks { get; } = new();
+
     public FakeBpDbService(IReadOnlyList<BpProcessRow> processes, FolderStructure folders)
     {
         Processes = processes;
@@ -30,4 +35,17 @@ public sealed class FakeBpDbService : IBpDbService
 
     public Task<FolderStructure> GetFolderStructureAsync(CancellationToken ct = default)
         => Task.FromResult(Folders);
+
+    public Task<Guid?> LookupProcessIdByNameAsync(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return Task.FromResult<Guid?>(null);
+        return NameToProcessId.TryGetValue(name, out var id)
+            ? Task.FromResult<Guid?>(id)
+            : Task.FromResult<Guid?>(null);
+    }
+
+    public Task<BpaProcessLockInfo?> GetProcessLockAsync(Guid processId)
+        => Locks.TryGetValue(processId, out var l)
+            ? Task.FromResult<BpaProcessLockInfo?>(l)
+            : Task.FromResult<BpaProcessLockInfo?>(null);
 }

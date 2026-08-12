@@ -26,9 +26,9 @@ public sealed class BpSyncService : IBpSyncService
     private static readonly Regex LeadingXmlCommentsRegex =
         new(@"^\s*(?:<!--[\s\S]*?-->\s*)+", RegexOptions.Compiled);
 
-    private readonly BpDbService _db;
+    private readonly IBpDbService _db;
 
-    public BpSyncService(BpDbService db)
+    public BpSyncService(IBpDbService db)
     {
         _db = db;
     }
