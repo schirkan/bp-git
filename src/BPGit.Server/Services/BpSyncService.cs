@@ -144,7 +144,7 @@ public sealed class BpSyncService : IBpSyncService
         }
     }
 
-    private static string StripLeadingXmlComments(string xml)
+    internal static string StripLeadingXmlComments(string xml)
     {
         if (string.IsNullOrEmpty(xml)) return xml;
         return LeadingXmlCommentsRegex.Replace(xml, string.Empty);
