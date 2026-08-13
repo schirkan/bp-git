@@ -8,37 +8,40 @@ public class AppConfig
 {
     // [bp] section - SQL connection (used for read-only operations: pull, status, lock-check)
     public string ConnectionString { get; set; } = "";
-    public string? SqlUser { get; set; }
-    public string? SqlPasswordEnvVar { get; set; }
+    public string? SqlUsername { get; set; }
+    public string? SqlPassword { get; set; }
     public List<string> IgnoreTables { get; set; } = new();
 
     // [cli] section - AutomateC.exe integration (used for write operations: commit)
     public string AutomateCPath { get; set; } = @"C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe";
     public string CliAuthMode { get; set; } = "sso"; // "sso" | "user"
     public string? CliUsername { get; set; }
-    public string? CliPasswordEnvVar { get; set; } = "BPGIT_CLI_PASSWORD";
+    public string? CliPassword { get; set; }
 
+    /// <summary>
+    /// Returns the connection string. If sql_username is set, appends User ID / Password
+    /// to the connection string for SQL authentication (otherwise the original
+    /// connection_string — typically Windows Integrated Auth — is returned unchanged).
+    /// </summary>
     public string GetEffectiveConnectionString()
     {
-        if (!string.IsNullOrWhiteSpace(SqlUser) && !string.IsNullOrWhiteSpace(SqlPasswordEnvVar))
-        {
-            var pwd = Environment.GetEnvironmentVariable(SqlPasswordEnvVar) ?? "";
-            return ConnectionString.Replace("{BPGIT_DB_PASSWORD}", pwd);
-        }
-        return ConnectionString;
+        if (string.IsNullOrWhiteSpace(SqlUsername))
+            return ConnectionString;
+
+        var sep = ConnectionString.EndsWith(";", StringComparison.Ordinal) ? "" : ";";
+        var pwd = SqlPassword ?? "";
+        return $"{ConnectionString}{sep}User ID={SqlUsername};Password={pwd};";
     }
 
     /// <summary>
-    /// Returns the CLI password from the configured env var (only used when auth = "user").
-    /// Null if auth != "user" or env var not set.
+    /// Returns the CLI password from config (only used when auth = "user").
+    /// Null if auth != "user" or cli_password not configured.
     /// </summary>
     public string? GetCliPassword()
     {
         if (!string.Equals(CliAuthMode, "user", StringComparison.OrdinalIgnoreCase))
             return null;
-        if (string.IsNullOrWhiteSpace(CliPasswordEnvVar))
-            return null;
-        return Environment.GetEnvironmentVariable(CliPasswordEnvVar);
+        return CliPassword;
     }
 
     public static AppConfig Load(string path)
@@ -71,8 +74,8 @@ public class AppConfig
                 switch (key)
                 {
                     case "connection_string": cfg.ConnectionString = value; break;
-                    case "sql_user": cfg.SqlUser = value; break;
-                    case "sql_password_env": cfg.SqlPasswordEnvVar = value; break;
+                    case "sql_username": cfg.SqlUsername = value; break;
+                    case "sql_password": cfg.SqlPassword = value; break;
                     case "ignore_tables":
                         cfg.IgnoreTables.AddRange(value.Split(',',
                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
@@ -85,8 +88,8 @@ public class AppConfig
                 {
                     case "automatec_path": cfg.AutomateCPath = value; break;
                     case "auth": cfg.CliAuthMode = value; break;
-                    case "username": cfg.CliUsername = value; break;
-                    case "password_env": cfg.CliPasswordEnvVar = value; break;
+                    case "cli_username": cfg.CliUsername = value; break;
+                    case "cli_password": cfg.CliPassword = value; break;
                 }
             }
         }

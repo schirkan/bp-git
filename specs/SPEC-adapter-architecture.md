@@ -32,32 +32,32 @@ Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentatione
 
 Kestrel-basierter HTTP-Server mit LibGit2Sharp für git-smart-HTTP-Protocol:
 
-| Modul | Aufgabe |
-|---|---|
-| `KestrelListener` | HTTP-Listener auf konfigurierbarem Port (Default 8181) |
-| `WindowsAuthHandler` | Negotiate/NTLM-Authentifizierung |
-| `GitHttpHandler` | git-smart-HTTP (`/info/refs`, `/git-upload-pack`, `/git-receive-pack`) via LibGit2Sharp |
-| `PreReceiveHook` | Processid-Lookup + `AutomateC.exe /import /forceid /overwrite` |
-| `PostReceiveHook` | BP-DB → canonical Filenames schreiben |
-| `PostCheckoutHook` | Worktree-Materialization bei `git clone` und `git checkout` |
-| `BpDbService` | SqlCommand-Zugriff auf BPAProcess + BPATree + BPAGroup + BPAGroupProcess + BPAAuditEvents |
-| `AutomateCRunner` | Process.Start-Wrapper für AutomateC.exe `/import /importrelease /export` |
+| Modul                | Aufgabe                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| `KestrelListener`    | HTTP-Listener auf konfigurierbarem Port (Default 8181)                                    |
+| `WindowsAuthHandler` | Negotiate/NTLM-Authentifizierung                                                          |
+| `GitHttpHandler`     | git-smart-HTTP (`/info/refs`, `/git-upload-pack`, `/git-receive-pack`) via LibGit2Sharp   |
+| `PreReceiveHook`     | Processid-Lookup + `AutomateC.exe /import /forceid /overwrite`                            |
+| `PostReceiveHook`    | BP-DB → canonical Filenames schreiben                                                     |
+| `PostCheckoutHook`   | Worktree-Materialization bei `git clone` und `git checkout`                               |
+| `BpDbService`        | SqlCommand-Zugriff auf BPAProcess + BPATree + BPAGroup + BPAGroupProcess + BPAAuditEvents |
+| `AutomateCRunner`    | Process.Start-Wrapper für AutomateC.exe `/import /importrelease /export`                  |
 
 ### 2. Data-Layer (`BPGit.Data`)
 
 POCOs für die Kern-BPA*-Tabellen, Dapper-Mapping:
 
-| DTO | Quell-Tabellen |
-|---|---|
-| `Process` | `BPAProcess`, `BPAProcessAttribute`, `BPAProcessBackup` |
+| DTO                 | Quell-Tabellen                                                |
+| ------------------- | ------------------------------------------------------------- |
+| `Process`           | `BPAProcess`, `BPAProcessAttribute`, `BPAProcessBackup`       |
 | `ProcessAuditEvent` | `BPAAuditEvents`, LEFT JOIN `BPAUser`, LEFT JOIN `BPAProcess` |
-| `Tree` | `BPATree` (gefiltert auf Processes/Objects) |
-| `Group` | `BPAGroup` (+ rekursiv `BPAGroupGroup` für nested) |
-| `ProcessMembership` | `BPAGroupProcess` (M:N) |
-| `ProcessDependency` | 9 `BPAProcess*Dependency`-Tabellen |
-| `ProcessEnvVar` | `BPAProcessEnvVar` |
-| `ProcessLock` | `BPAProcessLock` |
-| `Release` | `BPARelease`, `BPAReleaseEntry` |
+| `Tree`              | `BPATree` (gefiltert auf Processes/Objects)                   |
+| `Group`             | `BPAGroup` (+ rekursiv `BPAGroupGroup` für nested)            |
+| `ProcessMembership` | `BPAGroupProcess` (M:N)                                       |
+| `ProcessDependency` | 9 `BPAProcess*Dependency`-Tabellen                            |
+| `ProcessEnvVar`     | `BPAProcessEnvVar`                                            |
+| `ProcessLock`       | `BPAProcessLock`                                              |
+| `Release`           | `BPARelease`, `BPAReleaseEntry`                               |
 
 ### 3. XML-Serializer (`BPGit.Format`)
 
@@ -108,13 +108,13 @@ sanitize(name):
 
 **Beispiele:**
 
-| BP-Name | Filename |
-|---|---|
-| `MS Excel VBO` | `MS Excel VBO.xml` |
+| BP-Name                 | Filename                    |
+| ----------------------- | --------------------------- |
+| `MS Excel VBO`          | `MS Excel VBO.xml`          |
 | `Utility - Environment` | `Utility - Environment.xml` |
-| `Prozess: Test` | `Prozess_ Test.xml` |
-| `Path/Test` | `Path_Test.xml` |
-| `Trailing. ` | `Trailing.xml` |
+| `Prozess: Test`         | `Prozess_ Test.xml`         |
+| `Path/Test`             | `Path_Test.xml`             |
+| `Trailing. `            | `Trailing.xml`              |
 
 ### Folder-Hierarchie
 
@@ -145,13 +145,13 @@ Beispiel: `<process name="MP - Subprocess A" ...>` → `"MP - Subprocess A"`
 
 ### Processid-Auflösung pro Operation
 
-| Git-Diff-Status | Alter Name (Filename) | Neuer Name (XML-Root) | BP-Aktion |
-|---|---|---|---|
-| `M` | "X" | "X" (gleich) | DB-Lookup `WHERE name='X'` → processid → `/import /forceid /overwrite <file>` |
-| `M` (Rename via XML) | "Old" | "New" (≠) | DB-Lookup `WHERE name='New'` (0 Treffer), dann `WHERE name='Old'` (1 Treffer) → processid → `/import /forceid /overwrite <file>` |
-| `A` | — | "New" | DB-Lookup `WHERE name='New'` (0 erwartet) → `/import <file>` (BP legt neuen Prozess an) |
-| `D` | "Gone" | — | DB-Lookup `WHERE name='Gone'` → wenn 1 Treffer: Prozess löschen |
-| `R` (git mv) | "Old" | "New" | Wie Modify-Rename-Fall, danach Pull-Normalisierung |
+| Git-Diff-Status      | Alter Name (Filename) | Neuer Name (XML-Root) | BP-Aktion                                                                                                                        |
+| -------------------- | --------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `M`                  | "X"                   | "X" (gleich)          | DB-Lookup `WHERE name='X'` → processid → `/import /forceid /overwrite <file>`                                                    |
+| `M` (Rename via XML) | "Old"                 | "New" (≠)             | DB-Lookup `WHERE name='New'` (0 Treffer), dann `WHERE name='Old'` (1 Treffer) → processid → `/import /forceid /overwrite <file>` |
+| `A`                  | —                     | "New"                 | DB-Lookup `WHERE name='New'` (0 erwartet) → `/import <file>` (BP legt neuen Prozess an)                                          |
+| `D`                  | "Gone"                | —                     | DB-Lookup `WHERE name='Gone'` → wenn 1 Treffer: Prozess löschen                                                                  |
+| `R` (git mv)         | "Old"                 | "New"                 | Wie Modify-Rename-Fall, danach Pull-Normalisierung                                                                               |
 
 ### Rename-Walkthrough (komplett)
 
@@ -229,11 +229,11 @@ VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit X
 
 ### VS-Code-Integration
 
-| Phase | Mechanismus | Aufwand |
-|---|---|---|
-| **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting. | ✓ fertig, kein Code |
-| **Phase 2** | Custom Diff-Driver via `.gitattributes`: `*.xml diff=bp-xml-clean` → git nutzt `bpgit diff-xml` für semantische Diffs (Stage-Order, Inputs/Outputs) statt Text-Diffs. | ~50 LoC |
-| **Phase 3** | VS-Code-Extension: Snippets für BP-Stages, `BPAValCheck`-Validierung, Inline-Vorschau der Stage-Effekte. | separates Extension-Projekt |
+| Phase        | Mechanismus                                                                                                                                                           | Aufwand                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting.                                                                       | ✓ fertig, kein Code         |
+| **Phase 2**  | Custom Diff-Driver via `.gitattributes`: `*.xml diff=bp-xml-clean` → git nutzt `bpgit diff-xml` für semantische Diffs (Stage-Order, Inputs/Outputs) statt Text-Diffs. | ~50 LoC                     |
+| **Phase 3**  | VS-Code-Extension: Snippets für BP-Stages, `BPAValCheck`-Validierung, Inline-Vorschau der Stage-Effekte.                                                              | separates Extension-Projekt |
 
 ## Datenfluss
 
@@ -289,13 +289,14 @@ post-receive Hook:
 [bp]
 # Auth-Modus A: SSPI (Windows Integrated Auth; funktioniert automatisch
 # mit NTLM lokal und mit Kerberos in AD-Domänen-SSO)
-# Default-Modus — wenn keine sql_user-Eintraege gesetzt sind.
+# Default-Modus — wenn keine sql_username-Eintraege gesetzt sind.
 connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI;Database=BluePrism"
 
 # Auth-Modus B: SQL-Auth (für CI oder wenn keine Windows-Identity verfügbar)
-# Aktiv, sobald `sql_user` gesetzt ist. Password NIEMALS ins Repo — kommt
-# via env-var BPGIT_DB_PASSWORD oder `dotnet user-secrets`.
-# sql_user = "bpgit_readonly"
+# Aktiv, sobald `sql_username` gesetzt ist. Credentials stehen direkt
+# in config (kein env-var-Lookup).
+# sql_username = "bpgit_readonly"
+# sql_password = "..."
 
 # Tabellen, die der Adapter ignoriert (Credentials, Session-Logs, System-Seed)
 ignore_tables = [

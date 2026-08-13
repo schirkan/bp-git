@@ -18,17 +18,18 @@ public static class InitCommand
                 "# Zwei Sektionen: [bp] fuer SqlConnection (read-only ops), [cli] fuer AutomateC.exe (write ops)\n\n" +
                 "[bp]\n" +
                 "connection_string = \"Server=(localdb)\\\\BluePrismLocalDB;Integrated Security=SSPI;Database=BluePrism\"\n" +
-                "# Optional: SQL-Auth fallback (only if SSPI unavailable)\n" +
-                "# sql_user = \"bpgit_readonly\"\n" +
-                "# sql_password_env = \"BPGIT_DB_PASSWORD\"\n\n" +
+                "# Optional: SQL-Auth fallback (only if SSPI unavailable).\n" +
+                "# Credentials direkt in config (kein env-var-Lookup).\n" +
+                "# sql_username = \"bpgit_readonly\"\n" +
+                "# sql_password = \"...\"\n\n" +
                 "[cli]\n" +
                 "# Path to AutomateC.exe (default is the standard install location)\n" +
                 "automatec_path = \"C:\\\\Program Files\\\\Blue Prism Limited\\\\Blue Prism Automate\\\\AutomateC.exe\"\n" +
                 "# Auth mode: \"sso\" (default, Windows Integrated Auth) or \"user\"\n" +
                 "auth = \"sso\"\n" +
-                "# Only used when auth = \"user\"\n" +
-                "# username = \"admin\"\n" +
-                "# password_env = \"BPGIT_CLI_PASSWORD\"\n";
+                "# Only used when auth = \"user\". Credentials direkt in config.\n" +
+                "# cli_username = \"admin\"\n" +
+                "# cli_password = \"...\"\n";
             await File.WriteAllTextAsync(configPath, cfg);
             Console.WriteLine($"Created {configPath}");
         }

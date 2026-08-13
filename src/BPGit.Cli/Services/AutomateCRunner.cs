@@ -36,13 +36,13 @@ public static class AutomateCRunner
         else if (auth == "user")
         {
             if (string.IsNullOrWhiteSpace(cfg.CliUsername))
-                throw new InvalidOperationException("auth = \"user\" erfordert username in .bpgit/config.toml [cli] section");
+                throw new InvalidOperationException("auth = \"user\" erfordert cli_username in .bpgit/config.toml [cli] section");
             psi.ArgumentList.Add("/user");
             psi.ArgumentList.Add(cfg.CliUsername);
             var pwd = cfg.GetCliPassword();
             if (string.IsNullOrEmpty(pwd))
                 throw new InvalidOperationException(
-                    $"auth = \"user\" erfordert password in env var {cfg.CliPasswordEnvVar ?? "(unset)"}");
+                    "auth = \"user\" erfordert cli_password in .bpgit/config.toml [cli] section");
             psi.ArgumentList.Add(pwd);
         }
         else
