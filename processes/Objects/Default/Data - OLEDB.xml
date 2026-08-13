@@ -1,0 +1,236 @@
+<process name="Data - OLEDB" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="A SQL interface for interacting with OLEDB data sources" byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>ed09581b-7493-46ed-8dfa-8f00d46356b0</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>-169</camerax><cameray>51</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="cfb6da91-518b-40a3-8e0e-115ff0252ea7" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>-161</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="90429413-7792-4513-8bc0-d6d079aa08b9" type="Normal" published="True"><name>Set Connection</name><view><camerax>20</camerax><cameray>63</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="459569f2-c792-4948-8884-5c2a0917cc16" type="Normal" published="True"><name>Open</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5" type="Normal" published="True"><name>Close</name><view><camerax>86</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="780529b8-393d-4d1d-bc5f-34f383fe53ec" type="Normal" published="True"><name>Get Collection</name><view><camerax>-42</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="712f26ff-72b1-4503-9126-4ce09ce05e60" type="Normal" published="True"><name>Get Collection from Stored Procedure</name><view><camerax>-89</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="b53c93ea-32ef-418c-bc11-c907d61842fe" type="Normal" published="True"><name>Execute Stored Procedure with Return Value</name><view><camerax>-89</camerax><cameray>-21</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="1ab0d89a-87ab-4c08-90ed-ffbb975c2704" type="Normal" published="True"><name>Execute Stored Procedure with Outputs</name><view><camerax>-89</camerax><cameray>-38</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="9ad00c3c-8615-4f62-9595-9081a2523133" type="Normal" published="True"><name>Execute</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="f3bf5e12-d2cf-4c5d-bda5-0deae3c26316" name="Start" type="Start"><loginhibit /><display x="15" y="-105" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>d16cc64f-d5d1-4aaf-bea5-f814e1f2657b</onsuccess></stage><stage stageid="d16cc64f-d5d1-4aaf-bea5-f814e1f2657b" name="End" type="End"><loginhibit /><display x="15" y="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="0efcc61e-6916-4463-ae94-c24edb2adc75" name="Stage1" type="ProcessInfo"><loginhibit /><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /><references><reference>System.Data.dll</reference><reference>System.XML.dll</reference></references><imports><import>System</import><import>System.Data</import><import>System.Data.OLEDB</import></imports><language>visualbasic</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[
+
+]]></globalcode><code><![CDATA[Private moConnection As OLEDBConnection
+
+Private Function ConvertValue(value As String, oleDbType As OleDbType) As Object
+    If String.IsNullOrEmpty(value) Then
+        Return DBNull.Value
+    End If
+    
+    Try
+        Select Case oleDbType
+            Case OleDbType.Integer
+                Return Integer.Parse(value)
+            Case OleDbType.BigInt
+                Return Long.Parse(value)
+            Case OleDbType.SmallInt
+                Return Short.Parse(value)
+            Case OleDbType.TinyInt, OleDbType.UnsignedTinyInt
+                Return Byte.Parse(value)
+            Case OleDbType.Boolean
+                Return Boolean.Parse(value)
+            Case OleDbType.Single
+                Return Single.Parse(value)
+            Case OleDbType.Double
+                Return Double.Parse(value)
+            Case OleDbType.Decimal, OleDbType.Numeric, OleDbType.Currency
+                Return Decimal.Parse(value)
+            Case OleDbType.Date, OleDbType.DBDate, OleDbType.DBTimeStamp
+                Return DateTime.Parse(value)
+            Case OleDbType.Guid
+                Return Guid.Parse(value)
+            Case OleDbType.VarChar, OleDbType.Char, OleDbType.WChar, OleDbType.VarWChar, _
+                 OleDbType.LongVarChar, OleDbType.LongVarWChar, OleDbType.BSTR
+                Return value
+            Case Else
+                Return value ' Default to string
+        End Select
+    Catch
+        Return value ' If conversion fails, return original string
+    End Try
+End Function
+		
+
+Public Function ExecuteStoredProcedure(connection as OLEDBConnection, procedureName As String, parameters As DataTable) As DataTable
+	Dim oDataAdapter as OLEDBDataAdapter
+	Dim oDataSet as New DataSet
+        Using command As New OleDbCommand(procedureName, connection) 
+            command.CommandType = CommandType.StoredProcedure
+            if not IsNothing(parameters) then
+				For Each row As DataRow In parameters.Rows
+					Dim paramName As String = row("ParamName").ToString()
+					Dim paramTypeString As String = row("ParamType").ToString()
+					Dim paramValue As String = row("ParamValue").ToString()
+					
+					' Parse the OleDbType
+					Dim paramType As OleDbType
+					If [Enum].TryParse(Of OleDbType)(paramTypeString, True, paramType) Then
+						' Convert the string value to appropriate type
+						Dim convertedValue As Object = ConvertValue(paramValue, paramType)
+						
+						' Add parameter with size if needed
+						If parameters.Columns.Contains("ParamSize") AndAlso Not row.IsNull("ParamSize") Then
+							Dim size As Integer = Convert.ToInt32(row("ParamSize"))
+							command.Parameters.Add(paramName, paramType, size).Value = convertedValue
+						Else
+							command.Parameters.Add(paramName, paramType).Value = convertedValue
+						End If
+					End If
+				Next
+            end if
+			oDataAdapter = new OLEDBDataAdapter(command)
+			oDataAdapter.Fill(oDataSet)
+            
+        End Using
+
+	return oDataSet.Tables(0)
+
+End Function
+
+
+Public Function ExecuteStoredProcedureWithReturn(connection As OLEDBConnection, procedureName As String, parameters As DataTable) As Object
+   ' Using connection As New OleDbConnection(connectionString)
+        Using command As New OleDbCommand(procedureName, connection)
+            command.CommandType = CommandType.StoredProcedure
+            
+            ' Add the return value parameter
+            Dim returnParameter As OleDbParameter = command.Parameters.Add("@ReturnValue", OleDbType.Integer)
+            returnParameter.Direction = ParameterDirection.ReturnValue
+            
+            ' Add input parameters
+            For Each row As DataRow In parameters.Rows
+                Dim paramName As String = row("ParamName").ToString()
+                Dim paramTypeString As String = row("ParamType").ToString()
+                Dim paramValue As String = row("ParamValue").ToString()
+                
+                ' Parse the OleDbType
+                Dim paramType As OleDbType
+                If [Enum].TryParse(Of OleDbType)(paramTypeString, True, paramType) Then
+                    ' Convert the string value to appropriate type
+                    Dim convertedValue As Object = ConvertValue(paramValue, paramType)
+                    
+                    ' Add parameter with size if needed
+                    If parameters.Columns.Contains("ParamSize") AndAlso Not row.IsNull("ParamSize") Then
+                        Dim size As Integer = Convert.ToInt32(row("ParamSize"))
+                        command.Parameters.Add(paramName, paramType, size).Value = convertedValue
+                    Else
+                        command.Parameters.Add(paramName, paramType).Value = convertedValue
+                    End If
+                End If
+            Next
+            
+           ' connection.Open()
+            command.ExecuteNonQuery()
+            
+            ' Return the return value
+            Return returnParameter.Value
+        End Using
+    'End Using
+End Function
+
+Public Function ExecuteStoredProcedureWithOutputs(connection As OLEDBConnection, procedureName As String, _
+                                                   parameters As DataTable, ByRef outputParams As DataTable) As Object
+   ' Using connection As New OleDbConnection(connectionString)
+        Using command As New OleDbCommand(procedureName, connection)
+            command.CommandType = CommandType.StoredProcedure
+            
+            ' Add the return value parameter
+            Dim returnParameter As OleDbParameter = command.Parameters.Add("@ReturnValue", OleDbType.Integer)
+            returnParameter.Direction = ParameterDirection.ReturnValue
+            
+            ' Add parameters
+            For Each row As DataRow In parameters.Rows
+                Dim paramName As String = row("ParamName").ToString()
+                Dim paramTypeString As String = row("ParamType").ToString()
+                Dim paramValue As String = row("ParamValue").ToString()
+                Dim paramDirection As String = If(parameters.Columns.Contains("ParamDirection"), _
+                                                   row("ParamDirection").ToString(), "Input")
+                
+                ' Parse the OleDbType
+                Dim paramType As OleDbType
+                If [Enum].TryParse(Of OleDbType)(paramTypeString, True, paramType) Then
+                    ' Convert the string value to appropriate type
+                    Dim convertedValue As Object = ConvertValue(paramValue, paramType)
+                    
+				
+                    ' Create parameter
+                    Dim param As OleDbParameter
+                    If parameters.Columns.Contains("ParamSize") AndAlso Not row.IsNull("ParamSize") Then
+                        Dim size As Integer = Convert.ToInt32(row("ParamSize"))
+                        param = command.Parameters.Add(paramName, paramType, size)
+                    Else
+                        param = command.Parameters.Add(paramName, paramType)
+                    End If
+                    
+                    ' Set direction
+                    Select Case paramDirection.ToLower()
+                        Case "output"
+                            param.Direction = ParameterDirection.Output
+                        Case "inputoutput"
+                            param.Direction = ParameterDirection.InputOutput
+                            param.Value = convertedValue
+                        Case Else
+                            param.Direction = ParameterDirection.Input
+                            param.Value = convertedValue
+                    End Select
+                End If
+            Next
+            
+          '  connection.Open()
+            command.ExecuteNonQuery()
+			
+            
+            ' Populate output parameters collection
+            If outputParams IsNot Nothing Then
+                outputParams.Clear()
+                outputParams.Columns.Clear()
+                outputParams.Columns.Add("ParamName", GetType(String))
+                outputParams.Columns.Add("ParamValue", GetType(String))
+                
+                For Each param As OleDbParameter In command.Parameters
+                    If param.Direction = ParameterDirection.Output OrElse _
+                       param.Direction = ParameterDirection.InputOutput Then
+                        Dim outputRow As DataRow = outputParams.NewRow()
+                        outputRow("ParamName") = param.ParameterName
+                        outputRow("ParamValue") = If(param.Value Is Nothing, "", param.Value.ToString())
+						outputParams.Rows.Add(outputRow)
+                    End If
+                Next
+            End If
+            
+            ' Return the return value
+            Return returnParameter.Value
+        End Using
+   ' End Using
+End Function]]></code></stage><stage stageid="fd95e8ae-614b-4bae-a0f9-cbd04cef37ce" name="Clean Up" type="SubSheetInfo"><subsheetid>cfb6da91-518b-40a3-8e0e-115ff0252ea7</subsheetid><loginhibit /><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="e91da0c2-e60f-4eae-a108-bd99aaff046f" name="Start" type="Start"><subsheetid>cfb6da91-518b-40a3-8e0e-115ff0252ea7</subsheetid><loginhibit /><display x="15" y="-105" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>88b89098-8bb2-42fc-8e43-bad5b1e4f400</onsuccess></stage><stage stageid="91836284-14a0-4c0f-b9d5-8cd74b4d1632" name="End" type="End"><subsheetid>cfb6da91-518b-40a3-8e0e-115ff0252ea7</subsheetid><loginhibit /><display x="15" y="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="cf7a7a0d-0c2b-4a9e-8a52-19bdf46ef4cc" name="Set Connection" type="SubSheetInfo"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><narrative>Sets the connection details for the database.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="5395eb12-61a3-4005-88a3-ceda307cf9b1" name="Start" type="Start"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><preconditions><condition narrative="" /></preconditions><display x="15" y="-105" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="Database" narrative="Optional. The path to the oledb database file" stage="Database" /><input type="password" name="Password" narrative="Optional. The password if required to open the oledb database." stage="Password" /><input type="text" name="Provider" narrative="Optional. Allows the database provider to be overridden." stage="Provider" /><input type="text" name="Connection String" narrative="Optional. Allows the full connection string to be provided. If supplying this parameter no other parameters are required." stage="Connection String" /></inputs><onsuccess>935af892-73c5-4d1a-871f-536b70e44a8f</onsuccess></stage><stage stageid="823a5018-5ad8-483c-a6c1-8c527bf7bc00" name="End" type="End"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="15" y="210" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="78309214-2fb3-4bd9-8433-ca0f0fc31bd4" name="new" type="Note"><subsheetid>cfb6da91-518b-40a3-8e0e-115ff0252ea7</subsheetid><loginhibit /><narrative>Clean Up Page
+
+This is an optional page where you might choose to perform some finalisation (or "cleanup") tasks as your business object is closed down.
+
+The cleanup action will be called automatically by Automate immediately after closing your business object at the end of a business process.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than before the disposal of the business object.</narrative><display x="-180" y="60" w="180" h="230" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="7bb7dcd7-acf2-4a7a-a96d-756830b2e54f" name="new" type="Note"><loginhibit /><narrative>Initialise Page
+
+This is an optional page where you might choose to perform some initialisation tasks after your business object is loaded.
+
+The initialise action will be called automatically by Automate immediately after loading your business object.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than after the creation of the object.</narrative><display x="-180" y="60" w="180" h="230" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="b9720411-39cf-4e79-8fe9-af8e7581970a" name="Database" type="Data"><loginhibit /><display x="180" y="-60" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /></stage><stage stageid="d1d97b89-18c2-40ab-8f43-0cd0ce45f5b7" name="User" type="Data"><loginhibit /><display x="180" y="-15" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /></stage><stage stageid="1c8bc019-fa8a-4593-b435-81216f908452" name="Password" type="Data"><loginhibit /><display x="180" y="30" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>password</datatype><initialvalueenc></initialvalueenc></stage><stage stageid="c9568fbf-1fca-4ce7-aa27-2309731df7f5" name="Connection String" type="Data"><loginhibit /><display x="180" y="75" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /></stage><stage stageid="db11541e-1f1d-48f5-a64e-e1d44d23ecf6" name="Set connection" type="Calculation"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="-30" y="150" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>823a5018-5ad8-483c-a6c1-8c527bf7bc00</onsuccess><calculation expression="&quot;Provider=&quot; &amp; [Provider] &amp; &quot;; Data Source=&quot; &amp; [Database] &amp; &quot;; Jet OLEDB:Database Password=&quot; &amp; [Password] &amp;&quot;;&quot;" stage="Connection String" /></stage><stage stageid="8ed153e9-383f-4acf-9e86-3d058f27a895" name="Open" type="SubSheetInfo"><subsheetid>459569f2-c792-4948-8884-5c2a0917cc16</subsheetid><loginhibit /><narrative>Opens a connection to the OLEDB database.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="3c501978-f53e-419d-ab66-c3cbef5cf598" name="Start" type="Start"><subsheetid>459569f2-c792-4948-8884-5c2a0917cc16</subsheetid><loginhibit /><display x="15" y="-105" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>c57babb2-f4b2-42dd-95c7-a8155b854975</onsuccess></stage><stage stageid="7295054b-4d97-4891-ab69-23416df80d09" name="End" type="End"><subsheetid>459569f2-c792-4948-8884-5c2a0917cc16</subsheetid><loginhibit /><display x="15" y="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="c57babb2-f4b2-42dd-95c7-a8155b854975" name="Open" type="Code"><subsheetid>459569f2-c792-4948-8884-5c2a0917cc16</subsheetid><loginhibit /><display x="15" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="ConnectionString" expr="[Connection String]" /></inputs><onsuccess>7295054b-4d97-4891-ab69-23416df80d09</onsuccess><code><![CDATA[If moConnection Is Nothing Then
+	moConnection = New OLEDBConnection(ConnectionString)
+	moConnection.Open()
+End If]]></code></stage><stage stageid="22e10c68-07d1-4cc4-9072-7c9b0b0c97cf" name="SQL" type="Data"><loginhibit /><display x="180" y="120" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /></stage><stage stageid="4a78a3ea-35e5-4496-bfe0-509900dc5137" name="Close" type="SubSheetInfo"><subsheetid>7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5</subsheetid><loginhibit /><narrative>Closes the connection to the OLEDB database.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="6bd7feeb-d610-4f7b-9646-df99afade77a" name="Start" type="Start"><subsheetid>7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5</subsheetid><loginhibit /><display x="0" y="-150" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>f5aab680-3f4a-4cb2-9873-7c2aa718133f</onsuccess></stage><stage stageid="b9924b3b-5eea-41f5-9d73-8f4624ba22fe" name="End" type="End"><subsheetid>7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5</subsheetid><loginhibit /><display x="0" y="45" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="f5aab680-3f4a-4cb2-9873-7c2aa718133f" name="Close" type="Code"><subsheetid>7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5</subsheetid><loginhibit /><display x="0" y="-60" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>b9924b3b-5eea-41f5-9d73-8f4624ba22fe</onsuccess><code><![CDATA[moConnection.Close()
+moConnection.Dispose()
+moConnection = Nothing]]></code></stage><stage stageid="88b89098-8bb2-42fc-8e43-bad5b1e4f400" name="Close" type="SubSheet"><subsheetid>cfb6da91-518b-40a3-8e0e-115ff0252ea7</subsheetid><loginhibit /><display x="15" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>91836284-14a0-4c0f-b9d5-8cd74b4d1632</onsuccess><processid>7ee7ad42-e017-40ff-92aa-3cfc5c6dd0e5</processid></stage><stage stageid="221cc4f2-f3b6-4a62-985a-350066ad7c79" name="Get Collection" type="SubSheetInfo"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="76ba8075-200c-47f3-a5b0-81d2a545b93b" name="Start" type="Start"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-45" y="-135" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="SQL" narrative="An SQL query to fetch the data. In most cases this will be a 'select' query." stage="SQL" /></inputs><onsuccess>98267e1e-20b7-4ce9-a0b8-847c18c1976f</onsuccess></stage><stage stageid="469b68e3-523f-4723-ab11-b47348bbdf33" name="End" type="End"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-45" y="60" /><font family="Tahoma" size="10" style="Regular" color="000000" /><outputs><output type="collection" name="Results" stage="Results" /></outputs></stage><stage stageid="897f736f-bc15-4938-9d97-b4c1065dd5e1" name="Get Data Table" type="Code"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-45" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="SQL" expr="[SQL]" /></inputs><outputs><output type="collection" name="Results" stage="Results" /></outputs><onsuccess>469b68e3-523f-4723-ab11-b47348bbdf33</onsuccess><code><![CDATA[Dim oDataAdapter As New OLEDBDataAdapter(SQL,moConnection)
+
+Dim oDataSet As New DataSet		
+oDataAdapter.Fill(oDataset)
+
+Results = oDataSet.Tables(0)]]></code></stage><stage stageid="98267e1e-20b7-4ce9-a0b8-847c18c1976f" name="Open" type="SubSheet"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-45" y="-75" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>897f736f-bc15-4938-9d97-b4c1065dd5e1</onsuccess><processid>459569f2-c792-4948-8884-5c2a0917cc16</processid></stage><stage stageid="71604ec6-dbf3-40c1-b400-8a5eea8eda3f" name="Results" type="Collection"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit /><display x="-195" y="45" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="3f4ca0da-93ad-492e-af65-ff637c54b37a" name="Password Set?" type="Decision"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><narrative>If the password is set use password in connection string.</narrative><display x="15" y="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /><decision expression="[PasswordText]&lt;&gt;&quot;&quot;" /><ontrue>db11541e-1f1d-48f5-a64e-e1d44d23ecf6</ontrue><onfalse>fbf4d6d4-763b-41f2-926a-ce6745964763</onfalse></stage><stage stageid="fbf4d6d4-763b-41f2-926a-ce6745964763" name="Set connection" type="Calculation"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="60" y="150" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>823a5018-5ad8-483c-a6c1-8c527bf7bc00</onsuccess><calculation expression="&quot;Provider=&quot; &amp; [Provider] &amp; &quot;; Data Source=&quot; &amp; [Database] &amp; &quot;;&quot;" stage="Connection String" /></stage><stage stageid="b0dbeba0-75c2-479b-9d5d-bde261b4db20" name="Provider" type="Data"><display x="180" y="165" w="180" h="30" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /><alwaysinit /></stage><stage stageid="16cd8677-ab9b-4269-9a0b-1e4956f4d103" name="Provider Set?" type="Decision"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="15" y="0" /><font family="Tahoma" size="10" style="Regular" color="000000" /><decision expression="[Provider]&lt;&gt;&quot;&quot;" /><ontrue>35e769d9-71b0-43da-8bda-6e4cbd3d0e55</ontrue><onfalse>8b21c0e2-f0c8-4c89-8636-f648382b8c37</onfalse></stage><stage stageid="8b21c0e2-f0c8-4c89-8636-f648382b8c37" name="Set Provider" type="Calculation"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="120" y="0" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>4eb62611-4eee-4ad8-9ffd-bf789ac796ad</onsuccess><calculation expression="&quot;Microsoft.ACE.OLEDB.12.0&quot;" stage="Provider" /></stage><stage stageid="4eb62611-4eee-4ad8-9ffd-bf789ac796ad" name="anchor1" type="Anchor"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="120" y="45" w="10" h="10" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>35e769d9-71b0-43da-8bda-6e4cbd3d0e55</onsuccess></stage><stage stageid="35e769d9-71b0-43da-8bda-6e4cbd3d0e55" name="Get Password Text" type="Calculation"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="15" y="45" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>3f4ca0da-93ad-492e-af65-ff637c54b37a</onsuccess><calculation expression="[Password]" stage="PasswordText" /></stage><stage stageid="8cc8ad2a-2fa6-41ee-abc4-def727b8035c" name="PasswordText" type="Data"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><display x="-195" y="15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="935af892-73c5-4d1a-871f-536b70e44a8f" name="Connection String Provided" type="Decision"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="15" y="-60" /><decision expression="Len([Connection String])&gt;0" /><ontrue>59f15fcb-a597-4b07-9bf2-27c46f27b6c6</ontrue><onfalse>16cd8677-ab9b-4269-9a0b-1e4956f4d103</onfalse></stage><stage stageid="59f15fcb-a597-4b07-9bf2-27c46f27b6c6" name="End1" type="End"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit /><display x="-75" y="-60" /></stage><stage stageid="867d0e4f-77f9-4ce5-98fe-24936bd70fef" name="Execute" type="SubSheetInfo"><subsheetid>9ad00c3c-8615-4f62-9595-9081a2523133</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="f3759797-b7e7-4c69-abe5-9eef2b589950" name="Start" type="Start"><subsheetid>9ad00c3c-8615-4f62-9595-9081a2523133</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="SQL" stage="SQL" /></inputs><onsuccess>e5eaf88d-54e6-4dc2-a219-327908c231f1</onsuccess></stage><stage stageid="39a5fcd1-fd83-4b7b-a7c1-988b88708eb6" name="End" type="End"><subsheetid>9ad00c3c-8615-4f62-9595-9081a2523133</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="e5eaf88d-54e6-4dc2-a219-327908c231f1" name="Execute" type="Code"><subsheetid>9ad00c3c-8615-4f62-9595-9081a2523133</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="SQL" expr="[SQL]" /></inputs><onsuccess>39a5fcd1-fd83-4b7b-a7c1-988b88708eb6</onsuccess><code><![CDATA[Dim oCommand As New OleDbCommand(SQL,moConnection)
+oCommand.ExecuteNonQuery()
+]]></code></stage><stage stageid="9936a20d-f775-48eb-abf9-97b9ba2ee812" name="Note1" type="Note"><loginhibit /><narrative>Version 10.2</narrative><display x="15" y="-150" w="90" h="30" /><font family="Segoe UI" size="12" style="Bold" color="FF0000" /></stage><stage stageid="0a27ce91-c610-47d9-94de-0485f578cc0e" name="Note2" type="Note"><loginhibit /><narrative>© 2025 Blue Prism Limited
+Licensed under Blue Prism Asset Terms for Modifiable Assets
+https://portal.blueprism.com/agreements</narrative><display x="435" y="-15" w="300" h="90" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="14a5d2f4-da37-451f-8821-b909665218cf" name="Get Collection from Stored Procedure" type="SubSheetInfo"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><narrative>Executes a stored procedure and returns the results as a collection. The parameters collection can be empty if the stored proc doesn't require any.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="cf75e157-f3e6-417a-a9dd-9aebd6ce8bee" name="Start" type="Start"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="15" y="-75" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="Stored Proc Name" narrative="The name of the stored procedure to execute" stage="Stored Procedure Name" /><input type="collection" name="SP Parameters" narrative="The collection of stored proc parameters." stage="SP Parameters" /></inputs><onsuccess>f4da2381-9c39-4bd7-815c-3903457ea03a</onsuccess></stage><stage stageid="9c5e9b09-6c1d-4136-8d73-ac1794d9ba1a" name="End" type="End"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="15" y="120" /><font family="Tahoma" size="10" style="Regular" color="000000" /><outputs><output type="collection" name="Results" stage="Results" /></outputs></stage><stage stageid="b64b0d25-b869-46d4-8c9b-0ce42b87aa60" name="Execute Stored Procedure" type="Code"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="15" y="45" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="SPName" expr="[Stored Procedure Name]" /><input type="collection" name="SPParams" expr="[SP Parameters]" /></inputs><outputs><output type="collection" name="Results" stage="Results" /></outputs><onsuccess>9c5e9b09-6c1d-4136-8d73-ac1794d9ba1a</onsuccess><code><![CDATA[
+
+Results = ExecuteStoredProcedure(moConnection, SPName, SPParams)]]></code></stage><stage stageid="f4da2381-9c39-4bd7-815c-3903457ea03a" name="Open" type="SubSheet"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="15" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>b64b0d25-b869-46d4-8c9b-0ce42b87aa60</onsuccess><processid>459569f2-c792-4948-8884-5c2a0917cc16</processid></stage><stage stageid="152f43cd-b10c-4616-a542-af1a99b34a80" name="Results" type="Collection"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="-195" y="135" w="120" h="60" /><font family="Tahoma" size="10" style="Regular" color="000000" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="49eecda7-bebe-4373-8f22-bf3c6c9d7e1f" name="Stored Procedure Name" type="Data"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit /><display x="-150" y="0" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="3ee58c71-d16c-4d64-be45-17f6476d0f28" name="SP Parameters" type="Collection"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><display x="-225" y="0" /><datatype>collection</datatype><private /><alwaysinit /><collectioninfo><field name="ParamName" type="text" description="The name of the parameter prefixed with '@'." /><field name="ParamType" type="text" description="The OleDBType enumeration value. Do not prefix with OleDbType" /><field name="ParamValue" type="text" description="The value of the parameter this may need to be converted." /><field name="ParamDirection" type="text" description="Input, Output or InputOutput. If left blank it will default to input." /><field name="ParamSize" type="number" description="Optional for sized types." /></collectioninfo></stage><stage stageid="96f4cac5-1e87-4cee-be2e-f4b28ce0b724" name="Execute Stored Procedure with Outputs" type="SubSheetInfo"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><narrative>Executes a Stored Procedure that makes use of input and output parameters.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="93e6acfe-0058-4e85-942c-6118189ab877" name="Start" type="Start"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><display x="-45" y="-135" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="Stored Proc Name" narrative="The name of the stored procedure to execute" stage="Stored Procedure Name" /><input type="collection" name="SP Parameters" narrative="The collection of stored proc parameters." stage="SP Parameters" /></inputs><onsuccess>0e332dd7-1631-4622-8182-e29300221ecb</onsuccess></stage><stage stageid="b8ceb149-70ba-48de-a7df-2a16e7434e72" name="End" type="End"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><display x="-45" y="60" /><font family="Tahoma" size="10" style="Regular" color="000000" /><outputs><output type="collection" name="Results" narrative="The resulting output parameter collection." stage="OutputParams" /><output type="number" name="ReturnValue" narrative="The return value from the stored proccedure" stage="ReturnValue" /></outputs></stage><stage stageid="a7a44c9c-1757-425a-bd6c-3c9a009c6146" name="Execute Stored Proc with Outputs" type="Code"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><display x="-45" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="SPName" expr="[Stored Procedure Name]" /><input type="collection" name="SPParams" expr="[SP Parameters]" /></inputs><outputs><output type="collection" name="OutputParams" stage="OutputParams" /><output type="text" name="ReturnValue" stage="ReturnValue" /></outputs><onsuccess>b8ceb149-70ba-48de-a7df-2a16e7434e72</onsuccess><code><![CDATA['Dim oDataAdapter As New OLEDBDataAdapter(SQL,moConnection)
+
+'Dim oDataSet As New DataSet		
+'oDataAdapter.Fill(oDataset)
+
+
+ReturnValue = ExecuteStoredProcedureWithOutputs(moConnection, SPName, SPParams, OutputParams)]]></code></stage><stage stageid="0e332dd7-1631-4622-8182-e29300221ecb" name="Open" type="SubSheet"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><display x="-45" y="-75" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>a7a44c9c-1757-425a-bd6c-3c9a009c6146</onsuccess><processid>459569f2-c792-4948-8884-5c2a0917cc16</processid></stage><stage stageid="3fa04c39-62c0-43a4-86a2-097d390bb835" name="Stored Procedure Name" type="Data"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit /><display x="-165" y="15" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f9fea4d5-1886-4983-8375-75c325924756" name="SP Parameters" type="Collection"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><display x="-225" y="15" /><datatype>collection</datatype><private /><alwaysinit /><collectioninfo><field name="ParamName" type="text" description="The name of the parameter prefixed with '@'." /><field name="ParamType" type="text" description="The OleDBType enumeration value. Do not prefix with OleDbType" /><field name="ParamValue" type="text" description="The value of the parameter this may need to be converted." /><field name="ParamSize" type="number" description="Optional for sized types." /><field name="ParamDirection" type="text" description="&quot;Input&quot;,&quot;Output&quot; or &quot;InputOutput&quot;" /></collectioninfo></stage><stage stageid="7cb2d99a-5e0a-4701-8a51-3100bdfbc75b" name="OutputParams" type="Collection"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><display x="-150" y="165" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="d6785c6c-7b3c-4e38-ab4f-e587bbe6606b" name="Execute Stored Procedure with Return Value" type="SubSheetInfo"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><narrative>Executes a stored procedure and returns the results as a collection.</narrative><display x="-195" y="-105" w="150" h="90" /><font family="Tahoma" size="10" style="Regular" color="000000" /></stage><stage stageid="511bfa5d-7e10-4104-9323-058c496e00a1" name="Start" type="Start"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><display x="-45" y="-135" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="Stored Proc Name" narrative="The name of the stored procedure to execute" stage="Stored Procedure Name" /><input type="collection" name="SP Parameters" narrative="The collection of stored proc parameters." stage="SP Parameters" /></inputs><onsuccess>66363e3b-72cb-4436-815f-af26c944cfad</onsuccess></stage><stage stageid="24d6fd95-de96-49d6-9ed7-4a95c20c8109" name="End" type="End"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><display x="-45" y="60" /><font family="Tahoma" size="10" style="Regular" color="000000" /><outputs><output type="text" name="ReturnValue" narrative="The single return value from the stored proc." stage="ReturnValue" /></outputs></stage><stage stageid="8b985e1b-4429-4a88-9772-b6f68dcdfae2" name="Execute Stored Procedure with RV" type="Code"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><display x="-45" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="text" name="SPName" expr="[Stored Procedure Name]" /><input type="collection" name="SPParams" expr="[SP Parameters]" /></inputs><outputs><output type="text" name="ReturnValue" stage="ReturnValue" /></outputs><onsuccess>24d6fd95-de96-49d6-9ed7-4a95c20c8109</onsuccess><code><![CDATA['Dim oDataAdapter As New OLEDBDataAdapter(SQL,moConnection)
+
+'Dim oDataSet As New DataSet		
+'oDataAdapter.Fill(oDataset)
+
+
+
+ReturnValue = ExecuteStoredProcedureWithReturn(moConnection, SPName, SPParams)]]></code></stage><stage stageid="66363e3b-72cb-4436-815f-af26c944cfad" name="Open" type="SubSheet"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><display x="-45" y="-75" /><font family="Tahoma" size="10" style="Regular" color="000000" /><onsuccess>8b985e1b-4429-4a88-9772-b6f68dcdfae2</onsuccess><processid>459569f2-c792-4948-8884-5c2a0917cc16</processid></stage><stage stageid="b5f7ac68-ee8b-44d3-a8af-8989e9895822" name="Stored Procedure Name" type="Data"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit /><display x="-150" y="15" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="3bb3321e-7d38-4f0a-a94c-2a13a7fabb4a" name="SP Parameters" type="Collection"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><display x="-225" y="15" /><datatype>collection</datatype><private /><alwaysinit /><collectioninfo><field name="ParamName" type="text" description="The name of the parameter prefixed with '@'." /><field name="ParamType" type="text" description="The OleDBType enumeration value. Do not prefix with OleDbType" /><field name="ParamValue" type="text" description="The value of the parameter this may need to be converted." /><field name="ParamDirection" type="text" description="Input, Output or InputOutput. If left blank then input is assumed." /><field name="ParamSize" type="number" description="Optional for sized types." /></collectioninfo></stage><stage stageid="7661d93a-4aab-4c8c-ab70-3a3b788a477a" name="ReturnValue" type="Data"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><display x="-195" y="150" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="80b71f66-08de-4588-ad17-9ddeeb823142" name="ReturnValue" type="Data"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><display x="-240" y="135" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="5f3fab79-98f3-41ef-a319-4a460cd41e51" name="Inputs" type="Block"><subsheetid>90429413-7792-4513-8bc0-d6d079aa08b9</subsheetid><loginhibit onsuccess="true" /><display x="-270" y="-30" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="e93d5027-408e-4fcb-a987-607cd090dd42" name="Outputs" type="Block"><subsheetid>780529b8-393d-4d1d-bc5f-34f383fe53ec</subsheetid><loginhibit onsuccess="true" /><display x="-285" y="-15" w="180" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="b231ee9b-f6d0-4142-a223-826e88ecdb11" name="Outputs" type="Block"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit onsuccess="true" /><display x="-270" y="75" w="165" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="e0ca2ed3-88d1-457a-9f2e-951b7150b49d" name="Inputs" type="Block"><subsheetid>712f26ff-72b1-4503-9126-4ce09ce05e60</subsheetid><loginhibit onsuccess="true" /><display x="-270" y="-45" w="165" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="e69c4130-7913-4f59-9223-d239bd6e49d6" name="Outputs" type="Block"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit onsuccess="true" /><display x="-270" y="90" w="165" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="9b211739-4ffd-49ed-97d7-64aa90edae87" name="Inputs" type="Block"><subsheetid>b53c93ea-32ef-418c-bc11-c907d61842fe</subsheetid><loginhibit onsuccess="true" /><display x="-270" y="-30" w="165" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="253f197b-f3a9-4a9d-a2dd-7bc30b7f2499" name="Outputs" type="Block"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit onsuccess="true" /><display x="-285" y="90" w="180" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="511c0c60-7175-48c7-9d6e-5be5768da5ba" name="Inputs" type="Block"><subsheetid>1ab0d89a-87ab-4c08-90ed-ffbb975c2704</subsheetid><loginhibit onsuccess="true" /><display x="-285" y="-30" w="180" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage></process>
