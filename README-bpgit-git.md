@@ -214,6 +214,80 @@ Für Details: Server-Logs auf OpenClawPC (`C:\bpgit\logs\`).
 - **Diff-Viewer**: `Ctrl+Shift+G` → Source-Control-Panel zeigt XML-Diffs inline.
 - **Auto-Pull**: Extension "Git Pull" für Auto-Pull in regelmäßigen Abständen (optional).
 
+## CLI-Commands
+
+`bpgit` ist das Admin-CLI fÃ¼r Server-Setup und BP-Sync-Diagnose. Es lÃ¤uft auf OpenClawPC (nicht auf Workstations).
+
+### Globale Optionen
+
+| Option | Beschreibung |
+|---|---|
+| `-o, --output <dir>` | Worktree output directory (default: aktuelles Verzeichnis) |
+| `--install-hooks` | Installiert git-hooks fÃ¼r drift-detection (nur bei `init`) |
+| `--force` | Erforderlich fÃ¼r `commit` (expliziter Write) |
+| `-n, --limit N` | Limit rows fÃ¼r `log` (default 50) |
+| `--processid <guid>` | Filter by processid fÃ¼r `log` |
+| `--since YYYY-MM-DD` | Nur EintrÃ¤ge mit eventdatetime >= since fÃ¼r `log` |
+| `--event <sCode>` | Filter by event-type code (z.B. P006, L001) fÃ¼r `log` |
+| `-h, --help` | Show help message |
+
+### Commands
+
+#### `bpgit init`
+
+Initialisiert bp-git-Worktree (legt `.bpgit/config.toml` an).
+
+```bash
+bpgit init
+bpgit --install-hooks init   # mit git-hooks
+```
+
+#### `bpgit pull`
+
+Exportiert BP-Processes aus der DB in den Worktree (canonical Filenames aus `BPAProcess.name`).
+
+```bash
+bpgit pull
+bpgit -o /path/to/worktree pull
+```
+
+#### `bpgit status`
+
+Zeigt Diff zwischen Worktree und Snapshot (welche Files wurden lokal geÃ¤ndert, welche sind in BP-DB neuer).
+
+```bash
+bpgit status
+```
+
+#### `bpgit diff [<processid>]`
+
+Hash-basierter Drift-Report (Worktree vs Snapshot). Optional per processid filtern.
+
+```bash
+bpgit diff
+bpgit diff <processid-guid>
+```
+
+#### `bpgit log`
+
+Zeigt BP per-edit Audit History aus `BPAAuditEvents`. Filter via `--processid`, `--since`, `--event`, `--limit`.
+
+```bash
+bpgit log
+bpgit log --limit 10
+bpgit log --processid <guid>
+bpgit log --since 2026-08-01
+bpgit log --event P006
+```
+
+#### `bpgit commit`
+
+Schreibt Worktree-Ã„nderungen zurÃ¼ck in die BP-DB (benÃ¶tigt `--force`).
+
+```bash
+bpgit --force commit
+```
+
 ## Weitere Dokumentation
 
 - **Architektur**: [`context/SPEC-git-server.md`](context/SPEC-git-server.md) — Server-Architektur, Hooks, Auth
