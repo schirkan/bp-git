@@ -1,0 +1,334 @@
+<process name="Utility - General" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="General utility functions which don't fit into specific categories" byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>1f3e584e-cb89-48ad-bd40-602968bdf4b9</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="177b593b-1118-4903-802c-d939d96ab07d" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="59cd9346-b5d1-4acb-ba11-68ee084fb577" type="Normal" published="True"><name>Click X,Y</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="812d80d2-5be4-4ee1-ae53-4af307316810" type="Normal" published="True"><name>Generate Password</name><view><camerax>0</camerax><cameray>42</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="67838a25-5b88-4849-816c-fb25b998fa1a" type="Normal" published="True"><name>Get Windows</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="d0540501-519a-45f1-b6f3-3af4af12e619" type="Normal" published="True"><name>Process Exists</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="1cfff60e-8c0b-4cec-af1e-645eaa20d5cd" type="Normal" published="True"><name>Sleep</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd" type="Normal" published="True"><name>Window Exists</name><view><camerax>-27</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="644da7bd-f4b1-44af-af67-fcf711356e70" name="Start" type="Start"><loginhibit /><display x="15" y="-105" /><onsuccess>9c3f9d10-70e5-4ac1-b987-48f7bd33f56d</onsuccess></stage><stage stageid="9c3f9d10-70e5-4ac1-b987-48f7bd33f56d" name="End" type="End"><loginhibit /><display x="15" y="90" /></stage><stage stageid="3395d1a0-fcba-4944-9f09-7c218000fc1f" name="Stage1" type="ProcessInfo"><display x="-135" y="-75" w="150" h="90" /><references><reference>System.Data.dll</reference><reference>System.Xml.dll</reference><reference>System.Drawing.dll</reference><reference>System.dll</reference><reference>System.Core.dll</reference><reference>System.Windows.Forms.dll</reference></references><imports><import>System</import><import>System.Drawing</import><import>System.Diagnostics</import><import>System.Collections.Generic</import><import>System.Linq</import><import>System.Security.Cryptography</import><import>System.Text.RegularExpressions</import><import>System.Text</import><import>System.Runtime.InteropServices</import><import>System.Data</import><import>System.Windows.Forms</import></imports><language>csharp</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[]]></globalcode><code><![CDATA[[DllImport("user32.dll")]
+private static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+   
+private delegate bool EnumWindowsProc(System.IntPtr hWnd, int lParam);
+
+[DllImport("USER32.DLL")]
+private static extern bool EnumWindows(EnumWindowsProc enumFunc, int lParam);
+
+[DllImport("USER32.DLL")]
+private static extern int GetWindowTextA(System.IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+[DllImport("USER32.DLL")]
+private static extern int GetWindowText(System.IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+[DllImport("USER32.DLL")]
+private static extern int GetWindowTextLength(System.IntPtr hWnd);
+
+[DllImport("user32.dll")]
+private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+[DllImport("USER32.DLL")]
+private static extern bool IsWindowVisible(System.IntPtr hWnd);
+
+[DllImport("USER32.DLL")]
+private static extern IntPtr GetShellWindow();
+
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+[DllImport("user32.dll")]
+private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+[DllImport("user32.dll")]
+private static extern IntPtr FindWindowA(string lpClassName, string lpWindowName);
+        
+[DllImport("user32.dll", SetLastError = true)]
+private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out Int32 lpdwProcessId);
+
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+static extern int GetClassNameW(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+		
+[DllImport("user32.dll", CharSet = CharSet.Auto)]
+private static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);  
+
+[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+
+public static DataTable GetOpenWindows(string classname = "", string title = "",string processname="",int processid=0)
+{
+	System.IntPtr shellWindow = GetShellWindow();
+	DataTable dt = new DataTable();
+	dt.Columns.Add("Window Title");
+	dt.Columns.Add("Class Name");
+	dt.Columns.Add("Handle");
+	dt.Columns.Add("Process ID");
+	dt.Columns.Add("Process Name");
+	EnumWindows(delegate (System.IntPtr hWnd, int lParam)
+	{
+		Int32 pid = 0;
+		if (hWnd == shellWindow) return true;
+		if (!IsWindowVisible(hWnd)) return true;
+
+		int length = GetWindowTextLength(hWnd);
+		if (length == 0) return true;
+
+		StringBuilder builder = new StringBuilder(length);
+		GetWindowText(hWnd, builder, length + 1);
+		string thisClassname=GetWindowClass(hWnd);
+		if (title != "" && classname != "")
+		{
+			if ((!builder.ToString().ToLower().Contains(title)) && (!thisClassname.ToLower().Contains(classname)))
+				return true;
+		}
+		if (title != "")
+		{
+			if (!builder.ToString().ToLower().Contains(title)) return true;
+		}
+
+		if (classname != "")
+		{
+			if (!thisClassname.ToLower().Contains(classname)) return true;
+		}
+
+		DataRow _row = dt.NewRow();
+
+		GetWindowThreadProcessId(hWnd, out pid);
+		if (processid != 0)
+		{
+			if (processid!=pid) return true;
+		}
+		Process[] processList = Process.GetProcesses();
+		foreach (Process p in processList)
+		{
+			if (p.Id == pid)
+			{
+				if (processname != "")
+				{
+					if (!p.ProcessName.ToLower().Contains(processname)) return true;
+				}
+				_row["Process ID"] = p.Id;
+				_row["Process Name"] = p.ProcessName;
+				break;
+			}
+		}
+		
+		_row["Window Title"] = builder.ToString();
+		_row["Class Name"] = thisClassname;
+		_row["Handle"]=hWnd.ToString();
+		dt.Rows.Add(_row);
+		return true;
+
+	}, 0);
+
+	return dt;
+}
+
+public static string GetWindowClass(IntPtr hWnd)
+{
+    const int size = 256;
+    StringBuilder buffer = new StringBuilder(size + 1);
+
+    if (GetClassName(hWnd, buffer, size) == 0)
+        Marshal.ThrowExceptionForHR(Marshal.GetHRForLastWin32Error());
+
+    return buffer.ToString();
+}
+
+public static void CloseWindow(IntPtr hwnd) {
+  const UInt32 WM_CLOSE = 0x0010;
+  SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+}
+
+[Flags]
+public enum MouseEventFlags
+{
+	LEFTDOWN = 0x00000002,
+	LEFTUP = 0x00000004,
+	MIDDLEDOWN = 0x00000020,
+	MIDDLEUP = 0x00000040,
+	MOVE = 0x00000001,
+	ABSOLUTE = 0x00008000,
+	RIGHTDOWN = 0x00000008,
+	RIGHTUP = 0x00000010
+}
+
+//*****************************************************************************
+//
+// BEGIN Global Section for 'Generate Password'
+//
+//*****************************************************************************
+
+//*****************************************************************************
+// NOTE: This code is adapted from the 'Password Generator' open source project
+// created by Paul Seal. You can find the original project on GitHub at the 
+// following link:
+//
+// https://github.com/prjseal/PasswordGenerator
+//*****************************************************************************
+protected const string LowercaseCharacters = "abcdefghijklmnopqrstuvwxyz";
+protected const string UppercaseCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+protected const string NumericCharacters = "0123456789";
+protected const string SpecialCharacters = @"!@#$%&?";
+protected const int MinPasswordLength = 4;
+protected const int MaxPasswordLength = 128;
+protected const int MaxIdenticalConsecutiveChars = 2;
+protected const int MaxPasswordAttempts = 100;
+protected static RNGCryptoServiceProvider rngcsp;
+
+// Main method of the 'Generate Password' action.
+protected static string GenerateRandomPassword(int passwordLength, string characterSet)
+{
+	var password = new char[passwordLength];
+	var characters = characterSet.ToCharArray();
+	var shuffledChars = Shuffle(characters.Select(x => x)).ToArray();
+
+	var shuffledCharacterSet = string.Join(null, shuffledChars);
+	var characterSetLength = shuffledCharacterSet.Length;
+
+	for (var characterPosition = 0; characterPosition < passwordLength; characterPosition++)
+	{
+		password[characterPosition] = shuffledCharacterSet[GetRandomNumberInRange(0,characterSetLength - 1)];
+
+		var moreThanTwoIdenticalInARow =
+			characterPosition > MaxIdenticalConsecutiveChars
+			&& password[characterPosition] == password[characterPosition - 1]
+			&& password[characterPosition - 1] == password[characterPosition - 2];
+
+		if (moreThanTwoIdenticalInARow) characterPosition--;
+	}
+
+	return string.Join(null, password);
+}
+
+// Get a random number to use in picking a character from the character set.
+protected static int GetRandomNumberInRange(int min, int max)
+{
+	if (min > max)
+		throw new ArgumentOutOfRangeException();
+
+	var data = new byte[sizeof(int)];
+	rngcsp.GetBytes(data);
+	var randomNumber = BitConverter.ToInt32(data, 0);
+
+	return (int)Math.Floor((double)(min + Math.Abs(randomNumber % (max - min))));
+}
+
+// Validation function used only with the default character set.
+protected static bool PasswordIsValid(string password, bool includeLowercase, bool includeUppercase, bool includeNumeric, bool includeSpecial)
+{
+	const string regexLowercase = @"[a-z]";
+	const string regexUppercase = @"[A-Z]";
+	const string regexNumeric = @"[\d]";
+
+	var lowerCaseIsValid = !includeLowercase || includeLowercase && Regex.IsMatch(password, regexLowercase);
+	var upperCaseIsValid = !includeUppercase || includeUppercase && Regex.IsMatch(password, regexUppercase);
+	var numericIsValid = !includeNumeric || includeNumeric && Regex.IsMatch(password, regexNumeric);
+
+	var specialIsValid = !includeSpecial;
+	if (includeSpecial && !string.IsNullOrWhiteSpace(SpecialCharacters))
+	{
+		var listA = SpecialCharacters.ToCharArray();
+		var listB = password.ToCharArray();
+
+		specialIsValid = listA.Any(x => listB.Contains(x));
+	}
+
+	return lowerCaseIsValid && upperCaseIsValid && numericIsValid && specialIsValid;
+}
+
+// Internal method used to build the default character set used to generate the password. That is unless the user specifies
+// their own custom character set.
+protected string BuildCharacterSet(bool includeLowercase, bool includeUppercase, bool includeNumeric, bool includeSpecial)
+{
+	var characterSet = new StringBuilder();
+
+	if (includeLowercase) characterSet.Append(LowercaseCharacters);
+	if (includeUppercase) characterSet.Append(UppercaseCharacters);
+	if (includeNumeric) characterSet.Append(NumericCharacters);
+	if (includeSpecial) characterSet.Append(SpecialCharacters);
+	
+	return characterSet.ToString();
+}
+
+private static IEnumerable<T> Shuffle<T>(IEnumerable<T> items)
+{
+	return from item in items orderby Guid.NewGuid() select item;
+}
+
+//*****************************************************************************
+//
+// END Global Section for 'Generate Password'
+//
+//*****************************************************************************
+]]></code></stage><stage stageid="baccb181-ead3-4cec-abfa-94bb52412e67" name="Clean Up" type="SubSheetInfo"><subsheetid>177b593b-1118-4903-802c-d939d96ab07d</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="7ab68dda-e80a-4e91-b3ca-b9bbeecb0ca0" name="Start" type="Start"><subsheetid>177b593b-1118-4903-802c-d939d96ab07d</subsheetid><loginhibit /><display x="15" y="-105" /><onsuccess>3475f7ae-9063-4cbe-85b1-f8f5b0dc90dd</onsuccess></stage><stage stageid="3475f7ae-9063-4cbe-85b1-f8f5b0dc90dd" name="End" type="End"><subsheetid>177b593b-1118-4903-802c-d939d96ab07d</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="27709e12-6519-4529-8d76-45eb27236042" name="Process Exists" type="SubSheetInfo"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><narrative>Checks to see if a process with the given name exists.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="541b75f3-1868-4536-9ed1-f0340805cf52" name="End" type="End"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="flag" name="Exists" narrative="True if the process exists" stage="Exists" /></outputs></stage><stage stageid="9e9ff0c4-2102-4dde-851b-568ecca9dd5c" name="Start" type="Start"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Process Name" narrative="The name of the process" stage="Process Name" /></inputs><onsuccess>a65e5d31-3b82-44bd-85e8-42d30bf96cec</onsuccess></stage><stage stageid="2987b0b2-bcfe-44df-8d60-3cf441c023bf" name="Process Name" type="Data"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><display x="-195" y="-15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="a65e5d31-3b82-44bd-85e8-42d30bf96cec" name="Process Exists" type="Code"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="Process Name" expr="[Process Name]" /></inputs><outputs><output type="flag" name="Exists" stage="Exists" /></outputs><onsuccess>541b75f3-1868-4536-9ed1-f0340805cf52</onsuccess><code><![CDATA[Exists = false;
+try
+{
+	foreach (Process p in Process.GetProcessesByName(Process_Name))
+	{
+		Exists = true;
+		return;
+	}
+}
+catch (Exception e)
+{
+	throw new ApplicationException("An exception was encountered while trying to parse the list of processes. Exception: " + e.Message);	
+}
+]]></code></stage><stage stageid="d97aef89-802a-4cf4-b301-aaa31126177f" name="Exists" type="Data"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><display x="-195" y="60" w="120" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="4adb19bc-3b13-48e7-9f69-079649e29bdc" name="Window Exists" type="SubSheetInfo"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><narrative>Checks to see if a window with the given title exists.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="071bf0aa-e2d9-416a-813b-a48a15296bf7" name="Start" type="Start"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Window Title" narrative="The title of the window to check" stage="Title" /><input type="flag" name="Use Wildcard Match" narrative="Set true to allow wildcards in the window title match" stage="Wildcard" /></inputs><onsuccess>f04edf78-80f6-4e20-90ad-cea14b6a29ff</onsuccess></stage><stage stageid="94672b8d-1060-4a0a-91f9-0c96cd778618" name="End" type="End"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="flag" name="Exists" narrative="True if the window exists" stage="Exists" /></outputs></stage><stage stageid="a7f48e3c-d61a-43dc-8546-646ae6b6c63b" name="End" type="End"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="flag" name="Exists" narrative="True if the window exists" stage="Exists" /></outputs></stage><stage stageid="f04edf78-80f6-4e20-90ad-cea14b6a29ff" name="Window Exists" type="Code"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="Title" expr="[Title]" /><input type="flag" name="Wildcard" expr="[Wildcard]" /></inputs><outputs><output type="flag" name="Exists" stage="Exists" /></outputs><onsuccess>a7f48e3c-d61a-43dc-8546-646ae6b6c63b</onsuccess><code><![CDATA[Exists = false;
+try
+{
+	if (Wildcard)
+	{
+		Title = Title.Replace("*", ".*");
+		Title = Title.Replace("?", @"\w");
+	}
+
+	Exists = false;
+	foreach (Process p in Process.GetProcesses())
+	{
+		if (Wildcard)
+		{
+			if (Regex.IsMatch(p.MainWindowTitle, Title))
+			{
+				Exists = true;
+				return;
+			}
+		}
+		else if (p.MainWindowTitle.ToLower() == Title.ToLower())
+		{
+			Exists = true;
+			return;
+		}
+	}
+}
+catch (Exception e)
+{
+	throw new ApplicationException("An exception was encountered while trying to parse the list of processes. Exception: " + e.Message);
+}
+]]></code></stage><stage stageid="911b7620-4b36-4299-a8fe-8be896ab0176" name="Exists" type="Data"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><display x="-195" y="90" w="120" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="588fd5df-2393-49f6-8dec-e6205287dedf" name="Title" type="Data"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><display x="-195" y="-15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="9df24660-8a75-41df-bf4c-69e3e18a14fa" name="Wildcard" type="Data"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><display x="-195" y="15" w="120" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="3d281508-283c-4d63-81dd-ec07cb0c7697" name="Test" type="Calculation"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="135" y="-105" /><onsuccess>a65e5d31-3b82-44bd-85e8-42d30bf96cec</onsuccess><calculation expression="&quot;iexplore&quot;" stage="Process Name" /></stage><stage stageid="149317ed-25d5-4998-b8d2-9e8793a9cebe" name="Test" type="MultipleCalculation"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="165" y="-105" /><onsuccess>f04edf78-80f6-4e20-90ad-cea14b6a29ff</onsuccess><steps><calculation expression="&quot;* - Windows Internet Explorer&quot;" stage="Title" /><calculation expression="True" stage="Wildcard" /></steps></stage><stage stageid="645b3fce-eacd-4d15-be94-499bf9d05f19" name="Sleep" type="SubSheetInfo"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><narrative>Pauses for a given time (in seconds).</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="f8281856-0b5c-4d54-bcb5-dd2aea75e3a6" name="Start" type="Start"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><loginhibit /><display x="-15" y="-90" /><inputs><input type="number" name="Sleep Time (Seconds)" narrative="The time (in seconds) for which to sleep" stage="Sleep Time (Seconds)" /></inputs><onsuccess>bdd3e5d7-002e-4c18-b363-b1474b2b1868</onsuccess></stage><stage stageid="64257152-cf77-42ee-814a-16c63b20d83b" name="End" type="End"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><loginhibit /><display x="-15" y="135" /></stage><stage stageid="fed99019-3566-4cf6-a7ab-82e05808dee6" name="Sleep Time (Seconds)" type="Data"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><display x="-195" y="-15" w="120" h="30" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="5bd29fe1-ab40-4cc5-b409-a4e444b93f51" name="Time Out1" type="WaitEnd"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><loginhibit /><display x="-15" y="60" w="30" h="30" /><onsuccess>64257152-cf77-42ee-814a-16c63b20d83b</onsuccess><groupid>997b23cb-7481-4893-b115-278ce1c05c0a</groupid></stage><stage stageid="bdd3e5d7-002e-4c18-b363-b1474b2b1868" name="Wait1" type="WaitStart"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><loginhibit /><display x="-15" y="-15" w="30" h="30" /><groupid>997b23cb-7481-4893-b115-278ce1c05c0a</groupid><choices /><timeout>[Sleep Time (Seconds)]</timeout></stage><stage stageid="ef0daf58-4ace-4ba0-8f21-d99f0ead7a78" name="Note2" type="Note"><narrative>© 2022 Blue Prism Limited
+Licensed under the Blue Prism Asset License and Support Terms
+https://digitalexchange.blueprism.com/fileMedia/download/a9111324-3192-43ff-9166-566620ca1182</narrative><display x="240" y="15" w="300" h="90" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="b141f536-04e7-40fc-9afa-a43282cbb6ed" name="Input" type="Block"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="b201dcbf-4a43-4071-8ad4-6ca40b965916" name="Output" type="Block"><subsheetid>d0540501-519a-45f1-b6f3-3af4af12e619</subsheetid><loginhibit /><display x="-270" y="30" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="CCFFCC" /></stage><stage stageid="fbdbe503-a502-406f-8fca-5e17e4f52463" name="Output" type="Block"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="-270" y="60" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="CCFFCC" /></stage><stage stageid="969aab86-4c3f-4e90-89f9-915d8004a7ad" name="Input" type="Block"><subsheetid>d500b9f6-798c-40d6-a9b8-e0eb9b16d9cd</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="7c70bc5d-7c7d-419f-a51e-87ab13f2e11b" name="Input" type="Block"><subsheetid>1cfff60e-8c0b-4cec-af1e-645eaa20d5cd</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="ffc86e69-5c28-43aa-9ef9-5cbdd83a9c7b" name="Generate Password" type="SubSheetInfo"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><narrative>This action can be used to generate random passwords. The default character set is composed of [A-Z], [a-z], [0-9], and [!@#$%&amp;?]. You can override the default character set through the various flags, or you may supply your own custom character set. This action will not permit the same character to be repeated more than two times consecutively.
+</narrative><display x="-195" y="-105" w="210" h="90" /></stage><stage stageid="923be7ea-9202-4044-88ee-aeec95c8846e" name="Start" type="Start"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="-120" /><inputs><input type="number" name="Password Length" narrative="The length of the generated password. Must be a value between 4 and 128. Default value is 8 characters." stage="Password Length" /><input type="flag" name="Include Lowercase" narrative="Flag indicating whether lowercase letters (i.e. [a-z]) should be included in the generated password. Default value is True." stage="Include Lowercase" /><input type="flag" name="Include Uppercase" narrative="Flag indicating whether uppercase letters (i.e. [A-Z]) should be included in the generated password. Default value is True." stage="Include Uppercase" /><input type="flag" name="Include Numbers" narrative="Flag indicating whether numbers (i.e. [0-9]) should be included in the generated password. Default value is True." stage="Include Numbers" /><input type="flag" name="Include Special" narrative="Flag indicating whether special characters (i.e. [!@#$%&amp;?]) should be included in the generated password. Default value is True." stage="Include Special" /><input type="text" name="Custom Character Set" narrative="Optional: User supplied set of characters for password generation. Note, supplying your own set of characters overrides the default character set." stage="Custom Character Set" /></inputs><onsuccess>4869a139-33e8-4852-8743-7020b80b8f0d</onsuccess></stage><stage stageid="def15afc-14af-4f1b-9b1a-d6eb018c4c39" name="End" type="End"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="345" /><outputs><output type="text" name="Password" narrative="The generated password." stage="Password" /></outputs></stage><stage stageid="dba341f1-3732-4950-bd2d-1264f1bb0b30" name="Input" type="Block"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="210" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="d9dded7d-045e-4871-bb06-e286e1c10452" name="Output" type="Block"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-270" y="180" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="CCFFCC" /></stage><stage stageid="8d2ead2c-9053-4870-8018-0d24214585e1" name="Password Length" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="-15" w="120" h="30" /><datatype>number</datatype><initialvalue>8</initialvalue><private /><alwaysinit /></stage><stage stageid="1453136e-036c-489a-b27b-9f2717e2c317" name="Include Lowercase" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="15" w="120" h="30" /><datatype>flag</datatype><initialvalue>True</initialvalue><private /><alwaysinit /></stage><stage stageid="bf52c4df-05e2-4cd2-9ab4-5bd0f8e4744e" name="Include Uppercase" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="45" w="120" h="30" /><datatype>flag</datatype><initialvalue>True</initialvalue><private /><alwaysinit /></stage><stage stageid="353473f0-937a-44c5-8cb8-e0509815cfc5" name="Include Numbers" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="75" w="120" h="30" /><datatype>flag</datatype><initialvalue>True</initialvalue><private /><alwaysinit /></stage><stage stageid="12ca1b22-db52-4e35-8c86-83a78140f10d" name="Password" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="210" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f428f21f-fcf3-4ab6-b401-6cb57bd01451" name="Include Special" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="-195" y="105" w="120" h="30" /><datatype>flag</datatype><initialvalue>True</initialvalue><private /><alwaysinit /></stage><stage stageid="4869a139-33e8-4852-8743-7020b80b8f0d" name="Valid Length" type="Decision"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="-75" /><decision expression="([Password Length] &gt;= 4) AND ([Password Length] &lt;= 128)" /><ontrue>4ccf7a83-8c07-4434-b987-8f613c522841</ontrue><onfalse>cc1b3b1c-1d19-420c-b0e0-63b6f27dd007</onfalse></stage><stage stageid="319281d4-5b5b-4b0a-abfd-a99e031bc68a" name="Generate Password" type="Code"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="300" /><inputs><input type="number" name="passwordLength" expr="[Password Length]" /><input type="flag" name="includeLowercase" expr="[Include Lowercase]" /><input type="flag" name="includeUppercase" expr="[Include Uppercase]" /><input type="flag" name="includeNumeric" expr="[Include Numbers]" /><input type="flag" name="includeSpecial" expr="[Include Special]" /><input type="flag" name="useCustomCharacterSet" expr="[Use Custom Character Set]" /><input type="text" name="customCharacterSet" expr="[Custom Character Set]" /></inputs><outputs><output type="text" name="password" stage="Password" /></outputs><onsuccess>def15afc-14af-4f1b-9b1a-d6eb018c4c39</onsuccess><code><![CDATA[password = "";
+int length = Decimal.ToInt32(passwordLength);
+
+// Check the Global RandomNumberGenerator instance to see if it's already been initalized (i.e. this action has been called before).
+if (rngcsp == null)
+	rngcsp = new RNGCryptoServiceProvider();
+
+var characterSet = useCustomCharacterSet ? customCharacterSet : BuildCharacterSet(includeLowercase, includeUppercase, includeNumeric, includeSpecial);
+
+// We do not perform any validity checks on the generated password when using a custom character set.
+if (useCustomCharacterSet)
+{
+	password = GenerateRandomPassword(length, characterSet);
+}
+else
+{
+	var passwordAttempts = 0;
+
+	do
+	{
+		password = GenerateRandomPassword(length, characterSet);
+		passwordAttempts++;
+	} while (passwordAttempts < MaxPasswordAttempts && !PasswordIsValid(password, includeLowercase, includeUppercase, includeNumeric, includeSpecial));
+
+	if (!PasswordIsValid(password, includeLowercase, includeUppercase, includeNumeric, includeSpecial))
+	{
+		password = "";
+		throw new ApplicationException("Failed to generate a valid password within the maximum number of attempts.");
+	}
+}
+]]></code></stage><stage stageid="cc1b3b1c-1d19-420c-b0e0-63b6f27dd007" name="Invalid Length" type="Exception"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="135" y="-75" w="90" h="30" /><exception localized="yes" type="Input Exception" detail="&quot;Please review and correct your input. The minimum password length is 4 characters. The maximum password length is 128 characters.&quot;" /></stage><stage stageid="eba8c7b7-5ec2-4bae-9ba6-94d996861e1b" name="Custom Character Set" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="-195" y="135" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ea3dff35-2c48-4819-a46c-4678051770a9" name="Use Custom Character Set" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-195" y="285" w="120" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="45e3e4b9-5550-433e-9602-c9d40b59e432" name="Internal" type="Block"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-270" y="255" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="FFFF99" /></stage><stage stageid="4ccf7a83-8c07-4434-b987-8f613c522841" name="Use Custom" type="Decision"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="-30" /><decision expression="Len([Custom Character Set]) &gt; 0" /><ontrue>0808df8e-7208-47be-bddf-557a9041f15f</ontrue><onfalse>9b083e92-3132-4d09-aa88-6dd20f0a290d</onfalse></stage><stage stageid="0808df8e-7208-47be-bddf-557a9041f15f" name="Set Custom Flag" type="Calculation"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="45" /><onsuccess>c21b0f28-1efa-4b0c-969c-3248d55e8896</onsuccess><calculation expression="True" stage="Use Custom Character Set" /></stage><stage stageid="9b083e92-3132-4d09-aa88-6dd20f0a290d" name="Anchor1" type="Anchor"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-75" y="-30" w="10" h="10" /><onsuccess>2d7fb7ea-6e9d-4b62-a2b6-e1d470510b28</onsuccess></stage><stage stageid="bdbb6bc1-15f5-4ae6-bb26-d5d3702bed2b" name="Note1" type="Note"><loginhibit /><narrative>Version: 10.0</narrative><display x="15" y="-165" w="90" h="30" /><font family="Segoe UI" size="14" style="Bold" color="FF0000" /></stage><stage stageid="4bc4440d-ab95-4d9e-92d4-f7e305129de0" name="Valid Flags" type="Decision"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><narrative>If the user sets all of the flags to False and they don't provide their own custom set of characters we need to throw an exception.</narrative><display x="15" y="255" /><decision expression="([Include Lowercase] = True) OR ([Include Numbers] = True) OR ([Include Uppercase] = True) OR ([Include Special] = True) OR ([Use Custom Character Set] = True)" /><ontrue>319281d4-5b5b-4b0a-abfd-a99e031bc68a</ontrue><onfalse>612ecf06-04b5-4c21-9f56-3b57ce6c56f8</onfalse></stage><stage stageid="612ecf06-04b5-4c21-9f56-3b57ce6c56f8" name="Invalid Options" type="Exception"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="135" y="255" w="90" h="30" /><exception localized="yes" type="Input Exception" detail="&quot;Please review and correct your input. At least one option must be set to True, or you must provide your own custom character set.&quot;" /></stage><stage stageid="c21b0f28-1efa-4b0c-969c-3248d55e8896" name="Check Custom Character Set" type="Code"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><narrative>This stage checks to ensure the user hasn't input a set of characters that include repeated characters. The set should only include distinct characters.</narrative><display x="15" y="90" /><inputs><input type="text" name="customCharacterSet" expr="[Custom Character Set]" /></inputs><outputs><output type="flag" name="isDistinct" stage="Is Distinct" /></outputs><onsuccess>fad2ba09-a213-40f3-bfb7-f2af4ba81682</onsuccess><code><![CDATA[isDistinct = customCharacterSet.Distinct().Count() == customCharacterSet.Length;
+]]></code></stage><stage stageid="62cfe659-f9f6-4f5d-b07c-e4f68ea27db0" name="Is Distinct" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="-195" y="315" w="120" h="30" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="fad2ba09-a213-40f3-bfb7-f2af4ba81682" name="Custom Set Is Distinct" type="Decision"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="135" /><decision expression="[Is Distinct]" /><ontrue>80b023c9-88f3-42db-aa7b-0804331331cc</ontrue><onfalse>e632b89e-c776-4d98-bf67-8c0d805398b4</onfalse></stage><stage stageid="e632b89e-c776-4d98-bf67-8c0d805398b4" name="Invalid Char Set" type="Exception"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="135" y="135" w="90" h="30" /><exception localized="yes" type="Input Exception" detail="&quot;Please review and correct your input. A custom character set must contain only distinct characters. No character should be repeated.&quot;" /></stage><stage stageid="2d7fb7ea-6e9d-4b62-a2b6-e1d470510b28" name="Anchor2" type="Anchor"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-75" y="255" w="10" h="10" /><onsuccess>4bc4440d-ab95-4d9e-92d4-f7e305129de0</onsuccess></stage><stage stageid="ac2ae6ce-346d-4c9f-b613-4bd572512c93" name="Custom Set Min Length" type="Data"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><narrative>If the user specifies a custom character set, it must contain at least 5 distinct characters.</narrative><display x="-195" y="345" w="120" h="30" /><datatype>number</datatype><initialvalue>5</initialvalue><private /><alwaysinit /></stage><stage stageid="80b023c9-88f3-42db-aa7b-0804331331cc" name="Valid Length" type="Decision"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="15" y="180" /><decision expression="Len([Custom Character Set]) &gt;= [Custom Set Min Length]" /><ontrue>4bc4440d-ab95-4d9e-92d4-f7e305129de0</ontrue><onfalse>e7ace412-396c-434a-8b5f-4a8a1e05ddd9</onfalse></stage><stage stageid="e7ace412-396c-434a-8b5f-4a8a1e05ddd9" name="Invalid Number" type="Exception"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><display x="135" y="180" w="90" h="30" /><exception localized="yes" type="Input Exception" detail="&quot;Please review and correct your input. The minimum number of distinct characters in a custom character set is &quot; &amp; [Custom Set Min Length] &amp; &quot;.&quot;" /></stage><stage stageid="0975f107-c3af-4f73-b59d-496e52897be4" name="Handle Custom Character Set" type="Block"><subsheetid>812d80d2-5be4-4ee1-ae53-4af307316810</subsheetid><loginhibit /><display x="-45" y="15" w="120" h="195" /><font family="Segoe UI" size="10" style="Regular" color="FFCC99" /></stage><stage stageid="6d35c14f-c98f-4bd8-8464-ecb024f8cc7f" name="Get Windows" type="SubSheetInfo"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><narrative>Get all Windows matching the specified criteria.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="9e47bdf8-0314-42ce-83c6-e3d0329626ae" name="Start" type="Start"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Window Title" stage="Window Title" /><input type="text" name="Class Name" stage="Class Name" /><input type="text" name="Process Name" stage="Process Name" /><input type="number" name="Process ID" stage="Process ID" /></inputs><onsuccess>ca61cede-d3f9-47d9-a06a-4c3cf0279098</onsuccess></stage><stage stageid="c727d3ae-510a-4dd8-aa9a-91c3c808492c" name="End" type="End"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="collection" name="Windows" stage="Windows" /></outputs></stage><stage stageid="ca61cede-d3f9-47d9-a06a-4c3cf0279098" name="Get Windows" type="Code"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="title" expr="[Window Title]" /><input type="text" name="classname" expr="[Class Name]" /><input type="text" name="ProcessName" expr="[Process Name]" /><input type="number" name="PID" expr="[Process ID]" /></inputs><outputs><output type="collection" name="Windows" stage="Windows" /></outputs><onsuccess>c727d3ae-510a-4dd8-aa9a-91c3c808492c</onsuccess><code><![CDATA[Windows = GetOpenWindows(classname,title,ProcessName,Convert.ToInt32(PID));]]></code></stage><stage stageid="20e0ca69-3f77-41cb-bf00-cdd2a91f7fe2" name="Windows" type="Collection"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="225" y="-15" w="150" h="30" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="130b1402-2cac-47cc-9dd9-37319118dd70" name="Window Title" type="Data"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><display x="-195" y="-15" w="150" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f976e166-9aae-4867-8699-3074ef97b459" name="Class Name" type="Data"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><display x="-195" y="15" w="150" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6bc17f33-3a7a-4e16-bd04-8edb021ccccb" name="Process Name" type="Data"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="-195" y="45" w="150" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="afb347f9-a4a7-4b33-9602-ef1760144986" name="Process ID" type="Data"><subsheetid>67838a25-5b88-4849-816c-fb25b998fa1a</subsheetid><loginhibit /><display x="-195" y="75" w="150" h="30" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="806ed446-2a77-4833-8fe9-cb9199bd58eb" name="Click X,Y" type="SubSheetInfo"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><narrative>Clicks on the specified coordinate.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="9acfe3e2-823b-43b6-b0b1-2e5043dea3e5" name="Start" type="Start"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><loginhibit /><narrative>Start of action</narrative><display x="-15" y="-90" /><inputs><input type="number" name="X" narrative="X coordinate to perform mouse click" stage="X" /><input type="number" name="Y" narrative="Y coordinate to perform mouse click" stage="Y" /></inputs><onsuccess>5b95dbad-10ee-4941-a74f-0b460d1e419c</onsuccess></stage><stage stageid="269f47d0-82c8-4722-8572-4e3293ff17de" name="End" type="End"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><loginhibit /><narrative>End of action</narrative><display x="-15" y="60" /></stage><stage stageid="5b95dbad-10ee-4941-a74f-0b460d1e419c" name="Click X,Y" type="Code"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><loginhibit /><narrative>Clicks on the specified coordinate</narrative><display x="-15" y="-15" /><font family="Tahoma" size="10" style="Regular" color="000000" /><inputs><input type="number" name="X" expr="[X]" /><input type="number" name="Y" expr="[Y]" /></inputs><onsuccess>269f47d0-82c8-4722-8572-4e3293ff17de</onsuccess><code><![CDATA[Cursor.Position = new System.Drawing.Point((int)X, (int)Y);
+mouse_event((int)(MouseEventFlags.LEFTDOWN), 0, 0, 0, 0);
+mouse_event((int)(MouseEventFlags.LEFTUP), 0, 0, 0, 0);]]></code></stage><stage stageid="d1140ff4-54e2-4919-a41b-5179b90cff79" name="X" type="Data"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><narrative>X coordinate to perform mouse click</narrative><display x="-195" y="-30" w="150" h="30" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="84dbed38-f020-4f6a-a981-fb263852f1d6" name="Y" type="Data"><subsheetid>59cd9346-b5d1-4acb-ba11-68ee084fb577</subsheetid><narrative>Y coordinate to perform mouse click</narrative><display x="-195" y="0" w="150" h="30" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage></process>

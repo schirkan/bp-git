@@ -1,0 +1,231 @@
+<process name="Utility - Image Manipulation" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="Utility methods for analysing and manipulating images." byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>373c66fe-ed50-4347-8826-961c605c36a2</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="5afcdaf5-28c3-4fa9-9c82-296be88ed2bf" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="770f130d-2233-4b18-b427-a6b2068004c9" type="Normal" published="True"><name>Image is White</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="58ce2146-7428-4658-8368-0a657b4650b8" type="Normal" published="True"><name>Image Contains Colour</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="51f754b0-95a4-49ae-8911-4df231659481" type="Normal" published="True"><name>Image Is Uniform Colour</name><view><camerax>0</camerax><cameray>-42</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6" type="Normal" published="True"><name>Get Sub Image Position</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="1415e255-6251-4f44-84a2-9def682b5033" type="Normal" published="True"><name>Find First Pixel From Left</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="86993a9b-04d3-4088-97b9-173ee7ae96e5" type="Normal" published="True"><name>Find First Pixel From Bottom</name><view><camerax>154</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="260695ce-598a-45da-857b-faaf399998a1" type="Normal" published="False"><name>Find First Pixel From Direction</name><view><camerax>97</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="d5928a3a-277e-4cb7-9ec6-6fce646a091f" type="Normal" published="True"><name>Crop Image</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="65658da5-49dd-45b2-bb03-d813b0b44612" type="Normal" published="True"><name>Resize Image</name><view><camerax>158</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="171af258-95db-4ca1-bfa1-4ae099ac4b78" type="Normal" published="True"><name>Convert Image Format</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="1682a9b9-5e52-4020-9af1-4903109033fc" name="Start" type="Start"><loginhibit /><display x="15" y="-105" /><onsuccess>c42f55e8-f668-45da-b9d4-c31d1674ded1</onsuccess></stage><stage stageid="c42f55e8-f668-45da-b9d4-c31d1674ded1" name="End" type="End"><loginhibit /><display x="15" y="90" /></stage><stage stageid="6a2af24c-7a9d-4380-b981-d03dd8ae1334" name="Stage1" type="ProcessInfo"><display x="-180" y="-105" w="180" h="90" /><references><reference>System.Data.dll</reference><reference>System.Xml.dll</reference><reference>System.Drawing.dll</reference></references><imports><import>System</import><import>System.Drawing</import><import>System.Data</import><import>System.IO</import><import>System.XML</import><import>Microsoft.VisualBasic</import></imports><language>visualbasic</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[
+
+]]></globalcode><code><![CDATA[
+Public Function GetDataTable(ByVal ColumnNamesCSV As String, ByVal ColumnTypesCSV As String) As DataTable
+
+	Dim objTable As DataTable
+	Dim objColumn As DataColumn
+	Dim aColumnNames As String() = ColumnNamesCSV.Split(",")
+	Dim aColumnTypes As String() = ColumnTypesCSV.Split(",")
+
+	Try
+		objTable = New DataTable
+		For i As Integer = 0 To aColumnNames.Length - 1
+			objColumn = New DataColumn 
+			objColumn.DataType = System.Type.GetType(aColumnTypes(i).Trim)
+			objColumn.ColumnName = aColumnNames(i).Trim
+			objTable.Columns.Add(objColumn)
+		Next
+		
+	Catch e As Exception
+		objTable = nothing	
+	End Try
+
+	Return objTable
+
+End Function
+
+Public Function ResizeImage(ByVal InputImage As Image, ByVal Width As Integer, ByVal Height As Integer) As Image
+        Return New Bitmap(InputImage, New Size(Width, Height))
+End Function]]></code></stage><stage stageid="ac71c3ed-405e-43d0-90d0-40a5cbc70038" name="Clean Up" type="SubSheetInfo"><subsheetid>5afcdaf5-28c3-4fa9-9c82-296be88ed2bf</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="2466cb5f-eb76-43fb-8eb4-6c9abc075131" name="Start" type="Start"><subsheetid>5afcdaf5-28c3-4fa9-9c82-296be88ed2bf</subsheetid><loginhibit /><display x="15" y="-105" /><onsuccess>e18f9486-056a-4f45-af10-ebf4fe0dfaa8</onsuccess></stage><stage stageid="e18f9486-056a-4f45-af10-ebf4fe0dfaa8" name="End" type="End"><subsheetid>5afcdaf5-28c3-4fa9-9c82-296be88ed2bf</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="7edd516c-669b-4090-8945-e74489e05155" name="new" type="Note"><subsheetid>5afcdaf5-28c3-4fa9-9c82-296be88ed2bf</subsheetid><narrative>Clean Up Page
+
+This is an optional page where you might choose to perform some finalisation (or "cleanup") tasks as your business object is closed down.
+
+The cleanup action will be called automatically immediately after closing your business object at the end of a business process.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than before the disposal of the business object.</narrative><display x="-180" y="60" w="180" h="230" /></stage><stage stageid="55619304-07ca-4697-a7ec-4ab708a96063" name="new" type="Note"><narrative>Initialise Page
+
+This is an optional page where you might choose to perform some initialisation tasks after your business object is loaded.
+
+The initialise action will be called automatically immediately after loading your business object.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than after the creation of the object.</narrative><display x="-180" y="60" w="180" h="230" /></stage><stage stageid="989c9452-a94a-4dd7-bd86-c6108901a496" name="Image is White" type="SubSheetInfo"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><narrative>Determines whether the supplied image is all white</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="50daf261-a2c1-4a71-b422-c3930b774d87" name="Start" type="Start"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><loginhibit /><preconditions><condition narrative="None" /></preconditions><display x="15" y="-105" /><inputs><input type="image" name="Image" narrative="The image to check" stage="Image" /></inputs><onsuccess>e3a5956c-32d6-4363-8c93-10a8d6654be2</onsuccess></stage><stage stageid="055b2548-e116-4bfa-9d08-e32e53324111" name="End" type="End"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><loginhibit /><display x="15" y="75" /><outputs><output type="flag" name="White" narrative="True if the image is white" stage="White" /></outputs></stage><stage stageid="e3a5956c-32d6-4363-8c93-10a8d6654be2" name="Image Is White" type="Code"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><display x="15" y="-15" /><inputs><input type="image" name="Image" expr="[Image]" /></inputs><outputs><output type="flag" name="White" stage="White" /></outputs><onsuccess>055b2548-e116-4bfa-9d08-e32e53324111</onsuccess><code><![CDATA[
+Dim c as System.Drawing.Color
+White = False
+
+For y As Integer = 0 To Image.Height - 1
+ For x As Integer = 0 To Image.Width - 1
+  c = Image.GetPixel(x, y)
+   If c.Name <> "ffffffff" Then
+		White = False
+		Exit Sub
+   End If
+ Next
+Next
+White = True]]></code></stage><stage stageid="d5332b0b-0700-4136-a598-1e2d5679bcd1" name="Image" type="Data"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><display x="-195" y="-15" w="150" h="30" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="d109ed4d-380e-4c12-82c7-bdcc50b8fd73" name="White" type="Data"><subsheetid>770f130d-2233-4b18-b427-a6b2068004c9</subsheetid><display x="-195" y="15" w="150" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="806e2448-b127-47af-82cf-20a97d90299e" name="Image Contains Colour" type="SubSheetInfo"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><narrative>Determines whether the specified colour is contained in the image.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="99d72a81-ce2e-4def-b84a-69a636b594f5" name="Start" type="Start"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><loginhibit /><preconditions><condition narrative="None." /></preconditions><display x="15" y="-105" /><inputs><input type="image" name="Image" narrative="The image to check" stage="Image" /><input type="text" name="Test Colour" narrative="The colour to check for in the hexadecimal format AARRGGBB (eg 'FF336699')" stage="Test Colour" /></inputs><onsuccess>d485eeca-314d-47ab-88d7-da0d7a86bfc1</onsuccess></stage><stage stageid="8ee84eda-d89e-44be-9a93-9d421c786b4a" name="End" type="End"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><loginhibit /><display x="15" y="75" /><outputs><output type="flag" name="Contains Colour" stage="Contains Colour" /></outputs></stage><stage stageid="d485eeca-314d-47ab-88d7-da0d7a86bfc1" name="Image Contains Colour" type="Code"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><display x="15" y="-15" w="90" h="30" /><inputs><input type="image" name="Image" expr="[Image]" /><input type="text" name="Test Colour" expr="[Test Colour]" /></inputs><outputs><output type="flag" name="Contains Colour" stage="Contains Colour" /></outputs><onsuccess>8ee84eda-d89e-44be-9a93-9d421c786b4a</onsuccess><code><![CDATA['First Validate the input colour
+If Test_Colour.Length = 8
+  For Each ch as Char In Test_Colour.ToCharArray()
+     If Not char.IsNumber(ch) Then
+        Dim IsValidChar As Boolean = False
+        For Each ValidChar As Char In New Char() {"A", "B", "C", "D", "E", "F"}
+           If char.ToUpper(ch).Equals(ValidChar) Then
+              IsValidChar = True
+              Exit For
+           End If
+        Next
+
+        If Not IsValidChar Then
+           Throw New ArgumentException("The supplied test colour '" & Test_Colour & "' is not valid. Please use a string in the hexadecimal format AARRGGBB (eg 'FF336699')")
+        End If
+     End If
+  Next
+End If
+
+Dim c as System.Drawing.Color
+Contains_Colour = False
+
+For y As Integer = 0 To Image.Height - 1
+ For x As Integer = 0 To Image.Width - 1
+  c = Image.GetPixel(x, y)
+   If c.Name.ToUpper() = Test_Colour.ToUpper() Then
+		Contains_Colour = True
+		Exit Sub
+   End If
+ Next
+Next
+]]></code></stage><stage stageid="3ff3d56c-4233-4e9b-9707-f9c463efcc9e" name="Image" type="Data"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><display x="-195" y="-15" w="150" h="30" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="1b1064cd-42e6-4418-b77c-ed32265cec51" name="Black" type="Data"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><display x="-195" y="15" w="150" h="30" /><datatype>flag</datatype><initialvalue>False</initialvalue><private /><alwaysinit /></stage><stage stageid="44c80ec6-4258-4d28-b48b-6d5b5793b82f" name="Test Colour" type="Data"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><display x="90" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="e65c1106-cd95-4665-b535-7c767f58f68a" name="Get Sub Image Position" type="SubSheetInfo"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><narrative>Finds whether the main image contains a sub image, and if found gives the X,Y coordinates of the sub image.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="a7e30009-84a0-48b0-b4ee-8ac3f7e18719" name="Start" type="Start"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="image" name="Main Image" narrative="The image to check" stage="Main Image" /><input type="image" name="Potential SubImage" narrative="The image to check for" stage="Potential SubImage" /></inputs><onsuccess>9581a702-c064-4ee6-a892-a8f051d39872</onsuccess></stage><stage stageid="1d937619-473b-4d9b-b9bc-03d10e8e426a" name="End" type="End"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="number" name="X Index" narrative="The X location of the sub image" stage="X Index" /><output type="number" name="Y Index" narrative="The Y location of the sub image" stage="Y Index" /><output type="flag" name="Contained" narrative="True if the main image contains the sub image" stage="Contained" /></outputs></stage><stage stageid="9581a702-c064-4ee6-a892-a8f051d39872" name="Detect Partial Image" type="Code"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><loginhibit /><display x="15" y="-30" w="90" h="30" /><inputs><input type="image" name="Potential SubImage" expr="[Potential SubImage]" /><input type="image" name="Main Image" expr="[Main Image]" /></inputs><outputs><output type="number" name="X Index" stage="X Index" /><output type="number" name="Y Index" stage="Y Index" /><output type="flag" name="Contained" stage="Contained" /></outputs><onsuccess>1d937619-473b-4d9b-b9bc-03d10e8e426a</onsuccess><code><![CDATA[Contained = False
+
+Dim bmPartial as Bitmap = ctype(Potential_SubImage, bitmap)
+Dim bmCaptured as bitmap = ctype(Main_Image, bitmap)
+
+Dim i As Integer = 0
+Dim j As Integer = 0
+For i = 0 to bmCaptured.Width - bmPartial.Width 
+   For j = 0 to bmCaptured.Height - bmPartial.Height 
+      Dim IsSubImage as Boolean = True
+      For x as integer = 0 to bmpartial.width -1
+         For y as integer = 0 to bmpartial.height -1
+            If bmCaptured.GetPixel(i+x,j+y).ToArgb() <> bmPartial.GetPixel(x,y).ToArgb()
+               IsSubImage = False
+               Goto NextAnchor
+            End If
+         Next
+      Next
+
+NextAnchor:
+      If IsSubImage Then
+         X_Index = i
+         Y_Index = j
+         Contained = True
+         Exit Sub
+      End If
+
+   Next
+Next
+
+X_Index = -1
+Y_Index = -1
+Contained = False]]></code></stage><stage stageid="d6454be3-1f6d-4dd6-94f7-383bb306ffad" name="Contained" type="Data"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><display x="210" y="90" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="514ea927-ab73-447d-87c7-f7647125551e" name="Y Index" type="Data"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><display x="150" y="90" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b055c12d-48c3-493e-8a96-d403e783e2af" name="X Index" type="Data"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><display x="90" y="90" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="52799220-2f09-48da-9a90-bec11811733e" name="Potential SubImage" type="Data"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><display x="195" y="-105" w="120" h="30" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="843e698a-2e6a-4acc-bdc0-55f88a76e265" name="Main Image" type="Data"><subsheetid>52a8e75a-abe2-40d1-9aaf-8c4df1ed37d6</subsheetid><display x="105" y="-105" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="dfbd8a53-c386-4e12-b484-0f3052db4f61" name="Contains Colour" type="Data"><subsheetid>58ce2146-7428-4658-8368-0a657b4650b8</subsheetid><display x="105" y="-15" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="fff62d3f-8e87-40c1-92ef-39744dd31d71" name="Find First Pixel From Left" type="SubSheetInfo"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><narrative>Finds the index of the first column of pixels from the left, containing a pixel of the specified colour.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="0aa9c991-2445-4945-8be2-1dad98e7048d" name="Start" type="Start"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Colour" narrative="The colour of interest, expressed as AARRGGBB in hex format." stage="Colour" /><input type="image" name="Image" narrative="The image to be examined." stage="Image" /><input type="flag" name="Invert Logic" narrative="When true, the first pixel NOT equal to the specified colour will be matched" stage="Invert Logic" /></inputs><onsuccess>095a4aaf-717c-4e5b-8fd7-6dbd5dc391b4</onsuccess></stage><stage stageid="f4be1535-44d7-41de-b71c-e998382198ac" name="End" type="End"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="number" name="First Pixel Index" narrative="The index of the first pixel from the left of the colour of interest, or -1 if no such exists." stage="First Pixel Index" /></outputs></stage><stage stageid="30a1f8e8-5c67-4cb4-8602-f7782964129d" name="Colour" type="Data"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><display x="90" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f8e53b21-c678-4135-85a2-cab7c67da67a" name="Image" type="Data"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><display x="150" y="-105" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="45be70b4-d30a-40ad-a1e1-cd8b0566b289" name="First Pixel Index" type="Data"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><display x="90" y="90" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="0f8e4bbb-e816-4a9e-a972-3ab769d9239c" name="Invert Logic" type="Data"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><display x="210" y="-105" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="bcdb71aa-15c6-440a-a006-c2a5f32d9343" name="Find First Pixel From Direction" type="SubSheetInfo"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><narrative>Finds the index of the first row or column of pixels from the given direction, containing a pixel of the specified colour.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="44f28f15-0b20-4c21-83f1-cc7f80092cdd" name="Start" type="Start"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><loginhibit /><display x="15" y="-60" /><inputs><input type="text" name="Colour" narrative="The colour of interest, expressed as AARRGGBB in hex format." stage="Colour" /><input type="image" name="Image" narrative="The image to be examined." stage="Image" /><input type="flag" name="Invert Logic" narrative="When true, the first pixel NOT equal to the specified colour will be matched" stage="Invert Logic" /><input type="text" name="Direction" narrative="The direction to search from - Left, Right, Top, Bottom" stage="Direction" /></inputs><onsuccess>4d5132e6-f382-4bd7-97c9-69e7c58f5a7d</onsuccess></stage><stage stageid="b79ccae7-75cc-4bcc-84f4-749e4f82a147" name="Colour" type="Data"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="90" y="-60" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f67e7eff-7bcf-4c31-88a5-980e2f495d23" name="Image" type="Data"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="150" y="-60" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="9c15ce02-d385-407a-965a-1794ec504bea" name="Invert Logic" type="Data"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="210" y="-60" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="d20f9712-8c03-4fb2-a7ea-6d03460bcf03" name="Direction" type="Data"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="270" y="-60" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="4d5132e6-f382-4bd7-97c9-69e7c58f5a7d" name="Find First Pixel" type="Code"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="15" y="45" w="90" h="30" /><inputs><input type="image" name="Image" expr="[Image]" /><input type="text" name="Test Colour" expr="[Colour]" /><input type="flag" name="Invert Logic" expr="[Invert Logic]" /><input type="text" name="Direction" expr="[Direction]" /></inputs><outputs><output type="number" name="FirstPixelIndex" stage="First Pixel Index" /></outputs><onsuccess>e8fcf813-e125-4a62-aef5-3009e3839408</onsuccess><code><![CDATA['First Validate the input colour
+If Test_Colour.Length = 8
+  For Each ch as Char In Test_Colour.ToCharArray()
+     If Not char.IsNumber(ch) Then
+        Dim IsValidChar As Boolean = False
+        For Each ValidChar As Char In New Char() {"A", "B", "C", "D", "E", "F"}
+           If char.ToUpper(ch).Equals(ValidChar) Then
+              IsValidChar = True
+              Exit For
+           End If
+        Next
+
+        If Not IsValidChar Then
+           Throw New ArgumentException("The supplied test colour '" & Test_Colour & "' is not valid. Please use a string in the hexadecimal format AARRGGBB (eg 'FF336699')")
+        End If
+     End If
+  Next
+End If
+
+Dim c as System.Drawing.Color
+FirstPixelIndex = -1
+
+Dim StartXIndex As Integer
+Dim EndXIndex As Integer
+Dim StartYIndex As Integer
+Dim EndYIndex As Integer
+Dim XStep As Integer= 1
+Dim YStep As Integer= 1
+Select Case Direction
+   Case "Left"
+		StartXIndex = 0
+		EndXIndex = Image.Width - 1
+		StartYIndex = 0
+		EndYIndex = Image.Height - 1
+	Case "Right"
+		StartXIndex = Image.Width - 1
+		EndXIndex = 0
+		StartYIndex = 0
+		EndYIndex = Image.Height - 1
+	Case "Top"
+		StartXIndex = 0
+		EndXIndex = Image.Width - 1
+		StartYIndex = 0
+		EndYIndex = Image.Height - 1
+	Case "Bottom"
+		StartXIndex = 0
+		EndXIndex = Image.Width - 1
+		StartYIndex = Image.Height - 1
+		EndYIndex = 0
+	Case Else
+		Throw New ApplicationException("Invalid Direction - " & Direction)
+End Select
+
+If StartXIndex > EndXIndex Then XStep = -1
+If StartYIndex > EndYIndex Then YStep = -1
+
+If Direction = "Left" OrElse Direction = "Right" Then
+	For x As Integer = StartXIndex To EndXIndex Step XStep
+	 For y As Integer = StartYIndex To EndYIndex Step YStep
+	  c = Image.GetPixel(x, y)
+	   Dim Match As Boolean = c.Name.ToUpper() = Test_Colour.ToUpper() 
+	   If (Match AndAlso Not Invert_Logic) OrElse (Not Match AndAlso Invert_Logic) Then
+			FirstPixelIndex = x
+			Exit Sub
+	   End If
+	 Next
+	Next
+Else
+ 'Top or Bottom
+ For y As Integer = StartYIndex To EndYIndex Step YStep
+	For x As Integer = StartXIndex To EndXIndex Step XStep
+	  c = Image.GetPixel(x, y)
+	   Dim Match As Boolean = c.Name.ToUpper() = Test_Colour.ToUpper() 
+	   If (Match AndAlso Not Invert_Logic) OrElse (Not Match AndAlso Invert_Logic) Then
+			FirstPixelIndex = y
+			Exit Sub
+	   End If
+	 Next
+	Next
+End If
+]]></code></stage><stage stageid="095a4aaf-717c-4e5b-8fd7-6dbd5dc391b4" name="Find First Pixel From Direction" type="SubSheet"><subsheetid>1415e255-6251-4f44-84a2-9def682b5033</subsheetid><display x="15" y="0" w="120" h="90" /><inputs><input type="text" name="Colour" narrative="The colour of interest, expressed as AARRGGBB in hex format." expr="[Colour]" /><input type="image" name="Image" narrative="The image to be examined." expr="[Image]" /><input type="flag" name="Invert Logic" narrative="When true, the first pixel NOT equal to the specified colour will be matched" expr="[Invert Logic]" /><input type="text" name="Direction" narrative="The direction to search from - Left, Right, Top, Bottom" expr="&quot;Left&quot;" /></inputs><outputs><output type="number" name="First Pixel Index" narrative="The index of the first pixel from the left of the colour of interest, or -1 if no such exists." stage="First Pixel Index" /></outputs><onsuccess>f4be1535-44d7-41de-b71c-e998382198ac</onsuccess><processid>260695ce-598a-45da-857b-faaf399998a1</processid></stage><stage stageid="e8fcf813-e125-4a62-aef5-3009e3839408" name="End" type="End"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><loginhibit /><display x="15" y="135" /><outputs><output type="number" name="First Pixel Index" narrative="The index of the first pixel from the left of the colour of interest, or -1 if no such exists." stage="First Pixel Index" /></outputs></stage><stage stageid="8b653267-9f22-4a6c-98a5-1786802aacb3" name="First Pixel Index" type="Data"><subsheetid>260695ce-598a-45da-857b-faaf399998a1</subsheetid><display x="90" y="135" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="abc37893-2948-4e5a-a928-8d3ff9d1caf0" name="Find First Pixel From Bottom" type="SubSheetInfo"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><narrative>Finds the index of the first row of pixels from the bottom, containing a pixel of the specified colour.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="507e6b7e-f58f-4a64-bfa2-0208fb1f4b5b" name="Start" type="Start"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><loginhibit /><display x="105" y="-105" /><inputs><input type="text" name="Colour" narrative="The colour of interest, expressed as AARRGGBB in hex format." stage="Colour" /><input type="image" name="Image" narrative="The image to be examined." stage="Image" /><input type="flag" name="Invert Logic" narrative="When true, the first pixel NOT equal to the specified colour will be matched" stage="Invert Logic" /></inputs><onsuccess>9587f833-3c43-452e-b0fc-44f0b23ee385</onsuccess></stage><stage stageid="5ad5e976-e5ca-431c-af3a-5413c033f7eb" name="End" type="End"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><loginhibit /><display x="105" y="90" /><outputs><output type="number" name="First Pixel Index" narrative="The index of the first pixel from the left of the colour of interest, or -1 if no such exists." stage="First Pixel Index" /></outputs></stage><stage stageid="324d4eab-2e2c-4221-a15d-675362686388" name="Colour" type="Data"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><display x="180" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="a4ac85c2-9007-4dfc-85b5-c41fc2651643" name="Image" type="Data"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><display x="240" y="-105" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="28a2bbe9-b996-4f50-9391-bf205a1f3d75" name="First Pixel Index" type="Data"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><display x="180" y="90" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="e22ee215-2ceb-4749-8cfd-0bc744f8597f" name="Invert Logic" type="Data"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><display x="300" y="-105" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="9587f833-3c43-452e-b0fc-44f0b23ee385" name="Find First Pixel From Direction" type="SubSheet"><subsheetid>86993a9b-04d3-4088-97b9-173ee7ae96e5</subsheetid><display x="105" y="0" w="120" h="90" /><inputs><input type="text" name="Colour" narrative="The colour of interest, expressed as AARRGGBB in hex format." expr="[Colour]" /><input type="image" name="Image" narrative="The image to be examined." expr="[Image]" /><input type="flag" name="Invert Logic" narrative="When true, the first pixel NOT equal to the specified colour will be matched" expr="[Invert Logic]" /><input type="text" name="Direction" narrative="The direction to search from - Left, Right, Top, Bottom" expr="&quot;Bottom&quot;" /></inputs><outputs><output type="number" name="First Pixel Index" narrative="The index of the first pixel from the left of the colour of interest, or -1 if no such exists." stage="First Pixel Index" /></outputs><onsuccess>5ad5e976-e5ca-431c-af3a-5413c033f7eb</onsuccess><processid>260695ce-598a-45da-857b-faaf399998a1</processid></stage><stage stageid="fb7b0b1d-6ad3-42ae-abf7-ae9c71c9000e" name="Image Is Uniform Colour" type="SubSheetInfo"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><narrative>Determines whether the image contains a single colour or not</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="3f18bf6a-8403-4cb1-8086-38e576dcb2a5" name="Start" type="Start"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><loginhibit /><display x="-45" y="-135" /><inputs><input type="image" name="Image" narrative="The image to test for uniform colour" stage="Image" /></inputs><onsuccess>bec769bc-c01b-43ba-875b-cb97cb2f090a</onsuccess></stage><stage stageid="bd709bcc-53a9-4ff8-abc5-a3b2a5f45b6c" name="End" type="End"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><loginhibit /><display x="-45" y="-45" /><outputs><output type="flag" name="Uniform" narrative="True if the image contains a single colour (regardless of what that colour is); False if there is any variation" stage="Uniform" /></outputs></stage><stage stageid="bec769bc-c01b-43ba-875b-cb97cb2f090a" name="Is Uniform" type="Code"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><loginhibit /><display x="-45" y="-90" /><inputs><input type="image" name="Image" expr="[Image]" /></inputs><outputs><output type="flag" name="Uniform" stage="Uniform" /></outputs><onsuccess>bd709bcc-53a9-4ff8-abc5-a3b2a5f45b6c</onsuccess><code><![CDATA[' Assume uniform
+Uniform = True
+
+' An empty image is (sort of) uniform
+If Image.Size = Size.Empty Then Return
+
+' Get the argb value of the origin
+Dim argb as Integer = Image.GetPixel(0,0).ToArgb()
+
+' And check each pixel against that value
+For y As Integer = 0 To Image.Height - 1
+	For x As Integer = 0 To Image.Width - 1
+		If Image.GetPixel(x, y).ToArgb() <> argb Then
+			Uniform = False
+			Return
+		End If
+	Next
+Next
+]]></code></stage><stage stageid="8428e08f-f97f-4e39-880e-9a0b8c32e364" name="Image" type="Data"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><display x="30" y="-135" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="8d1707e3-f291-4617-b0c7-083b8834d748" name="Uniform" type="Data"><subsheetid>51f754b0-95a4-49ae-8911-4df231659481</subsheetid><display x="30" y="-45" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="60ae1f17-f331-4bfd-b6c1-8ab8f92aa89a" name="Note2" type="Note"><narrative>© 2022 Blue Prism Limited
+Licensed under the Blue Prism Asset License and Support Terms
+https://digitalexchange.blueprism.com/fileMedia/download/a9111324-3192-43ff-9166-566620ca1182</narrative><display x="240" y="-15" w="300" h="90" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="c4d5317f-b096-46d8-9d03-383848f6a0b8" name="Note1" type="Note"><loginhibit /><narrative>Version 10.1.0</narrative><display x="15" y="-150" w="90" h="30" /><font family="Segoe UI" size="14" style="Bold" color="FF0000" /></stage><stage stageid="8c3208c1-7802-40f6-9011-e477eafbc70f" name="Crop Image" type="SubSheetInfo"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><narrative>Crops the given image</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="a6466496-2d67-460b-a945-7442c1a3eda0" name="Start" type="Start"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="image" name="Image" narrative="Input Image" stage="img" /><input type="number" name="Crop X" narrative="X coordinate to start cropping from" stage="cropX" /><input type="number" name="Crop Y" narrative="Y coordinate to start cropping from" stage="cropY" /><input type="number" name="Crop Width" narrative="Width of the cropped image" stage="cropWidth" /><input type="number" name="Crop Height" narrative="Height of the cropped image" stage="cropHeight" /></inputs><onsuccess>dcd4df73-9b20-447a-981f-89731e07900a</onsuccess></stage><stage stageid="b85336da-a6e8-420c-999a-ec794884c2e0" name="End" type="End"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="15" y="45" /><outputs><output type="image" name="Cropped Image" narrative="Cropped Image" stage="corppedImg" /></outputs></stage><stage stageid="dcd4df73-9b20-447a-981f-89731e07900a" name="Crop Image" type="Code"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="15" y="-30" /><inputs><input type="image" name="img" expr="[img]" /><input type="number" name="cropX" expr="[cropX]" /><input type="number" name="cropY" expr="[cropY]" /><input type="number" name="cropWidth" expr="[cropWidth]" /><input type="number" name="cropHeight" expr="[cropHeight]" /></inputs><outputs><output type="image" name="corppedImg" stage="corppedImg" /></outputs><onsuccess>b85336da-a6e8-420c-999a-ec794884c2e0</onsuccess><code><![CDATA[Dim rect As New Rectangle(cropX, cropY, cropWidth, cropHeight)
+corppedImg = img.Clone(rect, img.PixelFormat)]]></code></stage><stage stageid="671c0ecf-578b-4f1e-a323-0d419e81c3c3" name="img" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="105" y="-105" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="cee667fb-da39-4556-831a-a9ed4343007b" name="cropX" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="165" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="a7db7599-5b01-4264-8064-5fc8ab72b9e3" name="cropY" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="225" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6edf5537-ed07-4a35-a230-7091de496c8c" name="cropWidth" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="285" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6c68bcbe-5ef6-438c-8e14-ce61f6da63c2" name="cropHeight" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="345" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="301f96e1-8d14-41f2-8741-d536decce8da" name="corppedImg" type="Data"><subsheetid>d5928a3a-277e-4cb7-9ec6-6fce646a091f</subsheetid><loginhibit /><display x="105" y="45" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="9b5a81d9-c601-4f30-90a1-365a53cb7364" name="Resize Image" type="SubSheetInfo"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><narrative>Resizes the given image</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="43eee1f2-5232-4c9b-a607-f5d9b7a50da5" name="Start" type="Start"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="image" name="Image" narrative="Input Image" stage="img" /><input type="number" name="Width" narrative="Width of the resized image" stage="Width" /><input type="number" name="Height" narrative="Height of the resized image" stage="Height" /></inputs><onsuccess>6ed7f208-b0c2-4bc3-a419-3f0bb866fc94</onsuccess></stage><stage stageid="58c67922-7fe7-4339-953b-0a2466433c2d" name="End" type="End"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="15" y="45" /><outputs><output type="image" name="Resized Image" narrative="Resized Image" stage="ResizedImage" /></outputs></stage><stage stageid="6ed7f208-b0c2-4bc3-a419-3f0bb866fc94" name="Resize Image" type="Code"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="15" y="-30" /><inputs><input type="image" name="img" expr="[img]" /><input type="number" name="Width" expr="[Width]" /><input type="number" name="Height" expr="[Height]" /></inputs><outputs><output type="image" name="Resized Image" stage="ResizedImage" /></outputs><onsuccess>58c67922-7fe7-4339-953b-0a2466433c2d</onsuccess><code><![CDATA[Resized_Image=ResizeImage(img,Width,Height)]]></code></stage><stage stageid="a5bc377a-3266-4dff-af46-fbcbd64d3d75" name="img" type="Data"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="105" y="-105" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6b145133-61f2-4800-bf45-b726390feb8a" name="Width" type="Data"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="180" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ecf560c3-fdfc-493c-9ed4-29a3c7330dcb" name="Height" type="Data"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><loginhibit /><display x="240" y="-105" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="01eed69f-1969-4d55-a656-9c52b3ba6b6e" name="ResizedImage" type="Data"><subsheetid>65658da5-49dd-45b2-bb03-d813b0b44612</subsheetid><display x="105" y="45" /><datatype>image</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ada6bdf3-9165-4139-9823-99263204921d" name="Convert Image Format" type="SubSheetInfo"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><narrative>Converts the image format</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="09d8f3b9-9a01-4fb0-96db-0b05f996c2e9" name="Start" type="Start"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Input Image Path" narrative="Full path of the input image" stage="Input Image Path" /><input type="text" name="Image Format" narrative="Can be one of Jpeg, Bmp, Gif, Png or Tiff" stage="Image Format" /><input type="text" name="Converted Image Path" narrative="Full path where the converted image will be saved. This should include the filename and extension" stage="Converted Image Path" /></inputs><onsuccess>45df9a76-16c6-4edd-be8b-ceb3f594a954</onsuccess></stage><stage stageid="49c6e38a-f390-4812-8244-cc8c47a3e7fd" name="End" type="End"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="c56a4abe-1b98-4254-80b3-7135d11ceb3c" name="Image Format" type="Data"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><narrative>Can be one of Jpeg, Bmp, Gif, Png or Tiff</narrative><display x="240" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="d829e3d8-a00b-45ed-af7f-9c2807368d49" name="Input Image Path" type="Data"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><display x="90" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="2db6f3ab-c938-49d0-aeb4-3016bb39706b" name="Converted Image Path" type="Data"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><display x="165" y="-105" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="45df9a76-16c6-4edd-be8b-ceb3f594a954" name="Convert Type" type="Code"><subsheetid>171af258-95db-4ca1-bfa1-4ae099ac4b78</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="imagePath" expr="[Input Image Path]" /><input type="text" name="imageFormat" expr="[Image Format]" /><input type="text" name="convertedImagePath" expr="[Converted Image Path]" /></inputs><onsuccess>49c6e38a-f390-4812-8244-cc8c47a3e7fd</onsuccess><code><![CDATA[Select imageFormat.ToUpper()
+  Case "JPEG"
+	  Image.FromFile(imagePath).Save(convertedImagePath,System.Drawing.Imaging.ImageFormat.Jpeg)
+  Case "BMP"
+	  Image.FromFile(imagePath).Save(convertedImagePath,System.Drawing.Imaging.ImageFormat.Bmp)
+  Case "GIF"
+	  Image.FromFile(imagePath).Save(convertedImagePath,System.Drawing.Imaging.ImageFormat.Gif)
+  Case "PNG"
+	  Image.FromFile(imagePath).Save(convertedImagePath,System.Drawing.Imaging.ImageFormat.Png)
+  Case "TIFF"
+	  Image.FromFile(imagePath).Save(convertedImagePath,System.Drawing.Imaging.ImageFormat.Tiff)
+  Case Else	  
+End Select]]></code></stage></process>

@@ -1,0 +1,17 @@
+# bpgit config - Blue Prism Git adapter
+# Zwei Sektionen: [bp] fuer SqlConnection (read-only ops), [cli] fuer AutomateC.exe (write ops)
+
+[bp]
+connection_string = "Server=(localdb)\\BluePrismLocalDB;Integrated Security=SSPI;Database=BluePrism"
+# Optional: SQL-Auth fallback (only if SSPI unavailable)
+# sql_user = "bpgit_readonly"
+# sql_password_env = "BPGIT_DB_PASSWORD"
+
+[cli]
+# Path to AutomateC.exe (default is the standard install location)
+automatec_path = "C:\\Program Files\\Blue Prism Limited\\Blue Prism Automate\\AutomateC.exe"
+# Auth mode: "sso" (default, Windows Integrated Auth) or "user"
+auth = "sso"
+# Only used when auth = "user"
+# username = "admin"
+# password_env = "BPGIT_CLI_PASSWORD"

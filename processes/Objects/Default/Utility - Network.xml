@@ -1,0 +1,340 @@
+<process name="Utility - Network" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="A utility object with network related actions." byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>cc59863e-92d6-4396-adc1-0f8a2a96af39</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="5f21a6a2-cdb3-4d80-a8f3-b0efc6665b6f" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="5e950850-49da-49e3-ba6a-b55a612b4426" type="Normal" published="False"><name>Process Executor</name><view><camerax>0</camerax><cameray>-21</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="2e5ddf19-f310-4429-8309-a2377c5851e5" type="Normal" published="True"><name>Ping</name><view><camerax>0</camerax><cameray>63</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="9226f296-7cd6-4be9-a030-c485125adfae" type="Normal" published="True"><name>nslookup</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="b91c37ef-772c-467b-b5a9-4ab34e2a4f3a" type="Normal" published="True"><name>Get IP Addresses</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="b903506a-83b2-4f83-b104-e62485baa72f" type="Normal" published="True"><name>Netstat</name><view><camerax>-126</camerax><cameray>-8</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="54caaabb-4afd-42e8-944e-aea53fd44faf" type="Normal" published="True"><name>ARP</name><view><camerax>-206</camerax><cameray>-48</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="6d42c1dc-b244-4d85-88c2-b26bd2609afb" type="Normal" published="True"><name>NbtStat</name><view><camerax>0</camerax><cameray>-12</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="78b58da5-cf71-4a3b-b0fe-0a3fd689534f" type="Normal" published="True"><name>Hostname</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39" type="Normal" published="True"><name>Tracert</name><view><camerax>-310</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="e03585ed-9b57-4111-abef-444bafe6ca43" type="Normal" published="True"><name>IpConfig</name><view><camerax>-310</camerax><cameray>18</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="99909e63-dbe5-443a-88e2-8d5e4ebf9b04" type="Normal" published="True"><name>Route</name><view><camerax>-310</camerax><cameray>-90</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="8a91107d-0ee8-459a-bab3-ee14dbb82c08" type="Normal" published="True"><name>PathPing</name><view><camerax>-310</camerax><cameray>33</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="cc386a36-af51-4499-bc43-8a9a5407a881" name="Start" type="Start"><loginhibit /><display x="15" y="-105" /><onsuccess>6aae6635-0d2b-458f-9052-1ace6bbfd402</onsuccess></stage><stage stageid="6aae6635-0d2b-458f-9052-1ace6bbfd402" name="End" type="End"><loginhibit /><display x="15" y="90" /></stage><stage stageid="5388b9ac-8551-4b68-8c85-b43fdcabcd28" name="Stage1" type="ProcessInfo"><display x="-180" y="-105" w="180" h="90" /><references><reference>System.Data.dll</reference><reference>System.Xml.dll</reference><reference>System.Drawing.dll</reference></references><imports><import>System</import><import>System.Drawing</import><import>System.Net.NetworkInformation</import><import>System.Data</import><import>System.Diagnostics</import></imports><language>visualbasic</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[]]></globalcode><code><![CDATA[]]></code></stage><stage stageid="78247cd0-4a8b-4ba9-9606-3a4c6cf51122" name="Clean Up" type="SubSheetInfo"><subsheetid>5f21a6a2-cdb3-4d80-a8f3-b0efc6665b6f</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="80a773f1-2e40-4833-b9be-865fb16ce513" name="Start" type="Start"><subsheetid>5f21a6a2-cdb3-4d80-a8f3-b0efc6665b6f</subsheetid><loginhibit /><display x="15" y="-105" /><onsuccess>2ba811c0-d8c0-4f72-a5c1-86f4954dc807</onsuccess></stage><stage stageid="2ba811c0-d8c0-4f72-a5c1-86f4954dc807" name="End" type="End"><subsheetid>5f21a6a2-cdb3-4d80-a8f3-b0efc6665b6f</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="f5198681-ab5e-4781-8bdb-4b4cd39e77e1" name="new" type="Note"><subsheetid>5f21a6a2-cdb3-4d80-a8f3-b0efc6665b6f</subsheetid><narrative>Clean Up Page
+
+This is an optional page where you might choose to perform some finalisation (or "cleanup") tasks as your business object is closed down.
+
+The cleanup action will be called automatically immediately after closing your business object at the end of a business process.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than before the disposal of the business object.</narrative><display x="-180" y="60" w="180" h="230" /></stage><stage stageid="76772e92-3d97-452c-a128-db49a67a65d3" name="new" type="Note"><narrative>Initialise Page
+
+This is an optional page where you might choose to perform some initialisation tasks after your business object is loaded.
+
+The initialise action will be called automatically immediately after loading your business object.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than after the creation of the object.</narrative><display x="-180" y="60" w="180" h="230" /></stage><stage stageid="63a3a2b4-e879-437e-a3d2-90298c9a24f3" name="Ping" type="SubSheetInfo"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><narrative>Ping is used to test the ability of one network host to communicate with another. Simply enter the Ping command, followed by the name or the IP address of the destination host. Assuming that there are no network problems or firewalls preventing the ping from completing, the remote host will respond to the ping with four packets. Receiving these packets confirms that a valid and functional network path exists between the two hosts.</narrative><display x="-240" y="-120" w="300" h="90" /></stage><stage stageid="adeb690c-9fd3-459a-8a4a-83b624907159" name="Start" type="Start"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="15" y="-60" /><inputs><input type="text" name="Location" narrative="The computer name or ip address you want to ping" stage="Location" /></inputs><onsuccess>70574e9d-3764-4839-8247-c5df0a5f2f1c</onsuccess></stage><stage stageid="3f976139-c96e-48a5-a84f-b4af0aa75921" name="End" type="End"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="15" y="60" /><outputs><output type="flag" name="Ping Success" stage="Ping Success" /><output type="text" name="Address" stage="Address" /><output type="number" name="Round Trip Time (Milliseconds)" stage="Round Trip Time (Milliseconds)" /><output type="text" name="Ping Exception" stage="Ping Exception" /></outputs></stage><stage stageid="16c0b46b-f799-4e33-8121-5d6d779f4b71" name="Location" type="Data"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="-165" y="-15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="70574e9d-3764-4839-8247-c5df0a5f2f1c" name="Ping" type="Code"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="15" y="0" /><inputs><input type="text" name="Location" expr="[Location]" /></inputs><outputs><output type="flag" name="Success" stage="Ping Success" /><output type="text" name="Address" stage="Address" /><output type="number" name="Round Trip Time" stage="Round Trip Time (Milliseconds)" /><output type="text" name="Exception" stage="Ping Exception" /></outputs><onsuccess>3f976139-c96e-48a5-a84f-b4af0aa75921</onsuccess><code><![CDATA[Success = False
+Dim pingSender As New Ping
+Try
+	Dim reply As PingReply = pingSender.Send(Location)
+
+	If (reply.Status = IPStatus.Success) Then
+		Success = True
+		Address = reply.Address.ToString()
+		Round_Trip_Time = reply.RoundtripTime
+	End If
+
+Catch ex as Exception
+	Exception = ex.ToString()
+End Try]]></code></stage><stage stageid="ad81f7a6-de26-45e0-af37-1fcc16c65311" name="Ping Success" type="Data"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><display x="-165" y="225" w="180" h="30" /><datatype>flag</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="8db99241-b839-49aa-a493-f51f61418185" name="Round Trip Time (Milliseconds)" type="Data"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><display x="-165" y="90" w="180" h="30" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="36226432-f5da-4f05-b068-dd8cc8996689" name="Address" type="Data"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><display x="-165" y="180" w="180" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="43f92e8a-9aea-4905-a868-f8fae4365ccd" name="Ping Exception" type="Data"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><display x="-165" y="135" w="180" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="378d243a-b717-4e26-bd8d-de94d7870f6e" name="Note2" type="Note"><narrative>© 2023 Blue Prism Limited
+Licensed under the Blue Prism Asset License and Support Terms
+https://digitalexchange.blueprism.com/fileMedia/download/a9111324-3192-43ff-9166-566620ca1182</narrative><display x="240" y="-15" w="300" h="90" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="2ba7e2f5-50fd-4c1d-b48d-bd2c649ab549" name="nslookup" type="SubSheetInfo"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><narrative>NSLookup is a great utility for diagnosing DNS name resolution problems. Just type the NSLookup command, and Windows will display the name and IP address of the device’s default DNS server. From there, you can type host names in an effort to see if the DNS server is able to resolve the specified host name.
+
+Usage:
+   nslookup [-opt ...]             # interactive mode using default server
+   nslookup [-opt ...] - server    # interactive mode using 'server'
+   nslookup [-opt ...] host        # just look up 'host' using default server
+   nslookup [-opt ...] host server # just look up 'host' using 'server'</narrative><display x="-270" y="-135" w="300" h="150" /></stage><stage stageid="4febb086-0e90-4d24-8547-530207269b67" name="Start" type="Start"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" narrative="The arguments for nslookup. Use /? for help" stage="Arguments" /></inputs><onsuccess>8746d9eb-923f-4b16-b9a6-2d5160b31c94</onsuccess></stage><stage stageid="7773edb3-f4b9-4e87-bfec-c0d23f0ea0f7" name="End" type="End"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" narrative="The results from the NSLookup call." stage="Output" /></outputs></stage><stage stageid="951a1cf7-71df-4a2a-9825-0c3ab3b47067" name="Get IP Addresses" type="SubSheetInfo"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><narrative>Returns a set of IP Addresses for a given hostname. The collection consists of both IPv4 and IPv6 addresses if they exist.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="960c4515-ed8f-4720-949a-acc8a8c86094" name="Start" type="Start"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Hostname" narrative="The hostname to gather the IP addresses for." stage="HostName" /></inputs><onsuccess>836e35fb-cb9e-4bf1-8cdd-0391f766d6ab</onsuccess></stage><stage stageid="67aea469-42ba-466b-841b-93f52b6be839" name="End" type="End"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="collection" name="Outputs" narrative="The resulting collection of IP Addresses" stage="IPAddresses" /></outputs></stage><stage stageid="836e35fb-cb9e-4bf1-8cdd-0391f766d6ab" name="GetIPAddresses" type="Code"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="Hostname" expr="[HostName]" /></inputs><outputs><output type="collection" name="IPAddresses" stage="IPAddresses" /></outputs><onsuccess>67aea469-42ba-466b-841b-93f52b6be839</onsuccess><code><![CDATA[Dim host As String = System.Net.Dns.GetHostName()
+        Dim IPAddrs As New DataTable()
+        Dim dr As DataRow
+        IPAddrs.Columns.Add("IPAddress")
+
+
+        For i = 0 To Net.Dns.GetHostEntry(Hostname).AddressList.Length() - 1
+            dr = IPAddrs.NewRow
+            dr("IPAddress") = Net.Dns.GetHostEntry(Hostname).AddressList(i).ToString()
+			IPAddrs.Rows.Add(dr)
+        Next
+
+IPAddresses = IPAddrs]]></code></stage><stage stageid="d2968a3d-d03d-4887-a295-e17589aa5347" name="HostName" type="Data"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="-195" y="0" w="120" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">BPEU342</initialvalue><private /><alwaysinit /></stage><stage stageid="b4e726f8-87ff-4dcd-8255-52a9766c428f" name="IPAddresses" type="Collection"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="-195" y="120" /><datatype>collection</datatype><private /><alwaysinit /><collectioninfo><field name="IPAddress" type="text" /></collectioninfo></stage><stage stageid="b7100a5d-48ec-4ce9-847b-bc057275b793" name="ProcessName" type="Data"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="-195" y="0" w="120" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">nslookup</initialvalue><private /><alwaysinit /></stage><stage stageid="6f26eaa6-2e71-42d4-a2ee-84c91d055d62" name="Process Executor" type="SubSheetInfo"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><narrative>Executes a command line process and returns the result to Blue Prism.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="ed698791-42f6-4a1b-91cf-4855268114cf" name="Start" type="Start"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="ProcessName" narrative="The command to be executed" stage="ProcessName" /><input type="text" name="Arguments" narrative="The arguments to add to the command." stage="Arguments" /></inputs><onsuccess>1c4f3a6b-ea39-4f02-b91c-304c27c2ffb8</onsuccess></stage><stage stageid="2318e10e-eed9-42de-9d17-361940704203" name="End" type="End"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" narrative="The resulting output" stage="ProcessOutput" /></outputs></stage><stage stageid="1c4f3a6b-ea39-4f02-b91c-304c27c2ffb8" name="Process Execution" type="Code"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="ProcessName" expr="[ProcessName]" /><input type="text" name="Arguments" expr="[Arguments]" /></inputs><outputs><output type="text" name="ProcessOutput" stage="ProcessOutput" /></outputs><onsuccess>2318e10e-eed9-42de-9d17-361940704203</onsuccess><code><![CDATA[	Dim output As String = String.Empty
+
+    Try
+        Dim p As Process = New Process With {
+            .StartInfo = New ProcessStartInfo() With {
+                .FileName = ProcessName,
+                .WorkingDirectory = String.Empty,
+                .Arguments = arguments,
+                .RedirectStandardOutput = True,
+                .UseShellExecute = False,
+                .CreateNoWindow = True
+            }
+        }
+        p.Start()
+        output = p.StandardOutput.ReadToEnd()
+        p.WaitForExit()
+    Catch ex As Exception
+        output = ex.Message
+    End Try
+
+    ProcessOutput = output
+]]></code></stage><stage stageid="f3cfa899-9548-44c1-b8c0-1f05bd50f523" name="ProcessName" type="Data"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="367e5b0e-cff3-4286-a7c6-de981c47c175" name="Arguments" type="Data"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="5c057e7f-f8b1-4b89-941e-1e7a32e1c64e" name="ProcessOutput" type="Data"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><display x="-195" y="120" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="530507fd-fa52-49c9-a86d-852486395eda" name="Netstat" type="SubSheetInfo"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><narrative>If you are experiencing problems with network communications, then network statistics can sometimes help point you toward the root cause of the problem. That’s where the aptly named NetStat command comes into play. This command has a number of different functions, but the most useful of these is to display network summary information for the device. To see this type of summary information, just type NetStat -e.
+
+Displays protocol statistics and current TCP/IP network connections.
+
+NETSTAT [-a] [-b] [-e] [-f] [-n] [-o] [-p proto] [-r] [-s] [-x] [-t] [interval]
+
+  -a            Displays all connections and listening ports.
+  -b            Displays the executable involved in creating each connection or
+                listening port. In some cases well-known executables host
+                multiple independent components, and in these cases the
+                sequence of components involved in creating the connection
+                or listening port is displayed. In this case the executable
+                name is in [] at the bottom, on top is the component it called,
+                and so forth until TCP/IP was reached. Note that this option
+                can be time-consuming and will fail unless you have sufficient
+                permissions.
+  -e            Displays Ethernet statistics. This may be combined with the -s
+                option.
+  -f            Displays Fully Qualified Domain Names (FQDN) for foreign
+                addresses.
+  -n            Displays addresses and port numbers in numerical form.
+  -o            Displays the owning process ID associated with each connection.
+  -p proto      Shows connections for the protocol specified by proto; proto
+                may be any of: TCP, UDP, TCPv6, or UDPv6.  If used with the -s
+                option to display per-protocol statistics, proto may be any of:
+                IP, IPv6, ICMP, ICMPv6, TCP, TCPv6, UDP, or UDPv6.
+  -q            Displays all connections, listening ports, and bound
+                nonlistening TCP ports. Bound nonlistening ports may or may not
+                be associated with an active connection.
+  -r            Displays the routing table.
+  -s            Displays per-protocol statistics.  By default, statistics are
+                shown for IP, IPv6, ICMP, ICMPv6, TCP, TCPv6, UDP, and UDPv6;
+                the -p option may be used to specify a subset of the default.
+  -t            Displays the current connection offload state.
+  -x            Displays NetworkDirect connections, listeners, and shared
+                endpoints.
+  -y            Displays the TCP connection template for all connections.
+                Cannot be combined with the other options.
+  interval      Redisplays selected statistics, pausing interval seconds
+                between each display.  Press CTRL+C to stop redisplaying
+                statistics.  If omitted, netstat will print the current
+                configuration information once.</narrative><display x="-450" y="135" w="300" h="540" /></stage><stage stageid="122f563b-fae3-4e21-9978-5f58763f2c8c" name="Start" type="Start"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>5bf2dd14-7faa-4889-be70-31373e2bf837</onsuccess></stage><stage stageid="ef43efd2-ca6f-4dbb-ab47-47d3547222b3" name="End" type="End"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="5bf2dd14-7faa-4889-be70-31373e2bf837" name="Process Executor" type="SubSheet"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>ef43efd2-ca6f-4dbb-ab47-47d3547222b3</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="6dd35d96-01ef-46a8-8475-da67fa34161c" name="ProcessName" type="Data"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">netstat</initialvalue><private /><alwaysinit /></stage><stage stageid="a3f90519-3f99-4426-bb7d-29d904af47b4" name="Arguments" type="Data"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="74f2cdba-4f43-45ed-b1e5-69a7f929d2d6" name="Output" type="Data"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="aa81d496-cfcb-4cb1-b88f-d2b4e3b8fb1d" name="Input Parameters" type="Block"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="3f56c6ef-de97-4884-8cc3-5293a2bf231a" name="Output Parameters" type="Block"><subsheetid>5e950850-49da-49e3-ba6a-b55a612b4426</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="0bbf036f-4887-4b8d-aa91-03f54fb4e5db" name="Input Parameters" type="Block"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="ed20bd13-50fc-46e0-9229-1ee5360ae414" name="Output Parameters" type="Block"><subsheetid>b91c37ef-772c-467b-b5a9-4ab34e2a4f3a</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="a5aa464e-25f6-4b9d-a143-426165384487" name="Input Parameters" type="Block"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="-240" y="-60" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="47937892-d6fb-43bc-8b95-319eb519740a" name="Output Parameters" type="Block"><subsheetid>2e5ddf19-f310-4429-8309-a2377c5851e5</subsheetid><loginhibit /><display x="-270" y="60" w="210" h="195" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="bef17170-baab-45e4-8d81-c59467531225" name="Input Parameters" type="Block"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="08933edb-c986-4037-af5f-00ca6b82ae3a" name="Output Parameters" type="Block"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="-270" y="105" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="8746d9eb-923f-4b16-b9a6-2d5160b31c94" name="Process Executor" type="SubSheet"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="15" y="-15" w="90" h="60" /><font family="Segoe UI" size="10" style="Regular" color="FF0000" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>7773edb3-f4b9-4e87-bfec-c0d23f0ea0f7</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="394993cb-a7c1-4eb0-834b-4359cd934cb5" name="Input Parameters" type="Block"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="0f79b1f4-1190-4450-b26c-22ff37774735" name="Output Parameters" type="Block"><subsheetid>b903506a-83b2-4f83-b104-e62485baa72f</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="5e074f19-b390-4bd6-a921-7ac40048cc30" name="Arguments" type="Data"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="-195" y="45" w="120" h="30" /><font family="Segoe UI" size="10" style="Regular" color="FF0000" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="287372b5-6233-4a04-a26b-0c2b633f61a4" name="Output" type="Data"><subsheetid>9226f296-7cd6-4be9-a030-c485125adfae</subsheetid><loginhibit /><display x="-195" y="150" /><font family="Segoe UI" size="10" style="Regular" color="FF0000" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="5215beac-881e-4d00-a851-ac26a3804bfa" name="ARP" type="SubSheetInfo"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><narrative>The ARP command corresponds to the Address Resolution Protocol. Although it is easy to think of network communications in terms of IP addressing, packet delivery is ultimately dependent on the Media Access Control (MAC) address of the device’s network adapter. This is where the Address Resolution Protocol comes into play. Its job is to map IP addresses to MAC addresses.
+
+Windows devices maintain an ARP cache, which contains the results of recent ARP queries. You can see the contents of this cache by using the ARP -A command. If you are having problems communicating with one specific host, you can append the remote host’s IP address to the ARP -A command.
+
+Displays and modifies the IP-to-Physical address translation tables used by
+address resolution protocol (ARP).
+
+ARP -s inet_addr eth_addr [if_addr]
+ARP -d inet_addr [if_addr]
+ARP -a [inet_addr] [-N if_addr] [-v]
+
+  -a            Displays current ARP entries by interrogating the current
+                protocol data.  If inet_addr is specified, the IP and Physical
+                addresses for only the specified computer are displayed.  If
+                more than one network interface uses ARP, entries for each ARP
+                table are displayed.
+  -g            Same as -a.
+  -v            Displays current ARP entries in verbose mode.  All invalid
+                entries and entries on the loop-back interface will be shown.
+  inet_addr     Specifies an internet address.
+  -N if_addr    Displays the ARP entries for the network interface specified
+                by if_addr.
+  -d            Deletes the host specified by inet_addr. inet_addr may be
+                wildcarded with * to delete all hosts.
+  -s            Adds the host and associates the Internet address inet_addr
+                with the Physical address eth_addr.  The Physical address is
+                given as 6 hexadecimal bytes separated by hyphens. The entry
+                is permanent.
+  eth_addr      Specifies a physical address.
+  if_addr       If present, this specifies the Internet address of the
+                interface whose address translation table should be modified.
+                If not present, the first applicable interface will be used.
+Example:
+  &gt; arp -s 157.55.85.212   00-aa-00-62-c6-09  .... Adds a static entry.
+  &gt; arp -a                                    .... Displays the arp table.</narrative><display x="-465" y="-60" w="360" h="450" /></stage><stage stageid="5b729e4f-3894-4b33-9acb-8d0e7970cad0" name="Start" type="Start"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>f5a2b825-b73b-4c9c-9100-d4410dc0ec41</onsuccess></stage><stage stageid="8e4229e8-3ca9-4824-aa66-d0b84251909c" name="End" type="End"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="f5a2b825-b73b-4c9c-9100-d4410dc0ec41" name="Process Executor" type="SubSheet"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>8e4229e8-3ca9-4824-aa66-d0b84251909c</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="970b8bb7-78be-4aae-816d-f924cf689281" name="ProcessName" type="Data"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">arp</initialvalue><private /><alwaysinit /></stage><stage stageid="9bc021e5-7f94-4cc9-9f8a-9bd75a780ee4" name="Arguments" type="Data"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="c7f0dfab-2688-462b-a4c3-c017f563d4e7" name="Output" type="Data"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="7b0b88f8-03d2-47cf-ae88-227e70db808c" name="Input Parameters" type="Block"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="60b381d9-f1a0-4c78-a7a1-c67f573fb9c6" name="Output Parameters" type="Block"><subsheetid>54caaabb-4afd-42e8-944e-aea53fd44faf</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="853151a1-4af9-476b-b80e-4e5263578a1d" name="NbtStat" type="SubSheetInfo"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><narrative>Computers that are running a Windows operating system are assigned a computer name. Oftentimes, there is a domain name or a workgroup name that is also assigned to the computer. The computer name is sometimes referred to as the NetBIOS name.
+
+Displays protocol statistics and current TCP/IP connections using NBT
+(NetBIOS over TCP/IP).
+
+NBTSTAT [ [-a RemoteName] [-A IP address] [-c] [-n]
+        [-r] [-R] [-RR] [-s] [-S] [interval] ]
+
+  -a   (adapter status) Lists the remote machine's name table given its name
+  -A   (Adapter status) Lists the remote machine's name table given its
+                        IP address.
+  -c   (cache)          Lists NBT's cache of remote [machine] names and their IP addresses
+  -n   (names)          Lists local NetBIOS names.
+  -r   (resolved)       Lists names resolved by broadcast and via WINS
+  -R   (Reload)         Purges and reloads the remote cache name table
+  -S   (Sessions)       Lists sessions table with the destination IP addresses
+  -s   (sessions)       Lists sessions table converting destination IP
+                        addresses to computer NETBIOS names.
+  -RR  (ReleaseRefresh) Sends Name Release packets to WINS and then, starts Refresh
+
+  RemoteName   Remote host machine name.
+  IP address   Dotted decimal representation of the IP address.
+  interval     Redisplays selected statistics, pausing interval seconds
+               between each display. Press Ctrl+C to stop redisplaying
+               statistics.
+
+Windows uses several different methods to map NetBIOS names to IP addresses, such as broadcast, LMHost lookup, or even using the nearly extinct method of querying a WINS server.
+
+Of course, NetBIOS over TCP/IP can occasionally break down. The NbtStat command can help you to diagnose and correct such problems. The NbtStat -n command for example, shows the NetBIOS names that are in use by a device. The NbtStat -r command shows how many NetBIOS names the device has been able to resolve recently.</narrative><display x="-420" y="15" w="270" h="450" /></stage><stage stageid="8bc64979-9023-494a-96f4-3d8f855bb76d" name="Start" type="Start"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>aae27b0a-5509-4a1e-a12b-fb6e59b968d2</onsuccess></stage><stage stageid="03f0e78e-f1c3-4615-bd10-da1ef1286fb6" name="End" type="End"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="11c3cb5a-9cb7-467c-aa65-10fb475a06ad" name="ProcessName" type="Data"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">C:\\windows\\system32\\sysnative\\nbtstat.exe</initialvalue><private /><alwaysinit /></stage><stage stageid="e7a08e0f-1358-411b-83a8-80be64dc74f9" name="Arguments" type="Data"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6f83a8db-6de1-4313-aae2-e671e6badfd5" name="Output" type="Data"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="04b71d44-e9f7-4157-86a4-ab54206917cf" name="Input Parameters" type="Block"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="15be6e26-52ad-4625-bd3c-3f69bb6467f5" name="Output Parameters" type="Block"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="f1f56feb-d1ae-4325-a709-447e3300bbe8" name="Hostname" type="SubSheetInfo"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><narrative>The previously discussed NbtStat command can provide you with the host name that has been assigned to a Windows device, if you know which switch to use with the command. However, if you’re just looking for a fast and easy way of verifying a computer’s name, then try using the Hostname command. Typing Hostname at the command prompt returns the local computer name.</narrative><display x="-195" y="-120" w="240" h="90" /></stage><stage stageid="673bfe4b-8168-4d7e-880f-7747e8404072" name="Start" type="Start"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="15" y="-105" /><onsuccess>e30648a0-2830-4be8-aea5-8149277f4578</onsuccess></stage><stage stageid="69d7c261-627f-45b2-804e-90d8c350b6c2" name="End" type="End"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="e30648a0-2830-4be8-aea5-8149277f4578" name="Process Executor" type="SubSheet"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="15" y="-15" w="60" h="60" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>69d7c261-627f-45b2-804e-90d8c350b6c2</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="72e9a13a-d3f2-43c4-9fe0-2b78115d9cb5" name="ProcessName" type="Data"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">hostname</initialvalue><private /><alwaysinit /></stage><stage stageid="18000e30-1cf4-46db-a563-f2a8b57a6f48" name="Arguments" type="Data"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="56819759-31a3-40c5-b80d-f32404063487" name="Output" type="Data"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="49bb9387-d553-41d5-b9f6-2ce1f04b7ed6" name="Input Parameters" type="Block"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="f04638eb-d5bf-49aa-99ce-46057f1d5751" name="Output Parameters" type="Block"><subsheetid>78b58da5-cf71-4a3b-b0fe-0a3fd689534f</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="dfaa2abe-2ef4-40b8-ae7c-2a5689ab2188" name="Tracert" type="SubSheetInfo"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><narrative>Contrary to what a rather infamous YouTube video might lead you to believe, Tracert isn’t pronounced “Tracer T,” nor can it show you how many people are using Google right this second. Instead, Tracert, or “Trace Route,” is a utility for examining the path to a remote host.
+
+Functionally, Tracert works similarly to Ping. The major difference is that Tracert sends a series of ICMP echo requests, and the request’s TTL increased by 1 each time. This allows the utility to display the routers through which packets are passing to be identified. When possible, Windows displays the duration and IP address or fully qualified domain name of each hop.
+
+Usage: tracert [-d] [-h maximum_hops] [-j host-list] [-w timeout]
+               [-R] [-S srcaddr] [-4] [-6] target_name
+
+Options:
+    -d                 Do not resolve addresses to hostnames.
+    -h maximum_hops    Maximum number of hops to search for target.
+    -j host-list       Loose source route along host-list (IPv4-only).
+    -w timeout         Wait timeout milliseconds for each reply.
+    -R                 Trace round-trip path (IPv6-only).
+    -S srcaddr         Source address to use (IPv6-only).
+    -4                 Force using IPv4.
+    -6                 Force using IPv6.</narrative><display x="-435" y="30" w="300" h="270" /></stage><stage stageid="bd908e6b-7b28-4dc5-80d0-bede1be58d92" name="Start" type="Start"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>096f6fcd-8bd9-45ca-9947-36d1b6207a5c</onsuccess></stage><stage stageid="ac6d1ca5-7ce8-4568-a638-9f36c083adc0" name="End" type="End"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="096f6fcd-8bd9-45ca-9947-36d1b6207a5c" name="Process Executor" type="SubSheet"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="15" y="-15" w="60" h="60" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>ac6d1ca5-7ce8-4568-a638-9f36c083adc0</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="5a758bd5-2fb0-414a-bdde-4189371e749e" name="ProcessName" type="Data"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">tracert</initialvalue><private /><alwaysinit /></stage><stage stageid="20d66fba-e5d1-4bf1-a821-a755c6ce517a" name="Arguments" type="Data"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="647f85f6-d1fe-4878-aabc-6b217e6b3d81" name="Output" type="Data"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="d9a676ef-a905-461d-b945-0324fd36f183" name="Input Parameters" type="Block"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="42f72721-dd5b-423d-ad2c-6ce790a9aa06" name="Output Parameters" type="Block"><subsheetid>7e45a8d7-eda0-4a40-b12b-5ad5b8e35a39</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="609ceeee-2859-4b21-b417-3b79637607c3" name="IpConfig" type="SubSheetInfo"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><narrative>At its simplest, the IPConfig command will display basic IP address configuration information for the device. Simply type IPConfig at the Windows command prompt, and you will be presented with the IP address, subnet mask, and default gateway that the device is currently using.
+
+USAGE:
+    ipconfig [/allcompartments] [/? | /all |
+                                 /renew [adapter] | /release [adapter] |
+                                 /renew6 [adapter] | /release6 [adapter] |
+                                 /flushdns | /displaydns | /registerdns |
+                                 /showclassid adapter |
+                                 /setclassid adapter [classid] |
+                                 /showclassid6 adapter |
+                                 /setclassid6 adapter [classid] ]
+
+where
+    adapter             Connection name
+                       (wildcard characters * and ? allowed, see examples)
+
+    Options:
+       /?               Display this help message
+       /all             Display full configuration information.
+       /release         Release the IPv4 address for the specified adapter.
+       /release6        Release the IPv6 address for the specified adapter.
+       /renew           Renew the IPv4 address for the specified adapter.
+       /renew6          Renew the IPv6 address for the specified adapter.
+       /flushdns        Purges the DNS Resolver cache.
+       /registerdns     Refreshes all DHCP leases and re-registers DNS names
+       /displaydns      Display the contents of the DNS Resolver Cache.
+       /showclassid     Displays all the dhcp class IDs allowed for adapter.
+       /setclassid      Modifies the dhcp class id.
+       /showclassid6    Displays all the IPv6 DHCP class IDs allowed for adapter.
+       /setclassid6     Modifies the IPv6 DHCP class id.
+
+
+The default is to display only the IP address, subnet mask and
+default gateway for each adapter bound to TCP/IP.
+
+For Release and Renew, if no adapter name is specified, then the IP address
+leases for all adapters bound to TCP/IP will be released or renewed.
+
+For Setclassid and Setclassid6, if no ClassId is specified, then the ClassId is removed.
+
+Examples:
+    &gt; ipconfig                       ... Show information
+    &gt; ipconfig /all                  ... Show detailed information
+    &gt; ipconfig /renew                ... renew all adapters
+    &gt; ipconfig /renew EL*            ... renew any connection that has its
+                                         name starting with EL
+    &gt; ipconfig /release *Con*        ... release all matching connections,
+                                         eg. "Wired Ethernet Connection 1" or
+                                             "Wired Ethernet Connection 2"
+    &gt; ipconfig /allcompartments      ... Show information about all
+                                         compartments
+    &gt; ipconfig /allcompartments /all ... Show detailed information about all
+                                         compartments</narrative><display x="-465" y="30" w="360" h="630" /></stage><stage stageid="33861b43-e9d5-4d14-b77b-d0c70b595bc1" name="Start" type="Start"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>ec6413ff-e624-4489-b4c2-608a220e26cd</onsuccess></stage><stage stageid="134f6cde-74b1-40c7-81c5-c1797823d116" name="End" type="End"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="ec6413ff-e624-4489-b4c2-608a220e26cd" name="Process Executor" type="SubSheet"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="15" y="-15" w="60" h="60" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>134f6cde-74b1-40c7-81c5-c1797823d116</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="9e6224e3-63f7-44df-9d45-08ed776b9f17" name="ProcessName" type="Data"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">ipconfig</initialvalue><private /><alwaysinit /></stage><stage stageid="d2e4562e-d7c3-4e24-9b0d-a6bbb0669d15" name="Arguments" type="Data"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="4724b71f-5eab-4e21-b97c-058ef1f5f37e" name="Output" type="Data"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="bc4e0a2b-2732-437c-a3d2-77f593d3641d" name="Input Parameters" type="Block"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="7e960b7e-e661-4164-b06a-991a82f5d87b" name="Output Parameters" type="Block"><subsheetid>e03585ed-9b57-4111-abef-444bafe6ca43</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="352191e7-0848-46dd-90b2-29c8b94de0c0" name="Route" type="SubSheetInfo"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><narrative>IP networks use routing tables to direct packets from one subnet to another. The Windows Route utility allows you to view the device’s routing tables. To do so, simply type Route Print.
+
+The cool thing about the Route command is that it not only shows you the routing table, it lets you make changes. Commands such as Route Add, Route Delete, and Route Change allow you to make routing table modifications on an as needed basis. The changes that you make can be persistent or nonpersistent, depending on whether you use the -P switch.
+
+ROUTE [-f] [-p] [-4|-6] command [destination]
+                  [MASK netmask]  [gateway] [METRIC metric]  [IF interface]
+
+  -f           Clears the routing tables of all gateway entries.  If this is
+               used in conjunction with one of the commands, the tables are
+               cleared prior to running the command.
+
+  -p           When used with the ADD command, makes a route persistent across
+               boots of the system. By default, routes are not preserved
+               when the system is restarted. Ignored for all other commands,
+               which always affect the appropriate persistent routes.
+
+  -4           Force using IPv4.
+
+  -6           Force using IPv6.
+
+  command      One of these:
+                 PRINT     Prints  a route
+                 ADD       Adds    a route
+                 DELETE    Deletes a route
+                 CHANGE    Modifies an existing route
+  destination  Specifies the host.
+  MASK         Specifies that the next parameter is the 'netmask' value.
+  netmask      Specifies a subnet mask value for this route entry.
+               If not specified, it defaults to 255.255.255.255.
+  gateway      Specifies gateway.
+  interface    the interface number for the specified route.
+  METRIC       specifies the metric, ie. cost for the destination.
+
+All symbolic names used for destination are looked up in the network database
+file NETWORKS. The symbolic names for gateway are looked up in the host name
+database file HOSTS.
+
+If the command is PRINT or DELETE. Destination or gateway can be a wildcard,
+(wildcard is specified as a star '*'), or the gateway argument may be omitted.
+
+If Dest contains a * or ?, it is treated as a shell pattern, and only
+matching destination routes are printed. The '*' matches any string,
+and '?' matches any one char. Examples: 157.*.1, 157.*, 127.*, *224*.
+
+Pattern match is only allowed in PRINT command.
+Diagnostic Notes:
+    Invalid MASK generates an error, that is when (DEST &amp; MASK) != DEST.
+    Example&gt; route ADD 157.0.0.0 MASK 155.0.0.0 157.55.80.1 IF 1
+             The route addition failed: The specified mask parameter is invalid. (Destination &amp; Mask) != Destination.
+
+Examples:
+
+    &gt; route PRINT
+    &gt; route PRINT -4
+    &gt; route PRINT -6
+    &gt; route PRINT 157*          .... Only prints those matching 157*
+
+    &gt; route ADD 157.0.0.0 MASK 255.0.0.0  157.55.80.1 METRIC 3 IF 2
+             destination^      ^mask      ^gateway     metric^    ^
+                                                         Interface^
+      If IF is not given, it tries to find the best interface for a given
+      gateway.
+    &gt; route ADD 3ffe::/32 3ffe::1
+
+    &gt; route CHANGE 157.0.0.0 MASK 255.0.0.0 157.55.80.5 METRIC 2 IF 2
+
+      CHANGE is used to modify gateway and/or metric only.
+
+    &gt; route DELETE 157.0.0.0
+    &gt; route DELETE 3ffe::/32</narrative><display x="-600" y="-30" w="570" h="810" /></stage><stage stageid="8e5409a5-8fd8-4fbc-8164-33dcb066c886" name="Start" type="Start"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>4c78fb28-64a4-4443-a5d4-1f4dbb8a41f0</onsuccess></stage><stage stageid="1be23b94-37aa-4da4-b810-6be5f463d7a1" name="End" type="End"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="4c78fb28-64a4-4443-a5d4-1f4dbb8a41f0" name="Process Executor" type="SubSheet"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="15" y="-15" w="60" h="60" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>1be23b94-37aa-4da4-b810-6be5f463d7a1</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="a97656db-e6bb-49d0-b7e5-d8fcb1235a56" name="ProcessName" type="Data"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">route</initialvalue><private /><alwaysinit /></stage><stage stageid="c1cbd388-9406-471c-8a9f-168dc9abec94" name="Arguments" type="Data"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f768dcfa-72d8-4549-8d91-38fe0d69f708" name="Output" type="Data"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="eb8808eb-8ba5-48ea-a1c2-5c3883c7454e" name="Input Parameters" type="Block"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="07a7e355-7e6d-4c59-aa99-7b04214c3371" name="Output Parameters" type="Block"><subsheetid>99909e63-dbe5-443a-88e2-8d5e4ebf9b04</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="d8a8e42d-3f3a-4d47-8409-8aef855655f4" name="PathPing" type="SubSheetInfo"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><narrative>Earlier, I talked about the Ping utility and the Tracert utility, and the similarities between them. As you might have guessed, the PathPing tool is a utility that combines the best aspects of Tracert and Ping.
+
+Entering the PathPing command followed by a host name initiates what looks like a somewhat standard Tracert process. Once this process completes however, the tool takes 300 seconds (five minutes) to gather statistics, and then reports latency and packet loss statistics that are more detailed than those provided by Ping or Tracert.
+
+Usage: pathping [-g host-list] [-h maximum_hops] [-i address] [-n]
+                [-p period] [-q num_queries] [-w timeout]
+                [-4] [-6] target_name
+
+Options:
+    -g host-list     Loose source route along host-list.
+    -h maximum_hops  Maximum number of hops to search for target.
+    -i address       Use the specified source address.
+    -n               Do not resolve addresses to hostnames.
+    -p period        Wait period milliseconds between pings.
+    -q num_queries   Number of queries per hop.
+    -w timeout       Wait timeout milliseconds for each reply.
+    -4               Force using IPv4.
+    -6               Force using IPv6.</narrative><display x="-510" y="45" w="450" h="240" /></stage><stage stageid="4dbfea80-d63b-4389-ae9a-db5bb5f47bb5" name="Start" type="Start"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="Arguments" stage="Arguments" /></inputs><onsuccess>1f5db1c7-e2d9-4fe0-981a-f54e28c100f4</onsuccess></stage><stage stageid="ee641764-218b-45d8-8d51-2c738417f537" name="End" type="End"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="15" y="90" /><outputs><output type="text" name="Output" stage="Output" /></outputs></stage><stage stageid="1f5db1c7-e2d9-4fe0-981a-f54e28c100f4" name="Process Executor" type="SubSheet"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="15" y="-15" w="60" h="60" /><inputs><input type="text" name="ProcessName" friendlyname="ProcessName" narrative="The command to be executed" expr="[ProcessName]" /><input type="text" name="Arguments" friendlyname="Arguments" narrative="The arguments to add to the command." expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" friendlyname="Output" narrative="The resulting output" stage="Output" /></outputs><onsuccess>ee641764-218b-45d8-8d51-2c738417f537</onsuccess><processid>5e950850-49da-49e3-ba6a-b55a612b4426</processid></stage><stage stageid="648ea0b5-cb6a-4e04-be0c-4b01d991610b" name="ProcessName" type="Data"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="-195" y="-15" w="90" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">pathping</initialvalue><private /><alwaysinit /></stage><stage stageid="9ad5f986-50dd-452b-8b0e-d5b5241aa544" name="Arguments" type="Data"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="-195" y="30" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="43c65326-cfa2-4757-8376-b48f10aa361d" name="Output" type="Data"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><display x="-195" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="17db41f8-0201-44da-9c51-a38cad027d41" name="Input Parameters" type="Block"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="c243ff42-5b4f-492f-99ea-b9863be24d5d" name="Output Parameters" type="Block"><subsheetid>8a91107d-0ee8-459a-bab3-ee14dbb82c08</subsheetid><loginhibit /><display x="-270" y="75" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="aae27b0a-5509-4a1e-a12b-fb6e59b968d2" name="NbtStat" type="Code"><subsheetid>6d42c1dc-b244-4d85-88c2-b26bd2609afb</subsheetid><loginhibit /><display x="15" y="-15" /><inputs><input type="text" name="Arguments" expr="[Arguments]" /></inputs><outputs><output type="text" name="Output" stage="Output" /></outputs><onsuccess>03f0e78e-f1c3-4615-bd10-da1ef1286fb6</onsuccess><code><![CDATA[        Dim processname As String = Environment.GetFolderPath(Environment.SpecialFolder.Windows) & "\\sysnative\\NBTSTAT.exe"
+        
+        Try
+            Dim p As Process = New Process With {
+                    .StartInfo = New ProcessStartInfo() With {
+                    .FileName = processname,
+                    .WorkingDirectory = "",
+                    .Arguments = arguments,
+                    .RedirectStandardOutput = True,
+                    .UseShellExecute = False,
+                    .CreateNoWindow = true}
+                    }
+            p.Start()
+            Output = p.StandardOutput.ReadToEnd()
+            p.WaitForExit()
+        Catch ex As Exception
+            Output = ex.Message
+        End Try]]></code></stage><stage stageid="f2ab6d5b-bbd4-4982-afbb-9fbd15f72658" name="Note1" type="Note"><loginhibit /><narrative>Version 10.0.1</narrative><display x="15" y="-165" w="120" h="30" /><font family="Segoe UI" size="14" style="Bold" color="FF0000" /></stage></process>

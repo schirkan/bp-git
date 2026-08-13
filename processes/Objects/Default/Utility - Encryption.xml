@@ -1,0 +1,248 @@
+<process name="Utility - Encryption" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="Provides symmetric encryption and decryption functionality in several algorithms (AES, Triple DES, Rjindael)" byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>45c614da-352d-4350-bf2d-f017794e9f4a</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>-26</camerax><cameray>-63</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="55996104-28f5-49f6-97d4-efb012c1b922" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="046e33b1-0ea6-4340-a479-4d3ad1891862" type="Normal" published="True"><name>Encrypt</name><view><camerax>0</camerax><cameray>21</cameray><zoom version="2">1.875</zoom></view></subsheet><subsheet subsheetid="9f519b11-a37b-4d80-b024-8c8637139b19" type="Normal" published="True"><name>Decrypt</name><view><camerax>3</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="c84c3019-3042-4c0c-af59-6cc5b91aee26" name="Start" type="Start"><loginhibit /><display x="-75" y="-135" /><onsuccess>ab00a6a4-79ea-4d72-b8e6-45e3308ee966</onsuccess></stage><stage stageid="ab00a6a4-79ea-4d72-b8e6-45e3308ee966" name="End" type="End"><loginhibit /><display x="-75" y="-45" /></stage><stage stageid="39da3d35-af06-45ab-ba69-9fdc054e5d35" name="Stage1" type="ProcessInfo"><display x="-210" y="-90" w="150" h="120" /><references><reference>System.dll</reference><reference>System.Data.dll</reference><reference>System.Xml.dll</reference><reference>System.Drawing.dll</reference><reference>System.Security.dll</reference><reference>System.IO.dll</reference><reference>System.Core.dll</reference></references><imports><import>System</import><import>System.Drawing</import><import>System.Data</import><import>System.Security.Cryptography</import><import>System.IO</import><import>System.Text</import></imports><language>csharp</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[]]></globalcode><code><![CDATA[Boolean IsKeyProvided(string inputKey)
+{
+	if (!String.IsNullOrEmpty(inputKey))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+string[] SplitEncryptedData(string encryptedData)
+{	
+	try
+	{
+		string[] encryptedDataSegments = encryptedData.Split(':');
+		if (encryptedDataSegments.Length != 2)
+		{
+			throw new Exception("Failed to parse encrypted data. Encrypted data should have format of: <initialization vector>:<data>");
+		}
+		else
+		{
+			return encryptedDataSegments;
+		}
+	}
+	catch (Exception ex)
+	{
+		throw new Exception(ex.Message);
+	}
+}
+
+string EncryptData(string inputData, CryptoStream cryptoStream, MemoryStream encryptedOutputDataStream)
+{
+	StreamWriter encryptedStreamWriter = new StreamWriter(cryptoStream);
+	encryptedStreamWriter.Write(inputData);
+	encryptedStreamWriter.Flush();
+	cryptoStream.FlushFinalBlock();	
+	encryptedOutputDataStream.Seek(0, SeekOrigin.Begin);
+	
+	return Convert.ToBase64String(encryptedOutputDataStream.ToArray());
+}
+
+string DecryptData(CryptoStream cryptoStream)
+{
+	using (StreamReader streamReader = new StreamReader(cryptoStream))
+	{
+		return streamReader.ReadToEnd();
+	}
+}
+
+string GetRSAKeyString(RSAParameters publicKey)
+{
+	var stringWriter = new System.IO.StringWriter();
+	var xmlSerializer = new System.Xml.Serialization.XmlSerializer(typeof(RSAParameters));
+	
+	xmlSerializer.Serialize(stringWriter, publicKey);
+	
+	return stringWriter.ToString();
+}]]></code></stage><stage stageid="1642acbf-23b8-43fe-9078-2dfb9db45969" name="Clean Up" type="SubSheetInfo"><subsheetid>55996104-28f5-49f6-97d4-efb012c1b922</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="69dc953a-0359-49de-ab9a-804e5622f7a2" name="Start" type="Start"><subsheetid>55996104-28f5-49f6-97d4-efb012c1b922</subsheetid><loginhibit /><display x="-75" y="-135" /><onsuccess>0cbf7163-2eb8-48fb-9ca4-c0c753816a93</onsuccess></stage><stage stageid="0cbf7163-2eb8-48fb-9ca4-c0c753816a93" name="End" type="End"><subsheetid>55996104-28f5-49f6-97d4-efb012c1b922</subsheetid><loginhibit /><display x="-75" y="-75" /></stage><stage stageid="e5d3f540-dea5-4aa0-8c58-db3342cb640e" name="Encrypt" type="SubSheetInfo"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><narrative>Encrypt text data using a selected algorithm</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="c9d53da6-49eb-41e2-bfd3-ecd5712fbf49" name="Start" type="Start"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="-60" y="-135" /><inputs><input type="text" name="Data" narrative="[Required] The data to be encrypted" stage="Data" /><input type="text" name="Key" narrative="[Optional] The secret key that should be used to encrypt the data. If no key is available, this action will generate and return a new key." stage="Key" /><input type="text" name="Algorithm" narrative="[Optional] The name of the algorithm to use for encryption. Valid values are: AES, TDES, Rjindael." stage="Algorithm" /></inputs><onsuccess>eaf217ee-d71d-4d21-892d-4c68b7e930e9</onsuccess></stage><stage stageid="fcb30227-18ef-4d0a-a5b3-98268228d265" name="End" type="End"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="90" y="195" /><outputs><output type="text" name="Encrypted Data" narrative="The input data in encrypted form" stage="Encrypted Data" /><output type="text" name="New Key" narrative="If no key was supplied in the input parameter (named Key), then a new key will be generated and stored in this data item." stage="New Key" /></outputs></stage><stage stageid="56f6846e-f939-488e-9051-d3b44ced5b2b" name="Data" type="Data"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>[Required] The data to be encrypted</narrative><display x="-195" y="-15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="f7acff17-735d-4b94-b010-8148ec943e1a" name="Key" type="Data"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>[Optional] The secret key that should be used to encrypt the data. If no key is available, this action will generate and return a new key.</narrative><display x="-195" y="15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="1a313369-1a15-4fef-b363-b9af7a8e48b5" name="Algorithm" type="Data"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>[Optional] The name of the algorithm to use for encryption. Valid values are: AES, TDES, Rijndael
+
+If no value is supplied, AES will be used by default.</narrative><display x="-195" y="45" w="120" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">AES</initialvalue><private /><alwaysinit /></stage><stage stageid="ab7d83e0-80c6-48f3-8f5f-536b3ce2c3bc" name="Encrypted Data" type="Data"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>The input data in encrypted form</narrative><display x="-195" y="120" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b28a30c4-9d30-439f-acc3-8af740e2372d" name="New Key" type="Data"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>If no key was supplied in the input parameter (named Key), then a new key will be generated and stored in this data item.
+
+Otherwise, if a Key was supplied, this data item will remain empty.</narrative><display x="-195" y="150" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="c17dc297-dc1f-4cd8-8431-0a39a252103c" name="Input Data Items" type="Block"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="d834ba9d-dd27-4da1-a635-1dcfec98969d" name="Output Data Items" type="Block"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="-270" y="90" w="150" h="90" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="9e38f51c-839b-4fd1-8da5-6173659fdb5a" name="Choose Algorithm" type="ChoiceStart"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>Determine which algorithm should be used to encrypt the data</narrative><display x="-60" y="-15" /><groupid>8deb4f43-91b7-4e1e-b00b-0e1008f00745</groupid><choices><choice expression="Lower([Algorithm]) = &quot;aes&quot;"><name>AES</name><distance>75</distance><ontrue>05f239d9-ff6b-4a7e-ac0e-eeeaa55ec882</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;tdes&quot;"><name>TDES</name><distance>150</distance><ontrue>6279f112-06f5-4da5-b394-ff80bacc13c9</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;rijndael&quot;"><name>Rijndael</name><distance>225</distance><ontrue>171916df-0d6f-401f-b2e1-ecf688f348a3</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;rsa&quot;"><name>RSA</name><distance>300</distance><ontrue>ba194a50-a3de-46a5-a90b-7d1be21cc816</ontrue></choice></choices></stage><stage stageid="e4f9db4e-f787-40ef-83f1-04a334bbd38d" name="Otherwise" type="ChoiceEnd"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="300" y="-15" /><onsuccess>5eca297e-b281-4168-b466-7622fdde1a12</onsuccess><groupid>8deb4f43-91b7-4e1e-b00b-0e1008f00745</groupid></stage><stage stageid="5eca297e-b281-4168-b466-7622fdde1a12" name="System Exception" type="Exception"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><display x="390" y="-15" /><exception localized="yes" type="System Exception" detail="&quot;Invalid value for [Algorithm] data item. The value must be one of the following: AES, TDES, Rijndael. Current value for [Algorithm]: &quot; &amp; [Algorithm]" /></stage><stage stageid="6279f112-06f5-4da5-b394-ff80bacc13c9" name="Encrypt with TDES" type="Code"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>Encrypt the data with Triple DES</narrative><display x="90" y="60" /><inputs><input type="text" name="inputData" expr="[Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="encryptedData" stage="Encrypted Data" /><output type="text" name="newKey" stage="New Key" /></outputs><onsuccess>b78d6543-31da-418c-baaa-03cbeddb3d98</onsuccess><code><![CDATA[// initalize output variables
+encryptedData = String.Empty;
+newKey = String.Empty;
+
+MemoryStream encryptedOutputDataStream = new MemoryStream();
+TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
+CryptoStream cryptoStream;
+byte[] key;
+
+if (IsKeyProvided(inputKey)) // if inputKey is blank, use a new key
+{ 
+	key = Convert.FromBase64String(inputKey); 
+}
+else
+{
+	key = tdes.Key;
+	newKey = Convert.ToBase64String(key);
+}
+
+cryptoStream = new CryptoStream(encryptedOutputDataStream, tdes.CreateEncryptor(key, tdes.IV), CryptoStreamMode.Write);	
+encryptedData = String.Format("{0}:{1}", Convert.ToBase64String(tdes.IV), EncryptData(inputData, cryptoStream, encryptedOutputDataStream));]]></code></stage><stage stageid="05f239d9-ff6b-4a7e-ac0e-eeeaa55ec882" name="Encrypt with AES" type="Code"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="15" y="60" /><inputs><input type="text" name="inputData" expr="[Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="encryptedData" stage="Encrypted Data" /><output type="text" name="newKey" stage="New Key" /></outputs><onsuccess>4d7ac4c5-3599-4da3-b44f-46de50fcdd91</onsuccess><code><![CDATA[// initalize output variables
+encryptedData = String.Empty;
+newKey = String.Empty;
+
+MemoryStream encryptedOutputDataStream = new MemoryStream();
+AesCryptoServiceProvider aes = new AesCryptoServiceProvider();
+CryptoStream cryptoStream;
+byte[] key;
+
+if (IsKeyProvided(inputKey)) // if inputKey is blank, use a new key
+{ 
+	key = Convert.FromBase64String(inputKey); 
+}
+else
+{
+	key = aes.Key;
+	newKey = Convert.ToBase64String(key);
+}
+
+cryptoStream = new CryptoStream(encryptedOutputDataStream, aes.CreateEncryptor(key, aes.IV), CryptoStreamMode.Write);	
+encryptedData = String.Format("{0}:{1}", Convert.ToBase64String(aes.IV), EncryptData(inputData, cryptoStream, encryptedOutputDataStream));]]></code></stage><stage stageid="171916df-0d6f-401f-b2e1-ecf688f348a3" name="Encrypt with Rijndael" type="Code"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="165" y="60" /><inputs><input type="text" name="inputData" expr="[Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="encryptedData" stage="Encrypted Data" /><output type="text" name="newKey" stage="New Key" /></outputs><onsuccess>343de607-b319-4b92-8775-8ad9e8977a43</onsuccess><code><![CDATA[// initalize output variables
+encryptedData = String.Empty;
+newKey = String.Empty;
+
+MemoryStream encryptedOutputDataStream = new MemoryStream();
+RijndaelManaged rm = new RijndaelManaged();
+CryptoStream cryptoStream;
+byte[] key;
+
+if (IsKeyProvided(inputKey)) // if inputKey is blank, use a new key
+{ 
+	key = Convert.FromBase64String(inputKey); 
+}
+else
+{
+	key = rm.Key;
+	newKey = Convert.ToBase64String(key);
+}
+
+cryptoStream = new CryptoStream(encryptedOutputDataStream, rm.CreateEncryptor(key, rm.IV), CryptoStreamMode.Write);	
+encryptedData = String.Format("{0}:{1}", Convert.ToBase64String(rm.IV), EncryptData(inputData, cryptoStream, encryptedOutputDataStream));]]></code></stage><stage stageid="3569ddef-de19-44c3-b283-f0f7023c21fe" name="Decrypt" type="SubSheetInfo"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><narrative>Decrypt text data using a selected algorithm and key</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="1cf27186-7d32-407b-ab15-ac37ddfe74c7" name="Start" type="Start"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="-60" y="-135" /><inputs><input type="text" name="Encrypted Data" narrative="[Required] The encrypted data to be decrypted" stage="Encrypted Data" /><input type="text" name="Key" narrative="[Required] The secret key that should be used to decrypt the data." stage="Key" /><input type="text" name="Algorithm" narrative="[Optional] The name of the algorithm to use for encryption. Valid values are: AES, TDES, Rijndael" stage="Algorithm" /></inputs><onsuccess>1fc09d50-d3ef-47f4-82fa-06a4dc7eff9f</onsuccess></stage><stage stageid="070f3d12-906b-4588-abd3-87e2f9a12631" name="End" type="End"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="90" y="195" /><outputs><output type="text" name="Decrypted Data" narrative="The data in decrypted form" stage="Decrypted Data" /></outputs></stage><stage stageid="0e9b6936-068e-4298-9c9a-587db4d83333" name="Choose Algorithm" type="ChoiceStart"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="-60" y="0" /><groupid>3688a7e4-adb2-4a89-9545-1aca8b92fc8c</groupid><choices><choice expression="Lower([Algorithm]) = &quot;aes&quot;"><name>AES</name><distance>78</distance><ontrue>b50a233a-bf1d-4f1d-b34b-eeff118e47b6</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;tdes&quot;"><name>TDES</name><distance>150</distance><ontrue>dc0f5cc9-5a3a-4cbe-993d-fe39d16672a8</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;rijndael&quot;"><name>Rijndael</name><distance>225</distance><ontrue>5c6c0835-f60f-4972-9790-3bb06a81a660</ontrue></choice><choice expression="Lower([Algorithm]) = &quot;rsa&quot;"><name>RSA</name><distance>300</distance><ontrue>6573c200-85df-41ef-8b2d-fbfdb412cfbf</ontrue></choice></choices></stage><stage stageid="16716f3c-b4b3-4c68-81de-74a35e60f0e2" name="Otherwise" type="ChoiceEnd"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="300" y="0" /><onsuccess>f3c45c72-e668-47da-9701-1958d52671aa</onsuccess><groupid>3688a7e4-adb2-4a89-9545-1aca8b92fc8c</groupid></stage><stage stageid="b1064e8b-283f-4d0e-abdf-895932f48ec6" name="Algorithm" type="Data"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>[Optional] The name of the algorithm to use for encryption. Valid values are: AES, TDES, Rijndael
+
+If no value is supplied, AES will be used by default.</narrative><display x="-195" y="45" w="120" h="30" /><datatype>text</datatype><initialvalue xml:space="preserve">AES</initialvalue><private /><alwaysinit /></stage><stage stageid="f3c45c72-e668-47da-9701-1958d52671aa" name="System Exception" type="Exception"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><display x="375" y="0" /><exception localized="yes" type="System Exception" detail="&quot;Invalid value for [Algorithm] data item. The value must be one of the following: AES, TDES, Rijndael. Current value for [Algorithm]: &quot; &amp; [Algorithm]" /></stage><stage stageid="8c9c3335-0c33-4eb4-913e-408b422d2a91" name="Encrypted Data" type="Data"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>[Required] The encrypted data to be decrypted</narrative><display x="-195" y="-15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="a5acf533-f7e7-4ac5-b06b-5e8dcd6197e6" name="Key" type="Data"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>[Required] The secret key that should be used to decrypt the data.</narrative><display x="-195" y="15" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ffe3a337-faf6-41a5-9589-92780e57bfdb" name="Decrypted Data" type="Data"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>The data in decrypted form</narrative><display x="-195" y="120" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="768987d4-6b8b-4229-8742-fd40ef9bd398" name="Input Data Items" type="Block"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="66d06de2-18db-463a-8c1d-038b03890c52" name="Output Data Items" type="Block"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="-270" y="90" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="7FB2E5" /></stage><stage stageid="eaf217ee-d71d-4d21-892d-4c68b7e930e9" name="Data Provided?" type="Decision"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><narrative>Determine if data has been provided for encryption. If False, throw exception.</narrative><display x="-60" y="-75" /><decision expression="[Data] &lt;&gt; &quot;&quot;" /><ontrue>9e38f51c-839b-4fd1-8da5-6173659fdb5a</ontrue><onfalse>26babfe2-112e-46b1-a929-8c9b61b339dd</onfalse></stage><stage stageid="26babfe2-112e-46b1-a929-8c9b61b339dd" name="System Exception" type="Exception"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><display x="15" y="-75" /><exception localized="yes" type="System Exception" detail="&quot;Missing required input parameter. [Data] cannot be blank.&quot;" /></stage><stage stageid="b50a233a-bf1d-4f1d-b34b-eeff118e47b6" name="Decrypt with AES" type="Code"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="15" y="75" /><inputs><input type="text" name="inputEncryptedData" expr="[Encrypted Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="outputDecryptedData" stage="Decrypted Data" /></outputs><onsuccess>1b205410-02a1-4d1b-b00d-c030d58c1fd9</onsuccess><code><![CDATA[// initialize output variable
+outputDecryptedData = String.Empty;
+
+// split inputEncryptedData to separate IV from data
+string[] encryptedDataSegments = SplitEncryptedData(inputEncryptedData);
+
+// convert strings to byte arrays
+byte[] iv = Convert.FromBase64String(encryptedDataSegments[0]);
+byte[] encryptedData = Convert.FromBase64String(encryptedDataSegments[1]);
+byte[] key = Convert.FromBase64String(inputKey);
+
+// create streams and AesCyptoServiceProvider
+AesCryptoServiceProvider aes = new AesCryptoServiceProvider();
+MemoryStream encryptedDataStream = new MemoryStream(encryptedData);
+CryptoStream cryptoStream = new CryptoStream(encryptedDataStream, aes.CreateDecryptor(key, iv), CryptoStreamMode.Read);
+
+// decrypt data
+outputDecryptedData = DecryptData(cryptoStream);]]></code></stage><stage stageid="dc0f5cc9-5a3a-4cbe-993d-fe39d16672a8" name="Decrypt with TDES" type="Code"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="90" y="75" /><inputs><input type="text" name="inputEncryptedData" expr="[Encrypted Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="outputDecryptedData" stage="Decrypted Data" /></outputs><onsuccess>ba398c5f-b678-4088-b4e3-7e17d01b30eb</onsuccess><code><![CDATA[// initialize output variable
+outputDecryptedData = String.Empty;
+
+// split inputEncryptedData to separate IV from data
+string[] encryptedDataSegments = SplitEncryptedData(inputEncryptedData);
+
+// convert strings to byte arrays
+byte[] iv = Convert.FromBase64String(encryptedDataSegments[0]);
+byte[] encryptedData = Convert.FromBase64String(encryptedDataSegments[1]);
+byte[] key = Convert.FromBase64String(inputKey);
+
+// create streams and AesCyptoServiceProvider
+TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
+MemoryStream encryptedDataStream = new MemoryStream(encryptedData);
+CryptoStream cryptoStream = new CryptoStream(encryptedDataStream, tdes.CreateDecryptor(key, iv), CryptoStreamMode.Read);
+
+// decrypt data
+outputDecryptedData = DecryptData(cryptoStream);]]></code></stage><stage stageid="5c6c0835-f60f-4972-9790-3bb06a81a660" name="Decrypt with Rijndael" type="Code"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="165" y="75" /><inputs><input type="text" name="inputEncryptedData" expr="[Encrypted Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="outputDecryptedData" stage="Decrypted Data" /></outputs><onsuccess>d55a87e2-7c78-4477-939d-741bad851c0a</onsuccess><code><![CDATA[// initialize output variable
+outputDecryptedData = String.Empty;
+
+// split inputEncryptedData to separate IV from data
+string[] encryptedDataSegments = SplitEncryptedData(inputEncryptedData);
+
+// convert strings to byte arrays
+byte[] iv = Convert.FromBase64String(encryptedDataSegments[0]);
+byte[] encryptedData = Convert.FromBase64String(encryptedDataSegments[1]);
+byte[] key = Convert.FromBase64String(inputKey);
+
+// create streams and AesCyptoServiceProvider
+RijndaelManaged rm = new RijndaelManaged();
+MemoryStream encryptedDataStream = new MemoryStream(encryptedData);
+CryptoStream cryptoStream = new CryptoStream(encryptedDataStream, rm.CreateDecryptor(key, iv), CryptoStreamMode.Read);
+
+// decrypt data
+outputDecryptedData = DecryptData(cryptoStream);]]></code></stage><stage stageid="1fc09d50-d3ef-47f4-82fa-06a4dc7eff9f" name="Data Provided?" type="Decision"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>Determine if data has been provided for decryption. If False, throw exception.</narrative><display x="-60" y="-90" /><decision expression="[Encrypted Data] &lt;&gt; &quot;&quot;" /><ontrue>93adb6ab-7215-4ec7-8966-73bc5a838897</ontrue><onfalse>de6de3ec-6f9d-42e1-945f-716547326ba2</onfalse></stage><stage stageid="93adb6ab-7215-4ec7-8966-73bc5a838897" name="Key Provided?" type="Decision"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><narrative>Determine if key has been provided for decryption. If False, throw exception.</narrative><display x="-60" y="-45" /><decision expression="[Key] &lt;&gt; &quot;&quot;" /><ontrue>0e9b6936-068e-4298-9c9a-587db4d83333</ontrue><onfalse>581655ce-da1d-4d05-ae90-b64263686c9a</onfalse></stage><stage stageid="de6de3ec-6f9d-42e1-945f-716547326ba2" name="System Exception" type="Exception"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><display x="30" y="-90" /><exception localized="yes" type="System Exception" detail="&quot;Missing required input parameter. [Encrypted Data] cannot be blank.&quot;" /></stage><stage stageid="581655ce-da1d-4d05-ae90-b64263686c9a" name="System Exception" type="Exception"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><display x="30" y="-45" /><exception localized="yes" type="System Exception" detail="&quot;Missing required input parameter. [Key] cannot be blank.&quot;" /></stage><stage stageid="55475a93-0093-4297-98cd-494e8b0a4bee" name="Note2" type="Note"><narrative>© 2022 Blue Prism Limited
+Licensed under the Blue Prism Asset License and Support Terms
+https://digitalexchange.blueprism.com/fileMedia/download/a9111324-3192-43ff-9166-566620ca1182
+</narrative><display x="135" y="-75" w="300" h="90" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="343de607-b319-4b92-8775-8ad9e8977a43" name="Anchor1" type="Anchor"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="165" y="135" w="10" h="10" /><onsuccess>b78d6543-31da-418c-baaa-03cbeddb3d98</onsuccess></stage><stage stageid="4d7ac4c5-3599-4da3-b44f-46de50fcdd91" name="Anchor1" type="Anchor"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="15" y="135" w="10" h="10" /><onsuccess>b78d6543-31da-418c-baaa-03cbeddb3d98</onsuccess></stage><stage stageid="b78d6543-31da-418c-baaa-03cbeddb3d98" name="Anchor1" type="Anchor"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="90" y="135" w="10" h="10" /><onsuccess>fcb30227-18ef-4d0a-a5b3-98268228d265</onsuccess></stage><stage stageid="ba194a50-a3de-46a5-a90b-7d1be21cc816" name="Encrypt with RSA" type="Code"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="240" y="60" /><inputs><input type="text" name="inputData" expr="[Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="encryptedData" stage="Encrypted Data" /><output type="text" name="newKey" stage="New Key" /></outputs><onsuccess>479b2012-f8fd-4be2-8da6-6ca62334449e</onsuccess><code><![CDATA[// initalize output variables
+encryptedData = String.Empty;
+newKey = String.Empty;
+
+string publicKeyString = string.Empty;
+string privateKeyString = string.Empty;
+
+using (var rsaCryptoServiceProvider = new RSACryptoServiceProvider(2048)) //2048 - Key length
+{
+	if (!IsKeyProvided(inputKey)) // if inputKey is blank, use a new key
+	{ 
+		var privateKey = rsaCryptoServiceProvider.ExportParameters(true); //Generating private key
+		var publicKey = rsaCryptoServiceProvider.ExportParameters(false); //Generating public key
+		
+		publicKeyString = GetRSAKeyString(publicKey);
+		privateKeyString = GetRSAKeyString(privateKey);
+		newKey = privateKeyString;
+	}
+	else
+	{
+		publicKeyString = inputKey;
+	}
+
+	var bytesToEncrypt = Encoding.UTF8.GetBytes(inputData);
+
+	try
+	{               
+		rsaCryptoServiceProvider.FromXmlString(publicKeyString);
+		
+		var encryptedBytes = rsaCryptoServiceProvider.Encrypt(bytesToEncrypt, true);
+		encryptedData = Convert.ToBase64String(encryptedBytes);
+	}
+	catch (Exception ex)
+	{
+		throw ex;
+	}
+	finally
+	{
+		rsaCryptoServiceProvider.PersistKeyInCsp = false;
+	}
+}
+]]></code></stage><stage stageid="479b2012-f8fd-4be2-8da6-6ca62334449e" name="Anchor2" type="Anchor"><subsheetid>046e33b1-0ea6-4340-a479-4d3ad1891862</subsheetid><loginhibit /><display x="240" y="135" w="10" h="10" /><onsuccess>343de607-b319-4b92-8775-8ad9e8977a43</onsuccess></stage><stage stageid="6573c200-85df-41ef-8b2d-fbfdb412cfbf" name="Decrypt with RSA" type="Code"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="240" y="75" /><inputs><input type="text" name="inputEncryptedData" expr="[Encrypted Data]" /><input type="text" name="inputKey" expr="[Key]" /></inputs><outputs><output type="text" name="outputDecryptedData" stage="Decrypted Data" /></outputs><onsuccess>07aba2fd-e324-4d51-9f76-83dd0322a664</onsuccess><code><![CDATA[// initalize output variables
+outputDecryptedData = String.Empty;
+
+var bytesToDescrypt = Encoding.UTF8.GetBytes(inputEncryptedData);
+
+using (var rsaCryptoServiceProvider = new RSACryptoServiceProvider(2048)) //2048 - Key length
+{
+	try
+	{               
+		rsaCryptoServiceProvider.FromXmlString(inputKey);
+		
+		var resultBytes = Convert.FromBase64String(inputEncryptedData);
+        var decryptedBytes = rsaCryptoServiceProvider.Decrypt(resultBytes, true);
+        var decryptedData = Encoding.UTF8.GetString(decryptedBytes);
+		
+		outputDecryptedData = decryptedData;
+
+	}
+	catch (Exception ex)
+	{
+		throw ex;
+	}
+	finally
+	{
+		rsaCryptoServiceProvider.PersistKeyInCsp = false;
+	}
+}
+]]></code></stage><stage stageid="1b205410-02a1-4d1b-b00d-c030d58c1fd9" name="Anchor3" type="Anchor"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="15" y="150" w="10" h="10" /><onsuccess>ba398c5f-b678-4088-b4e3-7e17d01b30eb</onsuccess></stage><stage stageid="d55a87e2-7c78-4477-939d-741bad851c0a" name="Anchor4" type="Anchor"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="165" y="150" w="10" h="10" /><onsuccess>ba398c5f-b678-4088-b4e3-7e17d01b30eb</onsuccess></stage><stage stageid="07aba2fd-e324-4d51-9f76-83dd0322a664" name="Anchor5" type="Anchor"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="240" y="150" w="10" h="10" /><onsuccess>d55a87e2-7c78-4477-939d-741bad851c0a</onsuccess></stage><stage stageid="ba398c5f-b678-4088-b4e3-7e17d01b30eb" name="Anchor6" type="Anchor"><subsheetid>9f519b11-a37b-4d80-b024-8c8637139b19</subsheetid><loginhibit /><display x="90" y="150" w="10" h="10" /><onsuccess>070f3d12-906b-4588-abd3-87e2f9a12631</onsuccess></stage><stage stageid="25fea3e8-8424-426b-ac66-decf625bc7aa" name="Note1" type="Note"><loginhibit /><narrative>Version 10.0</narrative><display x="-75" y="-195" w="90" h="30" /><font family="Segoe UI" size="14" style="Bold" color="FF0000" /></stage></process>

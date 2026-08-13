@@ -1,0 +1,619 @@
+<process name="Utility - JSON" version="6.9.0.26970" bpversion="7.5.1.18099" cpeversion="10.0.136.0" narrative="An object for parsing JSON into a collection and turning a collection into JSON." byrefcollection="true" processrunningmessage="" disableversioning="false" type="object" runmode="Background"><appdef><element name="Application Root"><id>8f20ac0c-296f-43c3-b0d9-59b5b2b7da1c</id><type>Application</type><basetype>Application</basetype><datatype>unknown</datatype><diagnose>False</diagnose></element></appdef><view><camerax>22</camerax><cameray>-21</cameray><zoom version="2">1.25</zoom></view><preconditions /><endpoint narrative="" /><subsheet subsheetid="6a9ccb5a-8cc3-44ac-b343-39680558062f" type="CleanUp" published="True"><name>Clean Up</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="560472b9-cea4-41d5-bc36-c49d6c1b26e6" type="Normal" published="True"><name>Collection to JSON</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="95ae0a6e-ac92-492f-8442-f18e8e242d7e" type="Normal" published="True"><name>Collection to JSON using Name/Values</name><view><camerax>0</camerax><cameray>21</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="e5aeb4cb-cd25-4535-b3be-b46681b4e6b6" type="Normal" published="True"><name>JSON to Collection</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="e53062c7-68de-4763-b37a-456688d0d607" type="Normal" published="True"><name>JSON to Collection (skipping JArray)</name><view><camerax>0</camerax><cameray>0</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="1c04dc1d-81e9-47e9-a8c4-b46dd19b2624" type="Normal" published="True"><name>JsonPath</name><view><camerax>0</camerax><cameray>-9</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="cbbe7eb7-53d6-49a6-9f88-cb3a26c334df" type="Normal" published="True"><name>JsonPath - Return Collection</name><view><camerax>0</camerax><cameray>42</cameray><zoom version="2">1.25</zoom></view></subsheet><subsheet subsheetid="990b7ffc-534f-4142-a66f-351a0789320a" type="Normal" published="True"><name>JsonPath - Return Collection - Using JArray</name><view><camerax>0</camerax><cameray>42</cameray><zoom version="2">1.25</zoom></view></subsheet><stage stageid="222ee4c2-914e-4b2b-8e13-443c1c76b3dd" name="Start" type="Start"><loginhibit /><display x="15" y="-105" /><onsuccess>ff6524a3-da73-439c-a4ba-2aabb994009c</onsuccess></stage><stage stageid="ff6524a3-da73-439c-a4ba-2aabb994009c" name="End" type="End"><loginhibit /><display x="15" y="90" /></stage><stage stageid="7fd071f3-6769-4dd5-95cf-a911c73c42ff" name="Stage1" type="ProcessInfo"><display x="-180" y="-105" w="180" h="90" /><references><reference>System.Data.dll</reference><reference>System.Xml.dll</reference><reference>System.Drawing.dll</reference><reference>Newtonsoft.Json.dll</reference><reference>System.Core.dll</reference><reference>System.dll</reference></references><imports><import>System.Data</import><import>System.Drawing</import><import>Newtonsoft.Json</import><import>System.Collections.Generic</import><import>System.Text</import><import>System.IO</import><import>System</import><import>Newtonsoft.Json.Linq</import><import>System.Collections</import><import>System.Linq</import><import>System.Collections</import></imports><language>csharp</language><pythondllpath></pythondllpath><pythonenvpath></pythonenvpath><globalcode><![CDATA[]]></globalcode><code><![CDATA[//**********************************************************************************************
+// NEW CODE
+// This code is used by the 'JSON To Collection (Skipping Array)' action. It is based on 
+// opensource code developed by Tobias Arnold and released under MIT License. The original 
+// source code can be found at the following GitHub link: 
+// 
+// 		https://github.com/toarnold/Coremoran.BluePrism.Json. 
+//
+// To contact Tobias, please refer to his LinkedIn profile: 
+// 
+// 		https://www.linkedin.com/in/tobias-arnold-492368155/  
+//**********************************************************************************************
+static bool IsSingleRowNew(DataTable table)
+{
+	return Convert.ToBoolean(table.ExtendedProperties[SpecialValues.SingleRowPropertyName] ?? false);
+}
+
+static void SetSingleRow(DataTable table, bool singleRow)
+{
+	table.ExtendedProperties[SpecialValues.SingleRowPropertyName] = singleRow;
+}
+
+public static class BluePrismConverter
+{
+	public static DataTable ObjectToCollection(object o)
+	{
+		return JsonToCollection(JsonConvert.SerializeObject(o,
+				new DataTableConverter(),
+				new GroupingConverter(),
+				new DataRowConverter()
+		));
+	}
+
+	public static DataTable JsonToCollection(string json)
+	{
+		return (DataTable)JsonConvert.DeserializeObject(json, typeof(DataTable), new JsonSerializerSettings
+		{
+			Converters = new JsonConverter[]
+			{
+				new DataTableConverter(),
+				new DataRowConverter()
+			},
+			DateTimeZoneHandling = DateTimeZoneHandling.Unspecified
+		});
+	}
+
+	public static string CollectionToJson(DataTable table)
+	{
+		return JsonConvert.SerializeObject(table,
+				new DataTableConverter(),
+				new DataRowConverter());
+	}
+
+	public static JArray CollectionToJArray(DataTable table)
+	{
+		var serializer = JsonSerializer.Create(new JsonSerializerSettings()
+		{
+			Converters = new JsonConverter[] {
+				new DataTableConverter(),
+				new DataRowConverter() }
+		});
+		return JArray.FromObject(table, serializer);
+	}
+}
+
+internal class DataRowConverter : JsonConverter
+{
+	public override bool CanConvert(Type objectType) => objectType == typeof(DataRow);
+
+	public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+	{
+		if (reader.TokenType != JsonToken.StartObject)
+		{
+			throw new Exception("Unsupported JsonToken " + reader.TokenType.ToString());
+		}
+
+		var dt = new DataTable();
+		SetSingleRow(dt, true);
+		dt.Rows.Add();
+		string currentColumnName = null;
+		while (reader.Read() && reader.TokenType != JsonToken.EndObject)
+		{
+			switch (reader.TokenType)
+			{
+				case JsonToken.PropertyName:
+					currentColumnName = reader.Value.ToString();
+					break;
+				default:
+					DataTableRowHandler.HandleJsonData(dt, currentColumnName, serializer, reader);
+					break;
+			}
+		}
+		return dt.Rows[0];
+	}
+
+	public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+	{
+		var dataRow = (DataRow)value;
+		var dataTable = dataRow.Table;
+		if (dataTable.Columns.Count == 1
+			&& dataTable.Columns[0].ColumnName == SpecialValues.JsonUnnamedValue 
+			&& (!IsSingleRowNew(dataTable) || writer.Path == string.Empty))
+		{
+			// First (and single!) element
+			serializer.Serialize(writer, dataRow[0]); 
+		}
+		else
+		{
+			serializer.Serialize(writer, dataTable.Columns.Cast<DataColumn>().ToDictionary(k => k.ColumnName, v => dataRow[v]));
+		}
+	}
+}
+
+internal class DataTableConverter : JsonConverter
+{
+	public override bool CanConvert(Type objectType) => objectType == typeof(DataTable);
+
+	public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+	{
+		var dt = (DataTable)value;
+		if (IsSingleRowNew(dt))
+		{
+			serializer.Serialize(writer, dt.Rows[0]);
+		}
+		else
+		{
+			serializer.Serialize(writer, dt.Select());
+		}
+	}
+
+	public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+	{
+		var dt = new DataTable();
+		switch (reader.TokenType)
+		{
+			case JsonToken.StartObject:
+				dt = serializer.Deserialize<DataRow>(reader).Table;
+				break;
+			case JsonToken.StartArray:
+				SetSingleRow(dt, false);
+				var nullColumns = new HashSet<string>();
+				while (reader.Read() && reader.TokenType != JsonToken.EndArray)
+				{
+					switch (reader.TokenType)
+					{
+						case JsonToken.Null:
+							dt.Rows.Add();
+							break;
+						case JsonToken.StartObject:
+							var tempTable = serializer.Deserialize<DataRow>(reader).Table;
+							var nulls = tempTable.Columns.Cast<DataColumn>().Where(w => tempTable.Rows[0].IsNull(w.ColumnName)).Select(s => s.ColumnName).ToList();
+							nulls.ForEach(n => tempTable.Columns.Remove(n));
+							nullColumns.UnionWith(nulls);
+							dt.Merge(tempTable, true, MissingSchemaAction.Add);
+							break;
+						default:
+							DataTableRowHandler.HandleJsonData(dt, null, serializer, reader);
+							break;
+					}
+				}
+				// Add not set Null-Columns
+				dt.Columns.AddRange(nullColumns.Where(w => !dt.Columns.Contains(w)).Select(s => new DataColumn(s)).ToArray());
+				break;
+			default: /* Try to append a single value */
+				if (reader.TokenType != JsonToken.Null)
+				{
+					SetSingleRow(dt, true);
+					dt.Rows.Add();
+					DataTableRowHandler.HandleJsonData(dt, null, serializer, reader);
+				}
+				break;
+		}
+		return dt;
+	}
+}
+
+internal static class DataTableRowHandler
+{
+	private static void AppendArrayItem(DataTable table, Type colType, string colName, object value)
+	{
+		if (!table.Columns.Contains(colName))
+		{
+			var newcolumn = new DataColumn(colName, colType); 
+			if (colType == typeof(DateTime))
+			{
+				newcolumn.DateTimeMode = DataSetDateTime.Utc;
+			}
+			table.Columns.Add(newcolumn);
+		}
+		if (IsSingleRowNew(table))
+		{
+			table.Rows[0][colName] = value;
+		}
+		else
+		{
+			var newRow = table.NewRow();
+			newRow[colName] = value;
+			table.Rows.Add(newRow);
+		}
+	}
+
+	internal static void HandleJsonData(DataTable table, string currentColumnName, JsonSerializer serializer, JsonReader reader)
+	{
+		switch (reader.TokenType)
+		{
+			case JsonToken.String:
+			case JsonToken.Null:
+				AppendArrayItem(table, typeof(string), currentColumnName ?? SpecialValues.JsonUnnamedValue, reader.Value);
+				break;
+			case JsonToken.Integer:
+			case JsonToken.Float:
+				AppendArrayItem(table, typeof(decimal), currentColumnName ?? SpecialValues.JsonUnnamedValue, reader.Value);
+				break;
+			case JsonToken.Boolean:
+				AppendArrayItem(table, typeof(bool), currentColumnName ?? SpecialValues.JsonUnnamedValue, reader.Value);
+				break;
+			case JsonToken.Date:
+				AppendArrayItem(table, typeof(DateTime), currentColumnName ?? SpecialValues.JsonUnnamedValue, reader.Value);
+				break;
+			case JsonToken.StartObject:
+				AppendArrayItem(table, typeof(DataTable), currentColumnName ?? SpecialValues.JsonUnnamedValue, serializer.Deserialize<DataTable>(reader));
+				break;
+			case JsonToken.StartArray:
+				AppendArrayItem(table, typeof(DataTable), currentColumnName ?? SpecialValues.JsonUnnamedValue, serializer.Deserialize<DataTable>(reader));
+				break;
+			default:
+				throw new Exception("Unsupported JsonToken " + reader.TokenType.ToString());
+		}
+	}
+}
+
+internal class GroupingConverter : JsonConverter
+{
+	public override bool CanRead => false;
+
+	public override bool CanConvert(Type objectType) => objectType.GetInterfaces().Any(a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof(IGrouping<,>));
+
+	public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer) => throw new NotImplementedException();
+
+	public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+	{
+		// Get key object with reflection
+		var keyInfo = value.GetType().GetProperty("Key");
+		var key = JToken.FromObject(keyInfo.GetValue(value));
+
+		var data = key is JObject obj ? obj : new JObject { { SpecialValues.GroupingSingleKeyColumnName, key } };
+		data.Add(SpecialValues.GroupingGroupColumnName, JArray.FromObject(((IEnumerable<object>)value).Select(x => x), serializer));
+
+		serializer.Serialize(writer, data);
+	}
+}
+
+public class SpecialValues
+{
+	public const string JsonUnnamedValue = "JSON_Unnamed_Value";
+	public const string SingleRowPropertyName = "SingleRow";
+	public const string GroupingSingleKeyColumnName = "Key";
+	public const string GroupingGroupColumnName = "Group";
+}
+
+//**********************************************************************************************
+// LEGACY CODE
+// This is the original code of the Utility - JSON VBO. This code is used by the 
+// 'JSON To Collection' and 'Collection To JSON' actions.
+//**********************************************************************************************
+private bool mUseNewParseMethod = false;
+
+private class JSON
+{
+	public const string Array = "JSON:Array";
+	public const string Null = "JSON:Null";
+}
+
+public string ConvertToJSON(DataTable dt)
+{
+	object o = SerialiseGeneric(dt, true);
+	return JsonConvert.SerializeObject(o);
+}
+
+public object SerialiseGeneric(object o, bool removeArray)
+{
+	DataTable dt = o as DataTable;
+	if (dt != null)
+		return SerialiseDataTable(dt);
+
+	DataRow dr = o as DataRow;
+	if (dr != null)
+		return SerialiseDataRow(dr, removeArray);
+
+	string s = o as string;
+	if (s != null && s == JSON.Null)
+		return null;
+
+	if (o != null)
+		return o;
+
+	return null;
+}
+
+public object SerialiseDataTable(DataTable dt)
+{
+	if (IsSingleRow(dt))
+		return SerialiseGeneric(dt.Rows[0], false);
+	else
+	{
+		JArray ja = new JArray();
+		foreach (DataRow r in dt.Rows)
+			ja.Add(SerialiseGeneric(r, true));
+		return ja;
+	}
+}
+
+public bool IsSingleRow(DataTable dt)
+{
+	if (dt.ExtendedProperties.Contains("SingleRow"))
+		return System.Convert.ToBoolean(dt.ExtendedProperties["SingleRow"]);
+	// Fallback for older versions of blueprism
+	return dt.Rows.Count == 1;
+}
+
+public object SerialiseDataRow(DataRow dr, bool removeArray)
+{
+	JObject jo = new JObject();
+	foreach (DataColumn c in dr.Table.Columns)
+	{
+		string s = c.ColumnName;
+		if (removeArray && s == JSON.Array)
+			return SerialiseGeneric(dr[s], true);
+		jo[s] = JToken.FromObject(SerialiseGeneric(dr[s], false));
+	}
+	return jo;
+}
+
+public DataTable ConvertToDataTable(string json)
+{
+	object o = JsonConvert.DeserializeObject(json);
+	return (DataTable)DeserialiseGeneric(o, true);
+}
+
+private object DeserialiseGeneric(object o, bool populate)
+{
+	JArray a = o as JArray;
+	if (a != null)
+		return mUseNewParseMethod ? DeserialiseArrayWithoutJArray(a, populate) : DeserialiseArray(a, populate);
+
+	JObject jo = o as JObject;
+	if (jo != null)
+		return DeserialiseObject(jo, populate);
+
+	JValue jv = o as JValue;
+	if (jv != null)
+		return jv.Value;
+
+	return JSON.Null;
+}
+
+private string GetKey(KeyValuePair<string, JToken> kv)
+{
+	if (kv.Key != null)
+		return kv.Key.ToString();
+	return "";
+}
+
+
+private DataTable DeserialiseObject(JObject o, bool populate)
+{
+	DataTable dt = new DataTable();
+
+	foreach (KeyValuePair<string, JToken> kv in o)
+	{
+		Type type = GetTypeOf(DeserialiseGeneric(kv.Value, false));
+		dt.Columns.Add(GetKey(kv), type);
+	}
+
+	if (populate)
+	{
+		DataRow dr = dt.NewRow();
+		foreach (KeyValuePair<string, JToken> kv in o)
+			dr[GetKey(kv)] = DeserialiseGeneric(kv.Value, true);
+		dt.Rows.Add(dr);
+	}
+
+	return dt;
+}
+
+private DataTable DeserialiseArrayWithoutJArray(JArray jarr, bool populate)
+{
+	DataTable dt = new DataTable();
+
+	Type first = null;
+	foreach (object e in jarr)
+	{
+		if (first == null)
+			first = GetTypeOf(DeserialiseGeneric(e, false));
+		if (GetTypeOf(DeserialiseGeneric(e, false)) != first)
+			throw new Exception("Data Type mismatch in array");
+	}
+
+	System.Collections.Specialized.OrderedDictionary columns = new System.Collections.Specialized.OrderedDictionary();
+	var allTypesInColumnsMatch = jarr.All(e =>
+	{
+		if (!(e is JObject))
+			return false;
+		foreach (KeyValuePair<string, JToken> pair in (JObject)e)
+		{
+			object val = pair.Value;
+			if (val is JValue)
+				val = (JValue)(pair.Value);
+			var tp = val ?? (object)"".GetType();
+
+			if (columns.Contains(pair.Key))
+			{
+				if (tp != columns[pair.Key])
+					return false;
+			}
+			else
+				columns[pair.Key] = tp;
+		}
+		return true;
+	});
+
+	if (allTypesInColumnsMatch)
+	{
+		foreach (DictionaryEntry pair in columns)
+		{
+			string key = System.Convert.ToString(pair.Key);
+			Type tp = (Type)pair.Value;
+			if (tp == typeof(JObject) || tp == typeof(JArray))
+				dt.Columns.Add(key, typeof(DataTable));
+			else
+				dt.Columns.Add(key, tp);
+		}
+	}
+	else if (first != null)
+		dt.Columns.Add(JSON.Array, first);
+
+	if (populate)
+	{
+		foreach (object e in jarr)
+		{
+			DataRow dr = dt.NewRow();
+			if (allTypesInColumnsMatch)
+			{
+				foreach (KeyValuePair<string, JToken> pair in (JObject)e)
+					dr[pair.Key] = DeserialiseGeneric(pair.Value, true);
+			}
+			else
+				dr[JSON.Array] = DeserialiseGeneric(e, true);
+
+			dt.Rows.Add(dr);
+		}
+	}
+
+	return dt;
+}
+
+private DataTable DeserialiseArray(JArray o, bool populate)
+{
+	DataTable dt = new DataTable();
+
+	Type first = null;
+	foreach (object e in o)
+	{
+		if (first == null)
+			first = GetTypeOf(DeserialiseGeneric(e, false));
+		if (GetTypeOf(DeserialiseGeneric(e, false)) != first)
+			throw new Exception("Data Type mismatch in array");
+	}
+	if (first != null)
+		dt.Columns.Add(JSON.Array, first);
+
+	if (populate)
+	{
+		foreach (object e in o)
+		{
+			DataRow dr = dt.NewRow();
+			dr[JSON.Array] = DeserialiseGeneric(e, true);
+			dt.Rows.Add(dr);
+		}
+	}
+
+	return dt;
+}
+
+private Type GetTypeOf(object o)
+{
+	if (o == null)
+		return typeof(string);
+	return o.GetType();
+}
+
+public bool IsNumeric(string value)
+{
+    return value.All(char.IsNumber);
+}
+
+public string BuildJsonFromDataRows(DataRow[] drs)
+        {
+            StringBuilder sb = new StringBuilder(); 
+
+            sb.Append("{");
+
+
+            foreach (DataRow dr in drs)
+            {
+                sb.Append($"\"{dr[0]}\":\"{dr[1]}\"");
+                sb.Append(",");
+            }
+
+            sb.Remove(sb.Length - 1, 1);
+            sb.Append("}");
+
+            return sb.ToString();
+        }
+]]></code></stage><stage stageid="c290e7f4-b01b-4012-9422-044432a3cc82" name="Clean Up" type="SubSheetInfo"><subsheetid>6a9ccb5a-8cc3-44ac-b343-39680558062f</subsheetid><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="662f70f7-7036-462d-b9bf-f35265dd971a" name="Start" type="Start"><subsheetid>6a9ccb5a-8cc3-44ac-b343-39680558062f</subsheetid><loginhibit /><display x="15" y="-105" /><onsuccess>153f4275-2acd-48a5-b6e6-409fcb2441a8</onsuccess></stage><stage stageid="153f4275-2acd-48a5-b6e6-409fcb2441a8" name="End" type="End"><subsheetid>6a9ccb5a-8cc3-44ac-b343-39680558062f</subsheetid><loginhibit /><display x="15" y="90" /></stage><stage stageid="885aaf30-a216-44c5-975b-ca58ce02f815" name="JSON to Collection" type="SubSheetInfo"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><narrative>Converts the input JSON text into a Collection.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="e5625896-d966-4a10-aa39-2e85611f490f" name="Start" type="Start"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="text" name="json" stage="json" /></inputs><onsuccess>779de445-0658-4a45-a1ef-a38d6de24429</onsuccess></stage><stage stageid="66526e3e-8b9e-4452-9ca8-f70baa9aec4a" name="End" type="End"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><loginhibit /><display x="15" y="45" /><outputs><output type="collection" name="Result" stage="Result" /></outputs></stage><stage stageid="007e04e2-4ed0-4afd-87d3-c06d79f48d86" name="new" type="Note"><subsheetid>6a9ccb5a-8cc3-44ac-b343-39680558062f</subsheetid><narrative>Clean Up Page
+
+This is an optional page where you might choose to perform some finalisation (or "cleanup") tasks as your business object is closed down.
+
+The cleanup action will be called automatically immediately after closing your business object at the end of a business process.
+
+You will not be able to call this action from a business process, nor will it be called at any other time than before the disposal of the business object.</narrative><display x="-180" y="60" w="180" h="230" /></stage><stage stageid="779de445-0658-4a45-a1ef-a38d6de24429" name="JSON To Collection" type="Code"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><loginhibit /><display x="15" y="-30" /><inputs><input type="text" name="json" expr="[json]" /></inputs><outputs><output type="collection" name="result" stage="Result" /></outputs><onsuccess>66526e3e-8b9e-4452-9ca8-f70baa9aec4a</onsuccess><code><![CDATA[result = ConvertToDataTable(json);]]></code></stage><stage stageid="da3984e5-ce52-4649-81c5-a71d452a5ba0" name="json" type="Data"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><display x="-195" y="0" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="0e93e91c-85e1-4c75-b74c-52d08c0724e6" name="Collection to JSON" type="SubSheetInfo"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><narrative>Converts an input Collection to JSON.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="c10fccbd-439b-447d-908a-58f20a540146" name="Start" type="Start"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="collection" name="Data" stage="Data" /></inputs><onsuccess>7923115c-5283-4694-b2c1-142afb4d3788</onsuccess></stage><stage stageid="ede1f653-07f1-42eb-8616-8d2d3dfb5244" name="End" type="End"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="15" y="60" /><outputs><output type="text" name="JSON" stage="JSON" /></outputs></stage><stage stageid="8f488472-d2dd-4bbc-a98e-07d6a494ab3f" name="Result" type="Collection"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><display x="-195" y="75" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="7923115c-5283-4694-b2c1-142afb4d3788" name="Collection To JSON" type="Code"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="15" y="-30" /><inputs><input type="collection" name="data" expr="[Data]" /></inputs><outputs><output type="text" name="json" stage="JSON" /></outputs><onsuccess>ede1f653-07f1-42eb-8616-8d2d3dfb5244</onsuccess><code><![CDATA[json = ConvertToJSON(data);]]></code></stage><stage stageid="dbeac687-55ba-4b1a-9e9b-1a5f1e763886" name="Data" type="Collection"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="-195" y="-15" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="60425486-0e54-4004-afef-6ccb7e96828d" name="JSON" type="Data"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><display x="-195" y="60" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="68820997-9906-40ef-b5f3-325f6f0a25b9" name="JSON to Collection (skipping JArray)" type="SubSheetInfo"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><narrative>Converts the input JSON text into a Collection without using an intermediary JArray construct.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="14799289-a9b9-4b93-aeb6-f0240547be63" name="Start" type="Start"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><loginhibit /><display x="-30" y="-120" /><inputs><input type="text" name="json" stage="json" /></inputs><onsuccess>8cb729e4-705c-400b-8d1d-0b54dd51fb94</onsuccess></stage><stage stageid="21187841-67f3-4ed1-a3b0-de763bb1e801" name="End" type="End"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><loginhibit /><display x="-30" y="30" /><outputs><output type="collection" name="Result" stage="Result" /></outputs></stage><stage stageid="8cb729e4-705c-400b-8d1d-0b54dd51fb94" name="JSON To Collection Without JArray" type="Code"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><loginhibit /><display x="-30" y="-45" /><inputs><input type="text" name="json" expr="[json]" /></inputs><outputs><output type="collection" name="result" stage="Result" /></outputs><onsuccess>21187841-67f3-4ed1-a3b0-de763bb1e801</onsuccess><code><![CDATA[result = BluePrismConverter.JsonToCollection(json);
+]]></code></stage><stage stageid="b3a37b86-f505-4522-80d4-2c9e45ab723c" name="json" type="Data"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><display x="-195" y="0" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="98ca8a8f-1ce6-4cb7-85e6-9fff8b1b06f9" name="Result" type="Collection"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><display x="-195" y="75" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="f95350a7-9c25-487f-ad74-c7ce70ea37a5" name="Note2" type="Note"><narrative>© 2024 Blue Prism Limited
+Licensed under the Blue Prism Asset License and Support Terms
+https://portal.blueprism.com/agreements
+
+Support URL
+
+https://community.blueprism.com</narrative><display x="240" y="-15" w="300" h="120" /><font family="Segoe UI" size="12" style="Regular" color="0000FF" /></stage><stage stageid="dfa7d330-e791-49c6-b4fb-6011b4d8d6cc" name="Note1" type="Note"><loginhibit /><narrative>Version 10.0.3</narrative><display x="15" y="-165" w="150" h="30" /><font family="Segoe UI" size="14" style="Bold" color="FF0000" /></stage><stage stageid="c07d13ef-4200-4377-8cfd-bd38c06ea923" name="JsonPath" type="SubSheetInfo"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><narrative>Uses JSONPath to locate element(s) within the input JSON.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="ee1a9752-11e4-4a3f-aae8-3e910b966e9c" name="Start" type="Start"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-30" y="-60" /><inputs><input type="text" name="Json" stage="Json" /><input type="text" name="JsonPath" stage="JsonPath" /></inputs><onsuccess>d0ff9ba9-4bf0-4ba4-a9d6-85a5a0935c7e</onsuccess></stage><stage stageid="4b590fe3-4e65-4b28-baa0-8852d218894a" name="End" type="End"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-30" y="60" /><outputs><output type="number" name="NumericResult" stage="NumericResult" /><output type="text" name="TextResult" stage="TextResult" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs></stage><stage stageid="7ae65c44-8e32-406c-ad5b-fa0f802cdabd" name="Json" type="Data"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><display x="-195" y="0" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b6118f7f-6c60-4e0b-9683-f749ae300a06" name="JsonPath" type="Data"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><display x="-195" y="45" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="d0ff9ba9-4bf0-4ba4-a9d6-85a5a0935c7e" name="Process Json - Single Output" type="Code"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-30" y="0" w="120" h="30" /><inputs><input type="text" name="Json" expr="[Json]" /><input type="text" name="JsonPath" expr="[JsonPath]" /></inputs><outputs><output type="text" name="TextResult" stage="TextResult" /><output type="number" name="NumericResult" stage="NumericResult" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs><onsuccess>4b590fe3-4e65-4b28-baa0-8852d218894a</onsuccess><code><![CDATA[// Initialize the output vars as only one will be used.
+NumericResult = 0;
+TextResult = String.Empty;
+ErrorMessage = String.Empty;
+
+String tempResult = string.Empty;
+
+JObject jo;
+
+jo = JObject.Parse(Json);
+
+try
+{
+	tempResult = (string)jo.SelectToken(JsonPath,true);
+
+	if (IsNumeric(tempResult))
+	{
+		NumericResult = Decimal.Parse(tempResult);
+	}
+	else
+	{
+		TextResult = tempResult;
+	}
+}
+catch (JsonException)
+{
+	ErrorMessage = "Unable to find value in supplied JSON.";
+}
+
+
+
+
+
+
+]]></code></stage><stage stageid="8a2694eb-d12b-4cad-87cb-d43651aeb0f2" name="NumericResult" type="Data"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><display x="-165" y="165" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="6bb1f845-c916-472b-852a-ab9c873bf569" name="TextResult" type="Data"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><display x="-225" y="165" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b1351cf4-399a-4e58-b568-321f0d3196e5" name="ErrorMessage" type="Data"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-195" y="210" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="94ab4d76-1378-44d7-bfd9-c4a6eaa1e710" name="JsonPath - Return Collection" type="SubSheetInfo"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><narrative>Uses JSONPath to process the input JSON and returns a Collection.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="f48025fa-9b5d-4675-8147-3478db7860c6" name="Start" type="Start"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-15" y="-45" /><inputs><input type="text" name="Json" stage="Json" /><input type="text" name="JsonPath" stage="JsonPath" /></inputs><onsuccess>a0419bd6-afbf-4de4-98ec-5471c207786c</onsuccess></stage><stage stageid="09dc30b8-a6f6-4594-9044-3e15b51f75ef" name="End" type="End"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-15" y="135" /><outputs><output type="collection" name="Result" stage="Result" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs></stage><stage stageid="be0e5e0e-6e93-4633-8c64-c02b0875b278" name="Json" type="Data"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><display x="-195" y="0" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ba7a4062-02e0-4458-8755-f7a521119277" name="JsonPath" type="Data"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><display x="-195" y="45" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="a0419bd6-afbf-4de4-98ec-5471c207786c" name="JsonPath - Return Object" type="Code"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><narrative>This allows multiple objects to be returned as a Json string.</narrative><display x="-15" y="15" /><inputs><input type="text" name="Json" expr="[Json]" /><input type="text" name="JsonPath" expr="[JsonPath]" /></inputs><outputs><output type="text" name="TextResult" stage="TextResult" /><output type="number" name="NumericResult" stage="NumericResult" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs><onsuccess>03bbb947-bcd3-4602-802b-f0444d868a92</onsuccess><code><![CDATA[//Initialize the output vars as only one will be used.
+NumericResult = 0;
+TextResult = String.Empty;
+ErrorMessage=String.Empty;
+
+string tempResult = string.Empty;
+JToken token;
+
+JObject jo;
+
+jo = JObject.Parse(Json);
+
+try
+{
+	token = jo.SelectToken(JsonPath);
+	tempResult = token.ToString();
+
+	TextResult = tempResult;
+}
+catch (JsonException)
+{
+	ErrorMessage = "Unable to find value in supplied JSON.";
+}
+
+
+
+
+
+]]></code></stage><stage stageid="b58dff70-5256-4b01-8e97-ed2efcbcbfcd" name="NumericResult" type="Data"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><display x="-225" y="120" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b226d9b3-eff1-427f-8b2e-eb5da2cefb05" name="TextResult" type="Data"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><display x="-165" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="60b9ffe8-dee6-4b41-b324-21aeca4ac438" name="ErrorMessage" type="Data"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-195" y="210" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="03bbb947-bcd3-4602-802b-f0444d868a92" name="JSON to Collection" type="SubSheet"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-15" y="75" /><inputs><input type="text" name="json" friendlyname="json" expr="[TextResult]" /></inputs><outputs><output type="collection" name="Result" friendlyname="Result" stage="Result" /></outputs><onsuccess>09dc30b8-a6f6-4594-9044-3e15b51f75ef</onsuccess><processid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</processid></stage><stage stageid="66ec6cbe-f703-4076-bcf5-5b0e22e41ba3" name="Result" type="Collection"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><display x="-195" y="255" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="87cac279-7118-48cc-b1d7-3658fc032d77" name="Inputs" type="Block"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="01799449-c645-49c1-8c4f-8986f1b1d742" name="Outputs" type="Block"><subsheetid>560472b9-cea4-41d5-bc36-c49d6c1b26e6</subsheetid><loginhibit /><display x="-270" y="30" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="a6c9d22a-d9ca-4915-bc8e-d670af070403" name="Inputs" type="Block"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><loginhibit /><display x="-270" y="-30" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="382cc03e-2ac0-4ec6-adb9-c3cc75a7ca5e" name="Outputs" type="Block"><subsheetid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</subsheetid><loginhibit /><display x="-270" y="45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="7f989a6d-ca7f-4b8e-a295-13d0e8290cf2" name="Inputs" type="Block"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><loginhibit /><display x="-270" y="-30" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="f366aecb-e6eb-48a8-abe6-7c5815ca65f3" name="Outputs" type="Block"><subsheetid>e53062c7-68de-4763-b37a-456688d0d607</subsheetid><loginhibit /><display x="-270" y="45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="8af65c59-f2d4-4d02-a30a-63b08b35cc7f" name="Inputs" type="Block"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-270" y="-30" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="5d7a75fc-0689-4c1b-b7a8-bcb95fc46ffb" name="Outputs" type="Block"><subsheetid>1c04dc1d-81e9-47e9-a8c4-b46dd19b2624</subsheetid><loginhibit /><display x="-270" y="120" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="52bedb01-d26a-4421-b30a-af904dfd5f10" name="Inputs" type="Block"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-270" y="-30" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="5e1ed7e6-95cc-4409-9c77-3b4c79d24ac6" name="Outputs" type="Block"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-270" y="165" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="921b8f62-3650-4490-a8f4-c38efa72e580" name="Intermediary Values" type="Block"><subsheetid>cbbe7eb7-53d6-49a6-9f88-cb3a26c334df</subsheetid><loginhibit /><display x="-270" y="90" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FFFF" /></stage><stage stageid="cdbd888c-c88a-4798-bb42-5eab07aa5f6a" name="Collection to JSON using Name/Values" type="SubSheetInfo"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><narrative>This action expects the input data collection to have 2 columns only called Name and Value. The Name column will be used to construct the name of the JSON element, and the value of the Value column will be used as the value of the JSON element.</narrative><display x="-195" y="-120" w="210" h="90" /></stage><stage stageid="2368dbd4-5200-4ff4-b5d5-f2c56ab9cbbe" name="Start" type="Start"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="15" y="-105" /><inputs><input type="collection" name="Data" stage="Data" /></inputs><onsuccess>66d4f3b7-3326-4090-902b-c028d2d48e6e</onsuccess></stage><stage stageid="a872b1e1-de06-4bab-8e73-d2953d568e28" name="End" type="End"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="15" y="60" /><outputs><output type="text" name="JSON" stage="JSON" /></outputs></stage><stage stageid="66d4f3b7-3326-4090-902b-c028d2d48e6e" name="Collection Values To JSON" type="Code"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="15" y="-30" /><inputs><input type="collection" name="data" expr="[Data]" /></inputs><outputs><output type="text" name="json" stage="JSON" /></outputs><onsuccess>a872b1e1-de06-4bab-8e73-d2953d568e28</onsuccess><code><![CDATA[json = BuildJsonFromDataRows(data.Select());]]></code></stage><stage stageid="4a790c70-6983-488e-9881-8513719db5ea" name="Data" type="Collection"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="-195" y="-15" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="d077d336-d280-49ad-97eb-7b65d0da244d" name="JSON" type="Data"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><display x="-195" y="60" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="b0eb5070-b8a7-4df3-a514-6de649a486a8" name="Inputs" type="Block"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="-270" y="-45" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="3fd4f03b-19fa-4f25-9927-840f731bdb90" name="Outputs" type="Block"><subsheetid>95ae0a6e-ac92-492f-8442-f18e8e242d7e</subsheetid><loginhibit /><display x="-270" y="30" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="4a3b5791-6270-408f-9b23-556d6feefe73" name="JsonPath - Return Collection - Using JArray" type="SubSheetInfo"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><narrative>This action allows the selection of specific columns from a json array. It selects, based on the jsonpath, and then returns a collection which is then assimilated into a JArray and then this is converted to a json string.</narrative><display x="-195" y="-105" w="150" h="90" /></stage><stage stageid="142f9abe-8913-4619-8f2a-9372603a39fe" name="Start" type="Start"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-15" y="-45" /><inputs><input type="text" name="Json" stage="Json" /><input type="text" name="JsonPath" stage="JsonPath" /></inputs><onsuccess>19600573-a359-4203-84e2-84c6e6ad7d91</onsuccess></stage><stage stageid="ced21478-ab07-417f-a445-410204b7990e" name="End" type="End"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-15" y="135" /><outputs><output type="collection" name="Result" stage="Result" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs></stage><stage stageid="e8fe5c85-cf73-4c0d-8ce3-2e0dd945a2a6" name="Json" type="Data"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><display x="-195" y="0" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="c1d8a34d-bc9c-48c1-918a-49f0e4c9db1a" name="JsonPath" type="Data"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><display x="-195" y="45" w="90" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="19600573-a359-4203-84e2-84c6e6ad7d91" name="JsonPath - Return Object - SelectTokens" type="Code"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><narrative>This allows multiple objects to be returned as a Json string.</narrative><display x="-15" y="15" /><inputs><input type="text" name="Json" expr="[Json]" /><input type="text" name="JsonPath" expr="[JsonPath]" /></inputs><outputs><output type="text" name="TextResult" stage="TextResult" /><output type="number" name="NumericResult" stage="NumericResult" /><output type="text" name="ErrorMessage" stage="ErrorMessage" /></outputs><onsuccess>ca325c47-cbcf-413d-a423-dd1f5c7f592b</onsuccess><code><![CDATA[//Initialize the output vars as only one will be used.
+NumericResult = 0;
+TextResult = String.Empty;
+ErrorMessage=String.Empty;
+
+string tempResult = string.Empty;
+IEnumerable<JToken> tokens;
+
+JObject jo;
+JArray ja;
+
+jo = JObject.Parse(Json);
+
+try
+{
+	tokens = jo.SelectTokens(JsonPath);
+	ja = new JArray(tokens);
+
+	TextResult = ja.ToString();
+}
+catch (JsonException)
+{
+	ErrorMessage = "Unable to find value in supplied JSON.";
+}
+
+
+
+
+
+]]></code></stage><stage stageid="a8919d1a-67f1-4288-b4a4-6bf5cf42bd23" name="NumericResult" type="Data"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><display x="-225" y="120" /><datatype>number</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="87514c46-55e8-43a7-bb7d-9ebb9f4da011" name="TextResult" type="Data"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><display x="-165" y="120" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="7adfe9eb-0a19-4e47-ba9b-c5e42b1de573" name="ErrorMessage" type="Data"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-195" y="210" w="120" h="30" /><datatype>text</datatype><initialvalue /><private /><alwaysinit /></stage><stage stageid="ca325c47-cbcf-413d-a423-dd1f5c7f592b" name="JSON to Collection" type="SubSheet"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-15" y="75" /><inputs><input type="text" name="json" friendlyname="json" expr="[TextResult]" /></inputs><outputs><output type="collection" name="Result" friendlyname="Result" stage="Result" /></outputs><onsuccess>ced21478-ab07-417f-a445-410204b7990e</onsuccess><processid>e5aeb4cb-cd25-4535-b3be-b46681b4e6b6</processid></stage><stage stageid="1a029f4f-6ff2-4fe3-bd39-1b68007ab419" name="Result" type="Collection"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><display x="-195" y="255" /><datatype>collection</datatype><private /><alwaysinit /></stage><stage stageid="2ad77eca-98eb-4469-a77f-5115436a462b" name="Inputs" type="Block"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-270" y="-30" w="150" h="105" /><font family="Segoe UI" size="10" style="Regular" color="FFCC00" /></stage><stage stageid="c4d6a22a-bcd4-4ea4-8825-e6316c97d921" name="Outputs" type="Block"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-270" y="165" w="150" h="120" /><font family="Segoe UI" size="10" style="Regular" color="00FF00" /></stage><stage stageid="cf8b41c4-8b83-4e96-9212-7ed5b76d8d91" name="Intermediary Values" type="Block"><subsheetid>990b7ffc-534f-4142-a66f-351a0789320a</subsheetid><loginhibit /><display x="-270" y="90" w="150" h="60" /><font family="Segoe UI" size="10" style="Regular" color="00FFFF" /></stage></process>

@@ -1,0 +1,160 @@
+{
+  "trees": [
+    {
+      "id": 2,
+      "name": "Processes"
+    },
+    {
+      "id": 3,
+      "name": "Objects"
+    }
+  ],
+  "groups": [
+    {
+      "id": "fcef128d-09e9-4ad4-a6f0-37b673bc300a",
+      "treeId": 2,
+      "name": "Default"
+    },
+    {
+      "id": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f",
+      "treeId": 3,
+      "name": "Default"
+    },
+    {
+      "id": "ccc17e80-9c06-49f6-88c1-98421e09a7d4",
+      "treeId": 3,
+      "name": "dummy"
+    },
+    {
+      "id": "7db25a20-cfba-4b98-ab39-f21bb8ae0c34",
+      "treeId": 3,
+      "name": "System Update"
+    }
+  ],
+  "memberships": [
+    {
+      "processId": "6a51f403-f4ab-44ee-b4bf-15710f0dc9bb",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "b99d5b9f-f5b7-45a4-b7b2-17a2cce2ac4c",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "c28cdbe1-9417-4ded-80c1-19fc3f6ab7f0",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "7ba7c602-a272-4b92-a90b-229ea298a38b",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "bf926e5b-5a53-4629-bf02-31a58a120117",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "9cd0a967-eb01-4e38-bc91-31ace18db7eb",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "cc0807f5-b419-486a-8e09-3d6216ebb8a4",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "6efb1579-126a-4563-b2e9-3d9e432c1a79",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "6f9680f1-616c-4884-b58c-42ed51446377",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "1b13f5b8-01d1-441e-bd7f-54884a24d71f",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "ba504fda-e81a-4ee6-a672-6200b55c48e0",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "66085a0f-6bf6-45e2-b5ed-6345f014f05b",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "1755dccf-ee8a-456b-86d6-6d83220f12de",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "e559fb86-9b63-4e0b-9399-972227189995",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "29192c0f-d13c-4769-bed3-9c51217efab4",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "9fc19dda-3610-454f-8713-a55af212d309",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "b71e99c3-94a3-4c4a-a1b6-a8f013fcb96b",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "92564613-f444-48c5-8ff7-abb4f7ea7548",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "88d28317-a894-42e7-b45c-abe265af61ce",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "f32ab518-c4ab-46ad-afd3-af58dfd14a0a",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "d39ef435-da5c-4e38-a846-b903b2cf3d8e",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "e290519e-5e15-4865-a384-bfb313c828d3",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "3a5f7760-1621-4a03-bd1e-c7477b5a6de4",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "35ff84bb-c65a-4d40-b776-e77f90e721d2",
+      "groupId": "2b6ee1c0-a02a-4e55-95de-347f7b183e4f"
+    },
+    {
+      "processId": "e83e413e-b3c7-493b-9f52-3d9d0818b15c",
+      "groupId": "fcef128d-09e9-4ad4-a6f0-37b673bc300a"
+    },
+    {
+      "processId": "42b5169c-1fde-4a1a-b912-4d1249805188",
+      "groupId": "fcef128d-09e9-4ad4-a6f0-37b673bc300a"
+    },
+    {
+      "processId": "314cc087-13af-45dd-86b2-6219dc522951",
+      "groupId": "fcef128d-09e9-4ad4-a6f0-37b673bc300a"
+    },
+    {
+      "processId": "4afb82b2-256d-4ac4-8322-48f4316aabe8",
+      "groupId": "ccc17e80-9c06-49f6-88c1-98421e09a7d4"
+    },
+    {
+      "processId": "3ceadfb9-e240-4ad9-9d9f-0d9be318413e",
+      "groupId": "7db25a20-cfba-4b98-ab39-f21bb8ae0c34"
+    },
+    {
+      "processId": "f8766127-4a61-463f-8762-74961ed8857f",
+      "groupId": "7db25a20-cfba-4b98-ab39-f21bb8ae0c34"
+    },
+    {
+      "processId": "bc81b8c8-cda2-450f-baec-b5fb916c15b5",
+      "groupId": "7db25a20-cfba-4b98-ab39-f21bb8ae0c34"
+    }
+  ]
+}

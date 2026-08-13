@@ -1,0 +1,201 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="7dabcf32-d944-4118-a0ba-cdf77574bdf6" name="Admin@OPENCLAWPC 2026-08-12 17:46:28" runUser="OPENCLAWPC\Admin" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-12T17:46:28.1185673+02:00" queuing="2026-08-12T17:46:28.1185681+02:00" start="2026-08-12T17:46:24.8666335+02:00" finish="2026-08-12T17:46:29.9078251+02:00" />
+  <TestSettings name="default" id="21bb0ba4-80d2-42e5-9738-8025d2d10c36">
+    <Deployment runDeploymentRoot="Admin_OPENCLAWPC_2026-08-12_17_46_28" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1c4343b0-f4a0-4a25-84b5-ae6691b69897" testId="2b420cf7-beb2-a5b9-da5f-4c653fa01a72" testName="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName" computerName="OPENCLAWPC" duration="00:00:00.5921177" startTime="2026-08-12T17:46:28.7301199+02:00" endTime="2026-08-12T17:46:29.3236741+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1c4343b0-f4a0-4a25-84b5-ae6691b69897">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Single() Failure: The collection was empty</Message>
+          <StackTrace>   at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName() in C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs:line 62&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="745501ad-d29f-4348-91d2-b5b1821dfd9b" testId="112da67c-2e35-2e5d-0a89-fac2262ee9c3" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;My Process&quot;, expected: &quot;My Process&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0000205" startTime="2026-08-12T17:46:28.0280874+02:00" endTime="2026-08-12T17:46:28.0282188+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="745501ad-d29f-4348-91d2-b5b1821dfd9b" />
+    <UnitTestResult executionId="7c247555-1c2a-4695-a958-a125d7b4f03c" testId="c9097694-c21e-92cb-c31b-a7119ff95b80" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;MyProcess&quot;, expected: &quot;MyProcess&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0000119" startTime="2026-08-12T17:46:28.0285133+02:00" endTime="2026-08-12T17:46:28.0286392+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7c247555-1c2a-4695-a958-a125d7b4f03c" />
+    <UnitTestResult executionId="c1f4bdba-302f-407d-90c6-2b0b58764d9b" testId="01f0f493-0bcd-4b59-9d08-3dbab70532bc" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;Email - POP3/SMTP/IMAP&quot;, expected: &quot;Email - POP3_SMTP_IMAP&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0047947" startTime="2026-08-12T17:46:27.9564120+02:00" endTime="2026-08-12T17:46:27.9735936+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1f4bdba-302f-407d-90c6-2b0b58764d9b" />
+    <UnitTestResult executionId="785d6503-9914-4a24-b01d-293e13a2fd0f" testId="d0f3e303-8197-b2b5-a08d-22ca621eb82e" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_DuplicatesFile_AcrossMultipleGroups" computerName="OPENCLAWPC" duration="00:00:00.6243441" startTime="2026-08-12T17:46:27.4044407+02:00" endTime="2026-08-12T17:46:28.0901799+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="785d6503-9914-4a24-b01d-293e13a2fd0f" />
+    <UnitTestResult executionId="8d847787-e4d2-489c-b350-2a5c08706c22" testId="dcf5e9c8-8949-9f87-c41c-18f065510f6e" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_RemovesAllLeadingComments" computerName="OPENCLAWPC" duration="00:00:00.0017614" startTime="2026-08-12T17:46:28.0640701+02:00" endTime="2026-08-12T17:46:28.0642378+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8d847787-e4d2-489c-b350-2a5c08706c22" />
+    <UnitTestResult executionId="fe47e7c7-9b14-48aa-9afd-c5456754da82" testId="0282977b-3893-0b96-95b0-24a0cf3db9c8" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SecondRunWithIdenticalContent_WritesNothing" computerName="OPENCLAWPC" duration="00:00:00.0284279" startTime="2026-08-12T17:46:28.1214704+02:00" endTime="2026-08-12T17:46:28.1496619+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fe47e7c7-9b14-48aa-9afd-c5456754da82" />
+    <UnitTestResult executionId="005b700e-e0e4-415b-b633-3d054fd99b7d" testId="a4d97683-17cb-c086-e9de-1a65cc5ad75a" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_NoComments_ReturnsUnchanged" computerName="OPENCLAWPC" duration="00:00:00.0001101" startTime="2026-08-12T17:46:28.0338832+02:00" endTime="2026-08-12T17:46:28.0340686+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="005b700e-e0e4-415b-b633-3d054fd99b7d" />
+    <UnitTestResult executionId="e23abcf5-bbf4-47c9-b20e-059458d0a59d" testId="cb17a913-36aa-3849-9d80-a54939a670ad" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SanitizesFilenameForInvalidChars" computerName="OPENCLAWPC" duration="00:00:00.0283489" startTime="2026-08-12T17:46:28.1634837+02:00" endTime="2026-08-12T17:46:28.1938093+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e23abcf5-bbf4-47c9-b20e-059458d0a59d" />
+    <UnitTestResult executionId="6e9f05a5-1638-4f5d-8cf1-3eb025b39265" testId="6f3710c8-6b80-a74c-e9fd-fa4dc9c038a4" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;trailing   &quot;, expected: &quot;trailing&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0000148" startTime="2026-08-12T17:46:28.0288809+02:00" endTime="2026-08-12T17:46:28.0289921+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6e9f05a5-1638-4f5d-8cf1-3eb025b39265" />
+    <UnitTestResult executionId="e25132d7-5645-46b1-b835-594fd650e1b8" testId="4916b7b2-093d-a286-64fc-f1bc0a1b06ef" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;trailing...&quot;, expected: &quot;trailing&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0000134" startTime="2026-08-12T17:46:28.0303553+02:00" endTime="2026-08-12T17:46:28.0304985+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e25132d7-5645-46b1-b835-594fd650e1b8" />
+    <UnitTestResult executionId="2deb0182-2c78-44dd-a4c9-cf71cd21669d" testId="80e6e855-c348-2d88-8f77-d238aa3ffa82" testName="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_DeleteFileInPush_CallsDeleteAsync" computerName="OPENCLAWPC" duration="00:00:01.2297838" startTime="2026-08-12T17:46:27.4019249+02:00" endTime="2026-08-12T17:46:28.6567516+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2deb0182-2c78-44dd-a4c9-cf71cd21669d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Single() Failure: The collection was empty</Message>
+          <StackTrace>   at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_DeleteFileInPush_CallsDeleteAsync() in C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs:line 100&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="757efb9b-2a26-49a2-aef3-9ae52b946105" testId="ff8231c6-a77d-e34a-eaa1-52df16ec88e5" testName="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName" computerName="OPENCLAWPC" duration="00:00:00.4902705" startTime="2026-08-12T17:46:29.3274034+02:00" endTime="2026-08-12T17:46:29.8151098+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="757efb9b-2a26-49a2-aef3-9ae52b946105">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Single() Failure: The collection was empty</Message>
+          <StackTrace>   at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName() in C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs:line 79&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="26f31021-f820-40a7-a495-d56318d42e0b" testId="30fa1874-2202-26bf-20c1-c0aa3cd9624a" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_EmptyString_ReturnsEmpty" computerName="OPENCLAWPC" duration="00:00:00.0001310" startTime="2026-08-12T17:46:28.0347028+02:00" endTime="2026-08-12T17:46:28.0348443+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="26f31021-f820-40a7-a495-d56318d42e0b" />
+    <UnitTestResult executionId="db144a38-57a7-4753-8165-d0bc365868ca" testId="62551cbc-970e-6663-7288-5679cf1018fe" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;a/b\\c:d*e?f\&quot;g&lt;h&gt;i|j&quot;, expected: &quot;a_b_c_d_e_f_g_h_i_j&quot;)" computerName="OPENCLAWPC" duration="00:00:00.0004046" startTime="2026-08-12T17:46:28.0258789+02:00" endTime="2026-08-12T17:46:28.0260588+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="db144a38-57a7-4753-8165-d0bc365868ca" />
+    <UnitTestResult executionId="7d76d9b6-8600-407f-b92d-239257daf89f" testId="1c8e9a76-dbf9-be6d-848c-fa8dfc46b30e" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_WritesCanonicalXml_ForSingleProcess" computerName="OPENCLAWPC" duration="00:00:00.0604889" startTime="2026-08-12T17:46:28.0913482+02:00" endTime="2026-08-12T17:46:28.1112215+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7d76d9b6-8600-407f-b92d-239257daf89f" />
+    <UnitTestResult executionId="55b8312c-6ef3-4a7b-a2e0-bd09cda4ba8c" testId="40b07848-f736-d8c5-3240-25bfe79ef510" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_PreservesMiddleComments" computerName="OPENCLAWPC" duration="00:00:00.0002089" startTime="2026-08-12T17:46:28.0330752+02:00" endTime="2026-08-12T17:46:28.0332186+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="55b8312c-6ef3-4a7b-a2e0-bd09cda4ba8c" />
+    <UnitTestResult executionId="4bc57128-0132-4823-8330-83e72a68fe0b" testId="a7042201-6008-b9b5-e740-50a2d603c7f9" testName="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_InvalidNewRev_ReturnsFailure" computerName="OPENCLAWPC" duration="00:00:00.0734831" startTime="2026-08-12T17:46:28.6705677+02:00" endTime="2026-08-12T17:46:28.7297284+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4bc57128-0132-4823-8330-83e72a68fe0b" />
+    <UnitTestResult executionId="1f4586f8-4f62-4c03-a771-8ecc18ed39e8" testId="2663d4e6-5de5-eb5a-59bc-bb4d78defc4a" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SkipsProcessWithNoGroupMembership" computerName="OPENCLAWPC" duration="00:00:00.0088412" startTime="2026-08-12T17:46:28.1117869+02:00" endTime="2026-08-12T17:46:28.1204675+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1f4586f8-4f62-4c03-a771-8ecc18ed39e8" />
+    <UnitTestResult executionId="57b33c48-ad2b-430e-bdc3-be8b74715ef9" testId="aabb1912-ad7b-39f5-47c1-e337e2ed8446" testName="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_DeletesStaleFiles" computerName="OPENCLAWPC" duration="00:00:00.0121127" startTime="2026-08-12T17:46:28.1501911+02:00" endTime="2026-08-12T17:46:28.1629129+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57b33c48-ad2b-430e-bdc3-be8b74715ef9" />
+    <UnitTestResult executionId="8873d327-cc86-4cbc-84d1-2a806e7d7db2" testId="a51a3fe7-1f25-bc91-3ad3-abd4e2bafbca" testName="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_EmptyOrWhitespace_ReturnsUnderscore" computerName="OPENCLAWPC" duration="00:00:00.0001351" startTime="2026-08-12T17:46:28.0718025+02:00" endTime="2026-08-12T17:46:28.0719867+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8873d327-cc86-4cbc-84d1-2a806e7d7db2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_PreservesMiddleComments" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="40b07848-f736-d8c5-3240-25bfe79ef510">
+      <Execution id="55b8312c-6ef3-4a7b-a2e0-bd09cda4ba8c" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="StripLeadingXmlComments_PreservesMiddleComments" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;trailing   &quot;, expected: &quot;trailing&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="6f3710c8-6b80-a74c-e9fd-fa4dc9c038a4">
+      <Execution id="6e9f05a5-1638-4f5d-8cf1-3eb025b39265" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SkipsProcessWithNoGroupMembership" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="2663d4e6-5de5-eb5a-59bc-bb4d78defc4a">
+      <Execution id="1f4586f8-4f62-4c03-a771-8ecc18ed39e8" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_SkipsProcessWithNoGroupMembership" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_DeletesStaleFiles" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="aabb1912-ad7b-39f5-47c1-e337e2ed8446">
+      <Execution id="57b33c48-ad2b-430e-bdc3-be8b74715ef9" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_DeletesStaleFiles" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_InvalidNewRev_ReturnsFailure" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="a7042201-6008-b9b5-e740-50a2d603c7f9">
+      <Execution id="4bc57128-0132-4823-8330-83e72a68fe0b" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.PreReceiveHandlerTests" name="HandleAsync_InvalidNewRev_ReturnsFailure" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;Email - POP3/SMTP/IMAP&quot;, expected: &quot;Email - POP3_SMTP_IMAP&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="01f0f493-0bcd-4b59-9d08-3dbab70532bc">
+      <Execution id="c1f4bdba-302f-407d-90c6-2b0b58764d9b" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;a/b\\c:d*e?f\&quot;g&lt;h&gt;i|j&quot;, expected: &quot;a_b_c_d_e_f_g_h_i_j&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="62551cbc-970e-6663-7288-5679cf1018fe">
+      <Execution id="db144a38-57a7-4753-8165-d0bc365868ca" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_NoComments_ReturnsUnchanged" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="a4d97683-17cb-c086-e9de-1a65cc5ad75a">
+      <Execution id="005b700e-e0e4-415b-b633-3d054fd99b7d" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="StripLeadingXmlComments_NoComments_ReturnsUnchanged" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;MyProcess&quot;, expected: &quot;MyProcess&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="c9097694-c21e-92cb-c31b-a7119ff95b80">
+      <Execution id="7c247555-1c2a-4695-a958-a125d7b4f03c" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="2b420cf7-beb2-a5b9-da5f-4c653fa01a72">
+      <Execution id="1c4343b0-f4a0-4a25-84b5-ae6691b69897" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.PreReceiveHandlerTests" name="HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_DuplicatesFile_AcrossMultipleGroups" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="d0f3e303-8197-b2b5-a08d-22ca621eb82e">
+      <Execution id="785d6503-9914-4a24-b01d-293e13a2fd0f" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_DuplicatesFile_AcrossMultipleGroups" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_RemovesAllLeadingComments" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="dcf5e9c8-8949-9f87-c41c-18f065510f6e">
+      <Execution id="8d847787-e4d2-489c-b350-2a5c08706c22" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="StripLeadingXmlComments_RemovesAllLeadingComments" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SecondRunWithIdenticalContent_WritesNothing" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="0282977b-3893-0b96-95b0-24a0cf3db9c8">
+      <Execution id="fe47e7c7-9b14-48aa-9afd-c5456754da82" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_SecondRunWithIdenticalContent_WritesNothing" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;trailing...&quot;, expected: &quot;trailing&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="4916b7b2-093d-a286-64fc-f1bc0a1b06ef">
+      <Execution id="e25132d7-5645-46b1-b835-594fd650e1b8" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_WritesCanonicalXml_ForSingleProcess" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="1c8e9a76-dbf9-be6d-848c-fa8dfc46b30e">
+      <Execution id="7d76d9b6-8600-407f-b92d-239257daf89f" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_WritesCanonicalXml_ForSingleProcess" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_DeleteFileInPush_CallsDeleteAsync" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="80e6e855-c348-2d88-8f77-d238aa3ffa82">
+      <Execution id="2deb0182-2c78-44dd-a4c9-cf71cd21669d" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.PreReceiveHandlerTests" name="HandleAsync_DeleteFileInPush_CallsDeleteAsync" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_ReplacesInvalidCharsAndTrims(input: &quot;My Process&quot;, expected: &quot;My Process&quot;)" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="112da67c-2e35-2e5d-0a89-fac2262ee9c3">
+      <Execution id="745501ad-d29f-4348-91d2-b5b1821dfd9b" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_ReplacesInvalidCharsAndTrims" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.StripLeadingXmlComments_EmptyString_ReturnsEmpty" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="30fa1874-2202-26bf-20c1-c0aa3cd9624a">
+      <Execution id="26f31021-f820-40a7-a495-d56318d42e0b" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="StripLeadingXmlComments_EmptyString_ReturnsEmpty" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="ff8231c6-a77d-e34a-eaa1-52df16ec88e5">
+      <Execution id="757efb9b-2a26-49a2-aef3-9ae52b946105" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.PreReceiveHandlerTests" name="HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests.MaterializeAsync_SanitizesFilenameForInvalidChars" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="cb17a913-36aa-3849-9d80-a54939a670ad">
+      <Execution id="e23abcf5-bbf4-47c9-b20e-059458d0a59d" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceMaterializeTests" name="MaterializeAsync_SanitizesFilenameForInvalidChars" />
+    </UnitTest>
+    <UnitTest name="BPGit.Server.Tests.WorktreeSyncServiceTests.SanitizeFilename_EmptyOrWhitespace_ReturnsUnderscore" storage="c:\users\admin\.openclaw\workspace\projects\bp-git\tests\bpgit.server.tests\bin\release\net10.0\bpgit.server.tests.dll" id="a51a3fe7-1f25-bc91-3ad3-abd4e2bafbca">
+      <Execution id="8873d327-cc86-4cbc-84d1-2a806e7d7db2" />
+      <TestMethod codeBase="C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\bin\Release\net10.0\BPGit.Server.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="BPGit.Server.Tests.WorktreeSyncServiceTests" name="SanitizeFilename_EmptyOrWhitespace_ReturnsUnderscore" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="2b420cf7-beb2-a5b9-da5f-4c653fa01a72" executionId="1c4343b0-f4a0-4a25-84b5-ae6691b69897" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="112da67c-2e35-2e5d-0a89-fac2262ee9c3" executionId="745501ad-d29f-4348-91d2-b5b1821dfd9b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c9097694-c21e-92cb-c31b-a7119ff95b80" executionId="7c247555-1c2a-4695-a958-a125d7b4f03c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="01f0f493-0bcd-4b59-9d08-3dbab70532bc" executionId="c1f4bdba-302f-407d-90c6-2b0b58764d9b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d0f3e303-8197-b2b5-a08d-22ca621eb82e" executionId="785d6503-9914-4a24-b01d-293e13a2fd0f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="dcf5e9c8-8949-9f87-c41c-18f065510f6e" executionId="8d847787-e4d2-489c-b350-2a5c08706c22" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0282977b-3893-0b96-95b0-24a0cf3db9c8" executionId="fe47e7c7-9b14-48aa-9afd-c5456754da82" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4d97683-17cb-c086-e9de-1a65cc5ad75a" executionId="005b700e-e0e4-415b-b633-3d054fd99b7d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cb17a913-36aa-3849-9d80-a54939a670ad" executionId="e23abcf5-bbf4-47c9-b20e-059458d0a59d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6f3710c8-6b80-a74c-e9fd-fa4dc9c038a4" executionId="6e9f05a5-1638-4f5d-8cf1-3eb025b39265" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4916b7b2-093d-a286-64fc-f1bc0a1b06ef" executionId="e25132d7-5645-46b1-b835-594fd650e1b8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="80e6e855-c348-2d88-8f77-d238aa3ffa82" executionId="2deb0182-2c78-44dd-a4c9-cf71cd21669d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ff8231c6-a77d-e34a-eaa1-52df16ec88e5" executionId="757efb9b-2a26-49a2-aef3-9ae52b946105" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="30fa1874-2202-26bf-20c1-c0aa3cd9624a" executionId="26f31021-f820-40a7-a495-d56318d42e0b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="62551cbc-970e-6663-7288-5679cf1018fe" executionId="db144a38-57a7-4753-8165-d0bc365868ca" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1c8e9a76-dbf9-be6d-848c-fa8dfc46b30e" executionId="7d76d9b6-8600-407f-b92d-239257daf89f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="40b07848-f736-d8c5-3240-25bfe79ef510" executionId="55b8312c-6ef3-4a7b-a2e0-bd09cda4ba8c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a7042201-6008-b9b5-e740-50a2d603c7f9" executionId="4bc57128-0132-4823-8330-83e72a68fe0b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2663d4e6-5de5-eb5a-59bc-bb4d78defc4a" executionId="1f4586f8-4f62-4c03-a771-8ecc18ed39e8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="aabb1912-ad7b-39f5-47c1-e337e2ed8446" executionId="57b33c48-ad2b-430e-bdc3-be8b74715ef9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a51a3fe7-1f25-bc91-3ad3-abd4e2bafbca" executionId="8873d327-cc86-4cbc-84d1-2a806e7d7db2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Ergebnisse nicht in einer Liste" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="Alle geladenen Ergebnisse" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="21" executed="21" passed="18" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.9)&#xD;
+[xUnit.net 00:00:00.89]   Discovering: BPGit.Server.Tests&#xD;
+[xUnit.net 00:00:01.00]   Discovered:  BPGit.Server.Tests&#xD;
+[xUnit.net 00:00:01.04]   Starting:    BPGit.Server.Tests&#xD;
+[xUnit.net 00:00:02.35]       Assert.Single() Failure: The collection was empty&#xD;
+[xUnit.net 00:00:02.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.35]         C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs(100,0): at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_DeleteFileInPush_CallsDeleteAsync()&#xD;
+[xUnit.net 00:00:02.35]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.01]       Assert.Single() Failure: The collection was empty&#xD;
+[xUnit.net 00:00:03.01]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.01]         C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs(62,0): at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName()&#xD;
+[xUnit.net 00:00:03.01]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.50]       Assert.Single() Failure: The collection was empty&#xD;
+[xUnit.net 00:00:03.50]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.50]         C:\Users\Admin\.openclaw\workspace\projects\bp-git\tests\BPGit.Server.Tests\PreReceiveHandlerTests.cs(79,0): at BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName()&#xD;
+[xUnit.net 00:00:03.50]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.51]   Finished:    BPGit.Server.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="OPENCLAWPC" outcome="Error" timestamp="2026-08-12T17:46:28.6619498+02:00">
+        <Text>[xUnit.net 00:00:02.35]     BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_DeleteFileInPush_CallsDeleteAsync [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="OPENCLAWPC" outcome="Error" timestamp="2026-08-12T17:46:29.3243378+02:00">
+        <Text>[xUnit.net 00:00:03.01]     BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="OPENCLAWPC" outcome="Error" timestamp="2026-08-12T17:46:29.8164662+02:00">
+        <Text>[xUnit.net 00:00:03.50]     BPGit.Server.Tests.PreReceiveHandlerTests.HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
