@@ -10,7 +10,7 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
 - **processid-Mapping final** (Martin #6311, 21:42): Filename = `sanitize(BPAProcess.name)`, abgeleitet nicht autoritativ. Mapping via `git diff`-Status (R/M/A/D) + `BPAProcess.name`-DB-Lookup.
 - **Kein** `snapshot.json`, **kein** `folders.json` im Worktree. Pure XML + git.
 - **Specs + Doku up-to-date** (Stand 2026-08-12, Martin #6401-Doku-Pass):
-  - `context/SPEC-git-server.md` — **v0.3 Draft** (Phase-4c + 4b-follow-up + xunit-Tests + LibGit2Sharp-0.32.0-Limitationen; Kapitel 9 added `cbaa279`)
+  - `specs/SPEC-git-server.md` (Martin #6429: verschoben von context/ fuer konsistente specs/-Convention) — **v0.3 Draft** (Phase-4c + 4b-follow-up + xunit-Tests + LibGit2Sharp-0.32.0-Limitationen; Kapitel 9 added `cbaa279`)
   - `specs/SPEC-adapter-architecture.md` — **v4** (Worktree-Layout, processid-Mapping, XML-Serialisierung; Phase 4c + xunit-Tests)
   - `specs/SPEC-target-environment.md` — **v2** (OpenClawPC, .NET 10, BP 7.5.1; verifiziert nach xunit-Tests-Welle)
   - `README-bpgit-git.md` — End-User-Quickstart (Footer mit Test-Stand + Spec-Versionen angereichert 2026-08-12)
@@ -24,7 +24,7 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
 - `README-bpgit-git.md` — End-User-Doku (Quickstart, Workflows, Filename-Regeln)
 - `specs/SPEC-adapter-architecture.md` — Adapter-Layer-Architektur (Worktree, Mapping)
 - `specs/SPEC-target-environment.md` — OpenClawPC, .NET 10, BP 7.5.1
-- `context/SPEC-git-server.md` — Git-Server-Architektur, Hooks, Auth, Deployment
+- `specs/SPEC-git-server.md` (Martin #6429: verschoben von context/ fuer konsistente specs/-Convention) — Git-Server-Architektur, Hooks, Auth, Deployment
 - `context/bp-cli-reference-7.5.1.md` — AutomateC.exe CLI-Referenz 7.5.1
 - `context/bp-database-schema.md` — BP-Schema-Doku
 - `context/bp-existing-solutions.md` — Bestehende Alternativen (BP-Diff, etc.)
