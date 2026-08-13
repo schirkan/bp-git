@@ -125,6 +125,10 @@ public static class GitHttpHandler
             .OrderBy(r => r.CanonicalName, StringComparer.Ordinal)
             .ToList();
 
+        // smart-HTTP v2: announce service name as the first pkt-line, then flush
+        // before the ref advertisement block. Without the service header, git
+        // clients reject the response with "expected service, got flush packet".
+        await Pkt.WriteServiceHeaderAsync(ctx.Response.Body, service);
         await Pkt.WriteFlushAsync(ctx.Response.Body);
         if (refs.Count == 0)
         {
@@ -286,13 +290,26 @@ internal static class Pkt
     public static async Task WriteDataAsync(Stream stream, string payload)
     {
         var bytes = Encoding.UTF8.GetBytes(payload);
-        var len = bytes.Length + 4 + 1; // 4 length bytes + payload + LF
+        // pkt-line length per gitprotocol-pack.txt:
+        // "The length of the packet, including the 4 bytes of the length itself,
+        //  but not including the packet payload's LF terminator."
+        // -> length = 4 (length bytes) + payload bytes (LF terminator is NOT counted).
+        var len = bytes.Length + 4;
         var header = new byte[4];
         BinaryPrimitives.WriteUInt32BigEndian(header, (uint)len);
         await stream.WriteAsync(header);
         await stream.WriteAsync(bytes);
         await stream.WriteAsync(new byte[] { (byte)'\n' });
     }
+
+    /// <summary>
+    /// Writes the service announcement pkt-line per smart-HTTP v2:
+    /// <c>&lt;len&gt;git-upload-pack\n</c>. The terminating <c>0000</c> flush
+    /// that separates the header from the ref advertisement must be emitted
+    /// separately by the caller.
+    /// </summary>
+    public static Task WriteServiceHeaderAsync(Stream stream, string service)
+        => WriteDataAsync(stream, service);
 
     public static async Task WriteFlushAsync(Stream stream)
     {

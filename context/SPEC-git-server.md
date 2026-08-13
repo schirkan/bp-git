@@ -202,10 +202,15 @@ Theoretisch, Demo-DB hat 0 Duplicates: bei zwei Processes mit gleichem Namen in 
 ### Beispiel: git clone
 
 ```bash
+# LAN (anderer Rechner im Subnetz):
 git clone http://win-user@openclawpc:8181/bp-git
+# Lokal auf OpenClawPC selbst (Server laeuft dort):
+git clone http://localhost:8181/bp-git
 cd bp-git
 ls processes/Processes/Default/   # folder-aware materialisiert
 ```
+
+> **Wichtig**: `0.0.0.0` in der Default-`listenUrls` ist ein **Bind-Adresse** (lauscht auf allen Interfaces). Clients koennen sich nicht zu `0.0.0.0` verbinden — Windows antwortet `Address not available`. Lokal immer `localhost`/`127.0.0.1`, remote den Hostnamen/die IP des Servers.
 
 Server-Flow:
 1. Auth via Windows-Integrated-Auth (Domaenen-Credentials)
@@ -378,7 +383,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 1. `bpgit init` (server-side Admin-Tool) erstellt Bare-Repo + Bare-Repo-Worktree mit folder-aware Layout
 2. `git add . && git commit -m "Initial import"`
-3. User clone: `git clone http://openclawpc:8181/bp-git`
+3. User clone: `git clone http://openclawpc:8181/bp-git` (lokal auf OpenClawPC: `git clone http://localhost:8181/bp-git`)
 
 ---
 
@@ -444,7 +449,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 2. **Konfiguration** in `C:\bpgit\bpgit-server.json`:
    ```json
    {
-     "ListenUrls": ["http://openclawpc:8181"],
+     "ListenUrls": ["http://0.0.0.0:8181"],
      "BpServer": "(localdb)\\BluePrismLocalDB",
      "BpDatabase": "BluePrism",
      "BpAuth": "sso",
@@ -452,6 +457,8 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
      "RepoName": "bp-git"
    }
    ```
+
+   > **Bind vs. Connect**: `0.0.0.0:8181` hoert auf allen Interfaces, ist aber kein verbindbarer Host. Lokale Tests: `http://localhost:8181`. LAN: `http://<hostname>:8181` oder die IP direkt. Fuer produktiven Einsatz kann die Default-Liste z.B. auf `["http://10.0.0.5:8181"]` gehaertet werden.
 3. **Bare-Repo initialisieren**:
    ```bash
    cd "C:/bpgit/repos"
@@ -492,7 +499,7 @@ git pull  # server-side post-checkout materialisiert Updates + canonical Filenam
 
 1. **Git-Server deployen** (per #12)
 2. **Initial-Repo erstellen**: `bpgit-server init bp-git` → Bare-Repo mit folder-aware Layout
-3. **Andere User migrieren**: `git clone http://openclawpc:8181/bp-git` → Worktree wird materialisiert
+3. **Andere User migrieren**: `git clone http://openclawpc:8181/bp-git` → Worktree wird materialisiert. Lokale Tests auf OpenClawPC selbst: `git clone http://localhost:8181/bp-git`.
 
 ### Ein-Weg-Migration
 

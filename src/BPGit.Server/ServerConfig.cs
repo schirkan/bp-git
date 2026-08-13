@@ -10,7 +10,18 @@ namespace BPGit.Server;
 /// </summary>
 public sealed class ServerConfig
 {
-    /// <summary>HTTP listen URL(s) for Kestrel. Default: http://0.0.0.0:8181</summary>
+    /// <summary>
+    /// HTTP listen URL(s) for Kestrel. Default: <c>http://0.0.0.0:8181</c>.
+    /// <para>
+    /// <c>0.0.0.0</c> is a <em>bind</em> address — it accepts connections on
+    /// every interface. Clients must connect via the host's actual name or IP
+    /// (<c>localhost</c> / <c>127.0.0.1</c> / the machine's hostname), NOT via
+    /// <c>0.0.0.0</c> (Windows rejects "Address not available"). For LAN access
+    /// from other machines, replace <c>0.0.0.0</c> with the machine's actual
+    /// IPv4 address (e.g. <c>http://192.168.1.10:8181</c>) or use
+    /// <c>http://+:8181</c> (HTTP.sys namespace reservation on Windows).
+    /// </para>
+    /// </summary>
     [JsonPropertyName("listenUrls")]
     public List<string> ListenUrls { get; init; } = new() { "http://0.0.0.0:8181" };
 

@@ -15,11 +15,14 @@ public class PktInternalTests
         await Pkt.WriteDataAsync(ms, "hello");
 
         var bytes = ms.ToArray();
+        // Per gitprotocol-pack.txt: len-prefix = 4 + payload-bytes (LF terminator
+        // is NOT counted in the length). Total bytes on the wire = 4 (header) +
+        // payload-bytes + 1 (LF).
         Assert.Equal(10, bytes.Length);
         Assert.Equal(0x00, bytes[0]);
         Assert.Equal(0x00, bytes[1]);
         Assert.Equal(0x00, bytes[2]);
-        Assert.Equal(0x0A, bytes[3]);
+        Assert.Equal(0x09, bytes[3]); // len = 4 + 5 = 9
         Assert.Equal("hello", Encoding.UTF8.GetString(bytes, 4, 5));
         Assert.Equal((byte)'\n', bytes[9]);
     }
@@ -43,14 +46,14 @@ public class PktInternalTests
     }
 
     [Fact]
-    public async Task WriteDataAsync_EmptyString_EmitsHeader0005LfOnly()
+    public async Task WriteDataAsync_EmptyString_EmitsHeader0004LfOnly()
     {
         using var ms = new MemoryStream();
         await Pkt.WriteDataAsync(ms, "");
 
         var bytes = ms.ToArray();
         Assert.Equal(5, bytes.Length);
-        Assert.Equal(0x05, bytes[3]);
+        Assert.Equal(0x04, bytes[3]); // len = 4 + 0 = 4
         Assert.Equal((byte)'\n', bytes[4]);
     }
 
@@ -62,7 +65,7 @@ public class PktInternalTests
 
         var bytes = ms.ToArray();
         Assert.Equal(4 + 2 + 1, bytes.Length);
-        Assert.Equal(0x07, bytes[3]);
+        Assert.Equal(0x06, bytes[3]); // len = 4 + 2 = 6
     }
 
 }

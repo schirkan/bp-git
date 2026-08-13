@@ -41,7 +41,21 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = options.DefaultPolicy;
+    // Default policy requires an authenticated Negotiate user — protects the
+    // /admin/* endpoints. Git smart-HTTP routes are explicitly opted out via
+    // .AllowAnonymous() (smart-HTTP clients don't ship credentials unless the
+    // URL embeds them, and forcing Negotiate here breaks all non-Windows clients).
+    options.DefaultPolicy = options.GetPolicy("RequireAdmin");
+
+    options.AddPolicy("RequireAdmin", policy =>
+        policy.RequireAuthenticatedUser());
+
+    // Git smart-HTTP routes use this no-op policy — explicit override of the
+    // FallbackPolicy for the catch-all endpoint. We also use .AllowAnonymous()
+    // which together with this no-op policy guarantees no auth challenge on
+    // /{repo}/info/refs and /{repo}/git-*-pack.
+    options.AddPolicy("AllowAnonymousGit", policy =>
+        policy.RequireAssertion(_ => true));
 });
 
 builder.Services.AddSingleton(cfg);
@@ -141,8 +155,15 @@ app.MapPost("/admin/sync-worktree", async (HttpContext ctx, WorktreeSyncService 
     }
 }).AllowAnonymous();
 
-// Git smart-HTTP endpoints. Auth required via Negotiate (Win Integrated).
-app.Map("/{repo}/**", async (HttpContext ctx, string repo, ServerConfig srvCfg) =>
+// Git smart-HTTP endpoints. Smart-HTTP is anonymous by protocol design — git
+// clients don't ship credentials with /info/refs or /git-*-pack requests unless
+// the URL embeds them. FallbackPolicy + .AllowAnonymous() alone is not enough
+// in ASP.NET Core (FallbackPolicy still triggers a 401 before the Anonymous
+// override), so we explicitly apply the no-op "AllowAnonymousGit" policy.
+//
+// The catch-all is registered as MapFallback so it does not collide with
+// /healthz, /admin/*, or other explicit routes.
+app.MapFallback(async (HttpContext ctx, ServerConfig srvCfg) =>
 {
     var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg);
     if (!handled)
@@ -150,11 +171,24 @@ app.Map("/{repo}/**", async (HttpContext ctx, string repo, ServerConfig srvCfg) 
         ctx.Response.StatusCode = StatusCodes.Status404NotFound;
         await ctx.Response.WriteAsync($"bpgit-server: no route for {ctx.Request.Path}\n");
     }
-});
+}).RequireAuthorization("AllowAnonymousGit");
+
+// Pick a connectable test URL for the banner. 0.0.0.0 is a *bind* address
+// (Windows accepts connections on every interface), not a connectable host —
+// clients must use the machine's actual hostname / localhost / IP.
+var firstUrl = cfg.ListenUrls.First();
+var connectable = firstUrl.StartsWith("http://0.0.0.0", StringComparison.OrdinalIgnoreCase)
+    ? "http://localhost" + firstUrl["http://0.0.0.0".Length..]
+    : firstUrl;
 
 Console.WriteLine($"[bpgit-server] Listening on {string.Join(", ", cfg.ListenUrls)}");
+Console.WriteLine($"[bpgit-server] Connect URL: {connectable}  (0.0.0.0 is bind-only — clients use localhost / hostname / IP)");
 Console.WriteLine($"[bpgit-server] Bare repo: {cfg.BareRepoPath}");
-Console.WriteLine($"[bpgit-server] Try: git ls-remote {cfg.ListenUrls.First()}");
+if (!Directory.Exists(cfg.BareRepoPath) || !LibGit2Sharp.Repository.IsValid(cfg.BareRepoPath))
+{
+    Console.WriteLine($"[bpgit-server] WARNING: no bare repo at {cfg.BareRepoPath} — run `bpgit-server init` first.");
+}
+Console.WriteLine($"[bpgit-server] Try: git ls-remote {connectable}/<repo-name>");
 
 app.Run();
 return 0;

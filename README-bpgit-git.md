@@ -6,6 +6,8 @@ Git-Workflow für Blue Prism Processes und Objects. Standard-git-Befehle, keine 
 
 ```bash
 # 1. Repo klonen (einmalig)
+#    LAN:    http://openclawpc:8181/bp-git
+#    lokal:  http://localhost:8181/bp-git    (wenn Server auf derselben Maschine laeuft)
 git clone http://openclawpc:8181/bp-git
 cd bp-git
 
