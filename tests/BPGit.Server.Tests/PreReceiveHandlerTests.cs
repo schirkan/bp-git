@@ -92,7 +92,7 @@ public class PreReceiveHandlerTests : IDisposable
         return commit.Sha;
     }
 
-    [Fact(Skip = "Issue #802 workaround (Commit[] parents + TreeDefinition + ObjectDatabase.CreateCommit) kompiliert jetzt in LibGit2Sharp 0.32.0; HandleAsync.Walk findet aber keine Tree-Eintraege (Assert.Single collection-empty). Tiefe Diagnose noetig: tree.Count nach jedem CommitXml vs parents[0].tree.Count vergleichen. Phase 5+")]
+    [Fact]
     public async Task HandleAsync_ModifyExistingFile_CallsModifyAsyncWithOldAndNewName()
     {
         var oldSha = CommitXml("<process name=\"Old\"/>", "processes/Old.xml", "initial");
@@ -110,7 +110,7 @@ public class PreReceiveHandlerTests : IDisposable
         Assert.Empty(fake.AddCalls);
     }
 
-    [Fact(Skip = "Issue #802 workaround (Commit[] parents + TreeDefinition + ObjectDatabase.CreateCommit) kompiliert jetzt in LibGit2Sharp 0.32.0; HandleAsync.Walk findet aber keine Tree-Eintraege (Assert.Single collection-empty). Tiefe Diagnose noetig: tree.Count nach jedem CommitXml vs parents[0].tree.Count vergleichen. Phase 5+")]
+    [Fact]
     public async Task HandleAsync_AddNewFile_CallsAddAsyncWithExtractedName()
     {
         var newSha = CommitXml("<process name=\"Brand\"/>", "processes/Brand.xml", "add-new");
@@ -126,7 +126,7 @@ public class PreReceiveHandlerTests : IDisposable
         Assert.Empty(fake.ModifyCalls);
     }
 
-    [Fact(Skip = "Issue #802 workaround (Commit[] parents + TreeDefinition + ObjectDatabase.CreateCommit) kompiliert jetzt in LibGit2Sharp 0.32.0; HandleAsync.Walk findet aber keine Tree-Eintraege (Assert.Single collection-empty). Tiefe Diagnose noetig: tree.Count nach jedem CommitXml vs parents[0].tree.Count vergleichen. Phase 5+")]
+    [Fact]
     public async Task HandleAsync_DeleteFileInPush_CallsDeleteAsync()
     {
         var oldSha = CommitXml("<process name=\"Going\"/>", "processes/Going.xml", "add");

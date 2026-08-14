@@ -63,15 +63,22 @@ public sealed class PreReceiveHandler
         var successes = new List<string>();
         var failures = new List<string>();
 
+        // Flatten both trees into path-keyed dictionaries (handles nested dirs).
+        // LibGit2Sharp's Tree enumerator only iterates direct children — sub-trees
+        // appear as a single TreeEntry with Path="<dirname>" (no slash), so we
+        // recurse to reach the actual files.
+        var newFiles = WalkTreeEntries(newTree, "");
+        var oldFiles = oldTree is null ? null : WalkTreeEntries(oldTree, "");
+
         // Pass 1: Walk NEW tree — Modified (mit oldEntry) oder Added (ohne oldEntry)
-        foreach (var newEntry in newTree)
+        foreach (var (entryPath, newEntry) in newFiles)
         {
-            if (newEntry.Path is null || !newEntry.Path.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
+            if (!entryPath.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (!newEntry.Path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            if (!entryPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var oldEntry = oldTree?[newEntry.Path];
+            var oldEntry = oldFiles is not null && oldFiles.TryGetValue(entryPath, out var oe) ? oe : null;
 
             // SHA-Vergleich: wenn oldEntry existiert und gleicher Blob-SHA → Unmodified
             if (oldEntry is not null
@@ -85,17 +92,17 @@ public sealed class PreReceiveHandler
             var blob = newEntry.Target as Blob;
             if (blob is null)
             {
-                failures.Add($"Add/Modify: '{newEntry.Path}' ist kein Blob (Mode={newEntry.Mode}).");
+                failures.Add($"Add/Modify: '{entryPath}' ist kein Blob (Mode={newEntry.Mode}).");
                 continue;
             }
             var xmlContent = blob.GetContentText(Utf8NoBom);
             var newName = ExtractProcessName(xmlContent);
             if (string.IsNullOrEmpty(newName))
             {
-                failures.Add($"Add/Modify: cannot extract process name from '{newEntry.Path}'.");
+                failures.Add($"Add/Modify: cannot extract process name from '{entryPath}'.");
                 continue;
             }
-            var oldName = Path.GetFileNameWithoutExtension(newEntry.Path);
+            var oldName = Path.GetFileNameWithoutExtension(entryPath);
 
             if (oldEntry is null)
             {
@@ -114,21 +121,20 @@ public sealed class PreReceiveHandler
         }
 
         // Pass 2: Walk OLD tree — Deleted (in alter Tree, nicht in neuer)
-        if (oldTree is not null)
+        if (oldFiles is not null)
         {
-            foreach (var oldEntry in oldTree)
+            foreach (var (entryPath, oldEntry) in oldFiles)
             {
-                if (oldEntry.Path is null || !oldEntry.Path.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
+                if (!entryPath.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (!oldEntry.Path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // Wenn oldEntry.Path in newTree existiert → wurde oben behandelt (Modified/Added/Unmodified)
-                var newEntry = newTree[oldEntry.Path];
-                if (newEntry is not null)
+                if (!entryPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var oldName = Path.GetFileNameWithoutExtension(oldEntry.Path);
+                // Wenn entryPath in newTree existiert → wurde oben behandelt (Modified/Added/Unmodified)
+                if (newFiles.ContainsKey(entryPath))
+                    continue;
+
+                var oldName = Path.GetFileNameWithoutExtension(entryPath);
                 var r = await _sync.DeleteAsync(oldName);
                 if (r.Ok) successes.Add($"Delete {oldName}");
                 else failures.Add(r.Message ?? "Delete failed (no message)");
@@ -138,6 +144,39 @@ public sealed class PreReceiveHandler
         return failures.Count == 0
             ? PreReceiveResult.Success(successes)
             : PreReceiveResult.Failure(failures);
+    }
+
+    /// <summary>
+    /// Recursively walks a tree (including sub-trees) and flattens every file
+    /// (blob) entry into a Dictionary keyed by its full repository-relative
+    /// path (e.g. "processes/Objects/MyProcess.xml"). LibGit2Sharp's Tree
+    /// enumerator only iterates direct children — sub-trees appear as a
+    /// single TreeEntry with Path="<dirname>" (no trailing slash) — so we
+    /// descend into them manually. Submodule commits and empty paths are
+    /// skipped.
+    /// </summary>
+    internal static Dictionary<string, TreeEntry> WalkTreeEntries(Tree tree, string prefix)
+    {
+        var result = new Dictionary<string, TreeEntry>(StringComparer.OrdinalIgnoreCase);
+        WalkTreeEntriesRecursive(tree, prefix, result);
+        return result;
+    }
+
+    private static void WalkTreeEntriesRecursive(Tree tree, string prefix, Dictionary<string, TreeEntry> result)
+    {
+        foreach (var entry in tree)
+        {
+            if (entry.Path is null) continue;
+            var entryPath = string.IsNullOrEmpty(prefix) ? entry.Path : prefix + "/" + entry.Path;
+            if (entry.TargetType == TreeEntryTargetType.Tree && entry.Target is Tree subTree)
+            {
+                WalkTreeEntriesRecursive(subTree, entryPath, result);
+            }
+            else
+            {
+                result[entryPath] = entry;
+            }
+        }
     }
 
     internal static bool IsZeroSha(string? sha) =>
