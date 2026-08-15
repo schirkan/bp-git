@@ -1,0 +1,19 @@
+{
+  "listenUrls": ["http://0.0.0.0:8181"],
+  "repoRoot": "C:\\bpgit\\repos",
+  "repoName": "bp-git",
+
+  "bpServer": "(localdb)\\BluePrismLocalDB",
+  "bpDatabase": "BluePrism",
+  "bpAuth": "sso",
+  "bpUser": null,
+  "bpPassword": null,
+
+  "worktreeDir": "./processes",
+  "snapshotFileName": "bpgit-snapshot.json",
+
+  "automatecPath": "C:\\Program Files\\Blue Prism Limited\\Blue Prism Automate\\AutomateC.exe",
+  "cliAuthMode": "sso",
+  "cliUsername": null,
+  "cliPassword": null
+}

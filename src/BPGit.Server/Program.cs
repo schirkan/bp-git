@@ -1,4 +1,4 @@
-using BPGit.Server;
+using BPGit.Data;
 using BPGit.Server.Commands;
 using BPGit.Server.GitHttp;
 using BPGit.Server.Services;
@@ -42,15 +42,24 @@ public static partial class Program
 
     private static int RunServer(string[] args)
     {
-        var cfg = ServerConfig.Load(args);
-
-        // Server-Mode subcommand: `bpgit-server --serve init [repo]` runs once and exits.
-        // Without this flag, the unified binary is in CLI mode and `init` is the CLI init.
-        if (args.Length > 0 && args[0].Equals("init", StringComparison.OrdinalIgnoreCase))
+        // First arg (if not "init") is the config-path override. Default = <exe-dir>/bpgit.json.
+        string? configPath = null;
+        var remainingArgs = args;
+        if (args.Length > 0 && !args[0].Equals("init", StringComparison.OrdinalIgnoreCase))
         {
-            if (args.Length >= 2 && !string.IsNullOrWhiteSpace(args[1]))
+            configPath = args[0];
+            remainingArgs = args[1..];
+        }
+
+        var cfg = ServerConfig.Load(configPath);
+
+        // Server-Mode subcommand: `bpgit --serve init [repo]` runs once and exits.
+        // Without this flag, the unified binary is in CLI mode and `init` is the CLI init.
+        if (remainingArgs.Length > 0 && remainingArgs[0].Equals("init", StringComparison.OrdinalIgnoreCase))
+        {
+            if (remainingArgs.Length >= 2 && !string.IsNullOrWhiteSpace(remainingArgs[1]))
             {
-                var overrideName = args[1].TrimEnd('/');
+                var overrideName = remainingArgs[1].TrimEnd('/');
                 if (overrideName.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
                     overrideName = overrideName[..^4];
                 cfg = new ServerConfig
@@ -63,6 +72,12 @@ public static partial class Program
                     BpAuth = cfg.BpAuth,
                     BpUser = cfg.BpUser,
                     BpPassword = cfg.BpPassword,
+                    WorktreeDir = cfg.WorktreeDir,
+                    SnapshotFileName = cfg.SnapshotFileName,
+                    AutomateCPath = cfg.AutomateCPath,
+                    CliAuthMode = cfg.CliAuthMode,
+                    CliUsername = cfg.CliUsername,
+                    CliPassword = cfg.CliPassword,
                 };
             }
             return InitCommand.Run(cfg);

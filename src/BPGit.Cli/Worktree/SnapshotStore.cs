@@ -36,16 +36,24 @@ public static class SnapshotStore
         return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    public static Snapshot? Load(string worktreeRoot)
+    /// <summary>
+    /// Loads snapshot from <paramref name="workdir"/>/<paramref name="snapshotFileName"/>.
+    /// Returns null if the file does not exist.
+    /// </summary>
+    public static Snapshot? Load(string workdir, string snapshotFileName)
     {
-        var path = Path.Combine(worktreeRoot, ".bpgit", "snapshot.json");
+        var path = Path.Combine(workdir, snapshotFileName);
         if (!File.Exists(path)) return null;
         return JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(path));
     }
 
-    public static void Save(string worktreeRoot, Snapshot snapshot)
+    /// <summary>
+    /// Saves snapshot to <paramref name="workdir"/>/<paramref name="snapshotFileName"/>.
+    /// Creates intermediate directories as needed.
+    /// </summary>
+    public static void Save(string workdir, string snapshotFileName, Snapshot snapshot)
     {
-        var path = Path.Combine(worktreeRoot, ".bpgit", "snapshot.json");
+        var path = Path.Combine(workdir, snapshotFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(path, json);

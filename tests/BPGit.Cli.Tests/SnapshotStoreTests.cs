@@ -7,20 +7,21 @@ namespace BPGit.Cli.Tests;
 
 public class SnapshotStoreTests : IDisposable
 {
-    private readonly string _worktreeRoot;
+    private readonly string _workdir;
+    private const string SnapshotFileName = "bpgit-snapshot.json";
 
     public SnapshotStoreTests()
     {
-        _worktreeRoot = Path.Combine(
+        _workdir = Path.Combine(
             Path.GetTempPath(),
             "bpgit-snapshotstore-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_worktreeRoot);
+        Directory.CreateDirectory(_workdir);
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(_worktreeRoot))
-            Directory.Delete(_worktreeRoot, recursive: true);
+        if (Directory.Exists(_workdir))
+            Directory.Delete(_workdir, recursive: true);
     }
 
     [Fact]
@@ -57,15 +58,15 @@ public class SnapshotStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_CreatesDotBpgitDirectoryAndSnapshotJson()
+    public void Save_CreatesSnapshotFileInWorkdir()
     {
         var snap = new Snapshot
         {
             Processes = { ["foo"] = new SnapshotEntry { Name = "foo", Hash = "sha256:abc", Type = "O", Path = "Objects/Default/foo.xml" } }
         };
-        SnapshotStore.Save(_worktreeRoot, snap);
+        SnapshotStore.Save(_workdir, SnapshotFileName, snap);
 
-        var path = Path.Combine(_worktreeRoot, ".bpgit", "snapshot.json");
+        var path = Path.Combine(_workdir, SnapshotFileName);
         Assert.True(File.Exists(path));
     }
 
@@ -76,8 +77,8 @@ public class SnapshotStoreTests : IDisposable
         {
             Processes = { ["foo"] = new SnapshotEntry { Name = "foo" } }
         };
-        SnapshotStore.Save(_worktreeRoot, snap);
-        var content = File.ReadAllText(Path.Combine(_worktreeRoot, ".bpgit", "snapshot.json"));
+        SnapshotStore.Save(_workdir, SnapshotFileName, snap);
+        var content = File.ReadAllText(Path.Combine(_workdir, SnapshotFileName));
         Assert.Contains("\n", content);
         Assert.Contains("  ", content);
     }
@@ -94,24 +95,24 @@ public class SnapshotStoreTests : IDisposable
                     Hash = "sha256:abc",
                     Name = "MP - Subprocess A",
                     Type = "P",
-                    Path = "processes/Processes/Default/MP - Subprocess A.xml"
+                    Path = "Processes/Default/MP - Subprocess A.xml"
                 }
             }
         };
-        SnapshotStore.Save(_worktreeRoot, snap);
-        var loaded = SnapshotStore.Load(_worktreeRoot);
+        SnapshotStore.Save(_workdir, SnapshotFileName, snap);
+        var loaded = SnapshotStore.Load(_workdir, SnapshotFileName);
 
         Assert.NotNull(loaded);
         Assert.Equal(2, loaded!.Version);
         Assert.Single(loaded.Processes);
-        Assert.Equal("processes/Processes/Default/MP - Subprocess A.xml",
+        Assert.Equal("Processes/Default/MP - Subprocess A.xml",
             loaded.Processes["MP - Subprocess A"].Path);
     }
 
     [Fact]
     public void Load_ReturnsNullWhenFileDoesNotExist()
     {
-        Assert.Null(SnapshotStore.Load(_worktreeRoot));
+        Assert.Null(SnapshotStore.Load(_workdir, SnapshotFileName));
     }
 
     [Fact]
@@ -126,14 +127,25 @@ public class SnapshotStoreTests : IDisposable
                 ["b"] = new SnapshotEntry { Name = "B", Hash = "sha256:222", Type = "P", Path = "x/b.xml" },
             }
         };
-        SnapshotStore.Save(_worktreeRoot, original);
+        SnapshotStore.Save(_workdir, SnapshotFileName, original);
 
-        var loaded = SnapshotStore.Load(_worktreeRoot);
+        var loaded = SnapshotStore.Load(_workdir, SnapshotFileName);
 
         Assert.NotNull(loaded);
         Assert.Equal(original.Version, loaded!.Version);
         Assert.Equal(2, loaded.Processes.Count);
         Assert.Equal("x/a.xml", loaded.Processes["a"].Path);
         Assert.Equal("x/b.xml", loaded.Processes["b"].Path);
+    }
+
+    [Fact]
+    public void Save_RespectsCustomSnapshotFileName()
+    {
+        var snapshotFileName = "my-snapshot.json";
+        var snap = new Snapshot { Processes = { ["foo"] = new SnapshotEntry { Name = "foo" } } };
+        SnapshotStore.Save(_workdir, snapshotFileName, snap);
+
+        Assert.True(File.Exists(Path.Combine(_workdir, snapshotFileName)));
+        Assert.False(File.Exists(Path.Combine(_workdir, SnapshotFileName)));
     }
 }

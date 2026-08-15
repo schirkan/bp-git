@@ -1,4 +1,5 @@
 using BPGit.Cli.Worktree;
+using BPGit.Data;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,28 +8,28 @@ using System.Linq;
 namespace BPGit.Cli.Commands;
 
 /// <summary>
-/// bpgit diff [&lt;processIdFilter&gt;] — Hash-based drift report.
-/// Folder-aware: walks processes/**/*.xml, resolves each file's processid via
-/// snapshot.json (path → processid), shows modified/added/deleted with hash diffs.
+/// bpgit diff [<processIdFilter>] — Hash-based drift report.
+/// Folder-aware: walks WorktreeDir/**/*.xml, resolves each file's processid via
+/// snapshot.json (path -> processid), shows modified/added/deleted with hash diffs.
 /// </summary>
 public static class DiffCommand
 {
-    public static void Run(string workdir, string? processIdFilter)
+    public static void Run(ServerConfig config, string? processIdFilter)
     {
-        var snapshot = SnapshotStore.Load(workdir);
+        var workdir = config.WorktreePath;
+        var snapshot = SnapshotStore.Load(workdir, config.SnapshotFileName);
         if (snapshot == null)
         {
-            Console.WriteLine("No snapshot. Run 'bpgit pull' first.");
+            Console.WriteLine($"No snapshot at {config.SnapshotPath}. Run 'bpgit pull' first.");
             return;
         }
-        var procDir = Path.Combine(workdir, "processes");
-        if (!Directory.Exists(procDir))
+        if (!Directory.Exists(workdir))
         {
-            Console.WriteLine($"No processes directory at {procDir}");
+            Console.WriteLine($"No worktree directory at {workdir}");
             return;
         }
 
-        // Build path → (processid, entry) reverse-map
+        // Build path -> (processid, entry) reverse-map
         var entryByPath = new Dictionary<string, (string processId, SnapshotEntry entry)>(StringComparer.OrdinalIgnoreCase);
         foreach (var kv in snapshot.Processes)
         {
@@ -44,7 +45,7 @@ public static class DiffCommand
         var deleted = 0;
         var currentPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in Directory.EnumerateFiles(procDir, "*.xml", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(workdir, "*.xml", SearchOption.AllDirectories))
         {
             var relPath = Path.GetRelativePath(workdir, file).Replace('\\', '/');
             currentPaths.Add(relPath);

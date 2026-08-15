@@ -1,42 +1,30 @@
+using BPGit.Data;
 using System;
 using System.IO;
 using System.Threading.Tasks;
 
 namespace BPGit.Cli.Commands;
 
+/// <summary>
+/// bpgit init — Bootstrap CLI worktree from BP-DB (no .bpgit/ directory;
+/// the unified bpgit.json next to the executable is the single config).
+///
+/// Optionally installs git hooks (post-checkout, post-merge) for drift warnings.
+/// </summary>
 public static class InitCommand
 {
-    public static async Task RunAsync(string workdir, bool installHooks = false)
+    public static async Task RunAsync(ServerConfig config, bool installHooks = false)
     {
-        var bpgitDir = Path.Combine(workdir, ".bpgit");
-        Directory.CreateDirectory(bpgitDir);
+        var workdir = config.WorktreePath;
+        Directory.CreateDirectory(workdir);
 
-        var configPath = Path.Combine(bpgitDir, "config.toml");
-        if (!File.Exists(configPath))
-        {
-            var cfg = "# bpgit config - Blue Prism Git adapter\n" +
-                "# Zwei Sektionen: [bp] fuer SqlConnection (read-only ops), [cli] fuer AutomateC.exe (write ops)\n\n" +
-                "[bp]\n" +
-                "connection_string = \"Server=(localdb)\\\\BluePrismLocalDB;Integrated Security=SSPI;Database=BluePrism\"\n" +
-                "# Optional: SQL-Auth fallback (only if SSPI unavailable).\n" +
-                "# Credentials direkt in config (kein env-var-Lookup).\n" +
-                "# sql_username = \"bpgit_readonly\"\n" +
-                "# sql_password = \"...\"\n\n" +
-                "[cli]\n" +
-                "# Path to AutomateC.exe (default is the standard install location)\n" +
-                "automatec_path = \"C:\\\\Program Files\\\\Blue Prism Limited\\\\Blue Prism Automate\\\\AutomateC.exe\"\n" +
-                "# Auth mode: \"sso\" (default, Windows Integrated Auth) or \"user\"\n" +
-                "auth = \"sso\"\n" +
-                "# Only used when auth = \"user\". Credentials direkt in config.\n" +
-                "# cli_username = \"admin\"\n" +
-                "# cli_password = \"...\"\n";
-            await File.WriteAllTextAsync(configPath, cfg);
-            Console.WriteLine($"Created {configPath}");
-        }
-        else
-        {
-            Console.WriteLine($"{configPath} already exists");
-        }
+        Console.WriteLine($"bpgit init: workdir={workdir}");
+        Console.WriteLine($"bpgit init: snapshot={config.SnapshotPath}");
+        Console.WriteLine($"bpgit init: bp-server={config.BpServer}, db={config.BpDatabase}");
+        Console.WriteLine($"bpgit init: connect-string={config.GetEffectiveConnectionString()}");
+
+        // Auto-pull from BP-DB into worktree
+        await PullCommand.RunAsync(config);
 
         if (installHooks)
         {
@@ -62,13 +50,13 @@ public static class InitCommand
 # bpgit post-checkout hook
 # Warnt nach Branch-Wechsel, dass Worktree moeglicherweise von BP-DB abweicht.
 # KEIN auto-pull, KEIN auto-rewrite - nur Hinweis.
-[ -d .bpgit ] && echo '[bpgit] Worktree kann von BP-DB abweichen. ''bpgit status'' pruefen, ggf. ''bpgit pull'' ausfuehren.'
+[ -d processes ] && echo '[bpgit] Worktree kann von BP-DB abweichen. ''bpgit status'' pruefen, ggf. ''bpgit pull'' ausfuehren.'
 ";
         var postMerge = @"#!/bin/sh
 # bpgit post-merge hook
 # Warnt nach Branch-Merge, dass Worktree moeglicherweise von BP-DB abweicht.
 # KEIN auto-pull, KEIN auto-rewrite - nur Hinweis.
-[ -d .bpgit ] && echo '[bpgit] Nach Merge: Worktree ggf. von BP-DB abweichen. ''bpgit pull'' empfohlen.'
+[ -d processes ] && echo '[bpgit] Nach Merge: Worktree ggf. von BP-DB abweichen. ''bpgit pull'' empfohlen.'
 ";
 
         var postCheckoutPath = Path.Combine(hooksDir, "post-checkout");

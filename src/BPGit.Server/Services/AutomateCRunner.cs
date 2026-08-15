@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using BPGit.Data;
 
 namespace BPGit.Server.Services;
 
@@ -72,7 +73,7 @@ public static class AutomateCRunner
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 
-        using var p = Process.Start(psi)!;
+        using var p = System.Diagnostics.Process.Start(psi)!;
         var stdout = p.StandardOutput.ReadToEnd();
         var stderr = p.StandardError.ReadToEnd();
         p.WaitForExit();

@@ -1,9 +1,8 @@
-using BPGit.Cli.Config;
+using BPGit.Data;
 using BPGit.Data.Connection;
 using BPGit.Data.Repositories;
 using System;
 using System.Globalization;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace BPGit.Cli.Commands;
@@ -11,20 +10,13 @@ namespace BPGit.Cli.Commands;
 public static class LogCommand
 {
     public static async Task RunAsync(
-        string workdir,
+        ServerConfig config,
         int limit,
         Guid? processId,
         DateTime? since,
         string? sCode)
     {
-        var configPath = Path.Combine(workdir, ".bpgit", "config.toml");
-        if (!File.Exists(configPath))
-        {
-            Console.Error.WriteLine("bpgit not initialized. Run 'bpgit init' first.");
-            return;
-        }
-        var cfg = AppConfig.Load(configPath);
-        var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
+        var factory = new ConnectionFactory(config.GetEffectiveConnectionString());
         var repo = new ProcessRepository(factory);
 
         var rows = await repo.GetAuditHistoryAsync(limit, processId, since, sCode);

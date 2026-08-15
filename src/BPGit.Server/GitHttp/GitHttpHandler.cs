@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using BPGit.Data;
 using LibGit2Sharp;
 
 namespace BPGit.Server.GitHttp;
@@ -191,7 +192,7 @@ public static class GitHttpHandler
         psi.ArgumentList.Add("upload-pack");
         psi.ArgumentList.Add("--stateless-rpc");
 
-        using var proc = Process.Start(psi);
+        using var proc = System.Diagnostics.Process.Start(psi);
         if (proc is null)
         {
             ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
@@ -252,7 +253,7 @@ public static class GitHttpHandler
         psi.ArgumentList.Add("receive-pack");
         psi.ArgumentList.Add("--stateless-rpc");
 
-        using var proc = Process.Start(psi);
+        using var proc = System.Diagnostics.Process.Start(psi);
         if (proc is null)
         {
             ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;

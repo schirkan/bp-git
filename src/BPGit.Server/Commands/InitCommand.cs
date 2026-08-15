@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using BPGit.Data;
 using LibGit2Sharp;
 
 namespace BPGit.Server.Commands;

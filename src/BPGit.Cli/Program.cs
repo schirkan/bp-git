@@ -1,11 +1,16 @@
 using System;
 using System.Globalization;
-using System.IO;
 using System.Threading.Tasks;
 using BPGit.Cli.Commands;
+using BPGit.Data;
 
 namespace BPGit.Cli;
 
+/// <summary>
+/// CLI entry point: parses commands and dispatches to <see cref="BPGit.Cli.Commands"/>.
+/// The unified <see cref="ServerConfig"/> (loaded from <c>bpgit.json</c> next to the
+/// executable) is the single source of truth — no <c>.bpgit/</c> directory is created.
+/// </summary>
 public class Program
 {
     public static async Task<int> Main(string[] args)
@@ -18,7 +23,6 @@ public class Program
 
         // Parse args: first non-option is the command, options are global
         string? command = null;
-        string? output = null;
         bool installHooks = false;
         bool force = false;
         int limit = 50;
@@ -31,13 +35,6 @@ public class Program
         {
             switch (args[i])
             {
-                case "--output":
-                case "-o":
-                    if (i + 1 < args.Length)
-                    {
-                        output = args[++i];
-                    }
-                    break;
                 case "--install-hooks":
                     installHooks = true;
                     break;
@@ -77,29 +74,30 @@ public class Program
             }
         }
 
-        output ??= Directory.GetCurrentDirectory();
+        // Load unified config (default: <exe-dir>/bpgit.json)
+        var config = ServerConfig.Load();
 
         try
         {
             switch (command)
             {
                 case "init":
-                    await InitCommand.RunAsync(output, installHooks);
+                    await InitCommand.RunAsync(config, installHooks);
                     return 0;
                 case "pull":
-                    await PullCommand.RunAsync(output);
+                    await PullCommand.RunAsync(config);
                     return 0;
                 case "status":
-                    StatusCommand.Run(output);
+                    StatusCommand.Run(config);
                     return 0;
                 case "diff":
-                    DiffCommand.Run(output, positionalArg);
+                    DiffCommand.Run(config, positionalArg);
                     return 0;
                 case "log":
-                    await LogCommand.RunAsync(output, limit, processId, since, sCode);
+                    await LogCommand.RunAsync(config, limit, processId, since, sCode);
                     return 0;
                 case "commit":
-                    return await CommitCommand.RunAsync(output, force);
+                    return await CommitCommand.RunAsync(config, force);
                 case null:
                     Console.Error.WriteLine("No command specified. Use 'bpgit --help' for usage.");
                     return 1;
@@ -117,26 +115,31 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine("bpgit - Git-konformer Adapter fuer Blue Prism (Phase 1+2 Read/Write)");
+        Console.WriteLine("bpgit - Git-konformer Adapter fuer Blue Prism (unified CLI + Server)");
         Console.WriteLine();
         Console.WriteLine("Usage: bpgit [options] <command>");
+        Console.WriteLine("       bpgit --serve [config-path] | /s [config-path] | -s [config-path]");
+        Console.WriteLine();
+        Console.WriteLine("Server-Mode (--serve):");
+        Console.WriteLine("  --serve              Start Kestrel self-hosted git-server (default config: <exe-dir>/bpgit.json)");
+        Console.WriteLine("  --serve <config>     Start server with custom config");
+        Console.WriteLine("  --serve init <repo>  Initialize bare git-repo for the BP project");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  -o, --output <dir>     Worktree output directory (default: current dir)");
-        Console.WriteLine("      --install-hooks    Install git hooks for drift detection (init only)");
-        Console.WriteLine("      --force            Required for `commit` (explicit write)");
-        Console.WriteLine("  -n, --limit N          Limit rows for `log` (default 50)");
-        Console.WriteLine("      --processid <guid> Filter by processid for `log`");
-        Console.WriteLine("      --since YYYY-MM-DD Only entries with eventdatetime >= since for `log`");
-        Console.WriteLine("      --event <sCode> Filter by event-type code (e.g. P006, L001) for `log`");
+        Console.WriteLine("      --install-hooks    Install git hooks for drift warnings (init only)");
+        Console.WriteLine("      --force            Required for 'commit' (explicit write)");
+        Console.WriteLine("  -n, --limit N          Limit rows for 'log' (default 50)");
+        Console.WriteLine("      --processid <guid> Filter by processid for 'log'");
+        Console.WriteLine("      --since YYYY-MM-DD Only entries with eventdatetime >= since for 'log'");
+        Console.WriteLine("      --event <sCode>    Filter by event-type code (e.g. P006, L001) for 'log'");
         Console.WriteLine("  -h, --help             Show this help message");
         Console.WriteLine();
-        Console.WriteLine("Commands:");
-        Console.WriteLine("  init                   Initialize bp-git worktree (.bpgit/config.toml)");
-        Console.WriteLine("  pull                   Export BP processes from DB to worktree");
+        Console.WriteLine("CLI commands:");
+        Console.WriteLine("  init                   Initialize CLI worktree from BP-DB (uses bpgit.json, no .bpgit/ dir)");
+        Console.WriteLine("  pull                   Re-pull BP processes into worktree");
         Console.WriteLine("  status                 Show diff between worktree and snapshot");
         Console.WriteLine("  diff [<processid>]     Hash-based drift report (worktree vs snapshot)");
         Console.WriteLine("  log                    Show BP per-edit audit history from BPAAuditEvents");
-        Console.WriteLine("  commit                 Write worktree changes back to BP DB (requires --force)");
+        Console.WriteLine("  commit                 Write worktree changes back to BP-DB (requires --force)");
     }
 }

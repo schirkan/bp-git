@@ -1,4 +1,4 @@
-using BPGit.Cli.Config;
+using BPGit.Data;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -7,20 +7,21 @@ namespace BPGit.Cli.Services;
 
 /// <summary>
 /// Process.Start-Wrapper fuer AutomateC.exe. Setzt Auth-Flags je nach
-/// AppConfig.CliAuthMode ("sso" oder "user"), gibt ExitCode + StdOut + StdErr zurueck.
+/// <see cref="ServerConfig.CliAuthMode"/> ("sso" oder "user"), gibt ExitCode +
+/// StdOut + StdErr zurueck.
 /// </summary>
 public static class AutomateCRunner
 {
     public record RunResult(int ExitCode, string StdOut, string StdErr);
 
-    public static RunResult Run(AppConfig cfg, params string[] args)
+    public static RunResult Run(ServerConfig config, params string[] args)
     {
-        if (!File.Exists(cfg.AutomateCPath))
-            throw new FileNotFoundException($"AutomateC.exe nicht gefunden: {cfg.AutomateCPath}");
+        if (!File.Exists(config.AutomateCPath))
+            throw new FileNotFoundException($"AutomateC.exe nicht gefunden: {config.AutomateCPath}");
 
         var psi = new ProcessStartInfo
         {
-            FileName = cfg.AutomateCPath,
+            FileName = config.AutomateCPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -28,34 +29,33 @@ public static class AutomateCRunner
         };
 
         // Auth-Setup
-        var auth = cfg.CliAuthMode?.ToLowerInvariant();
+        var auth = config.CliAuthMode?.ToLowerInvariant();
         if (auth == "sso")
         {
             psi.ArgumentList.Add("/sso");
         }
         else if (auth == "user")
         {
-            if (string.IsNullOrWhiteSpace(cfg.CliUsername))
-                throw new InvalidOperationException("auth = \"user\" erfordert cli_username in .bpgit/config.toml [cli] section");
+            if (string.IsNullOrWhiteSpace(config.CliUsername))
+                throw new InvalidOperationException("cliAuthMode = \"user\" erfordert cliUsername in bpgit.json");
             psi.ArgumentList.Add("/user");
-            psi.ArgumentList.Add(cfg.CliUsername);
-            var pwd = cfg.GetCliPassword();
-            if (string.IsNullOrEmpty(pwd))
+            psi.ArgumentList.Add(config.CliUsername);
+            if (string.IsNullOrEmpty(config.CliPassword))
                 throw new InvalidOperationException(
-                    "auth = \"user\" erfordert cli_password in .bpgit/config.toml [cli] section");
-            psi.ArgumentList.Add(pwd);
+                    "cliAuthMode = \"user\" erfordert cliPassword in bpgit.json");
+            psi.ArgumentList.Add(config.CliPassword);
         }
         else
         {
             throw new InvalidOperationException(
-                $"Unbekannter auth mode: '{cfg.CliAuthMode}'. Erlaubt: 'sso' oder 'user'.");
+                $"Unbekannter cliAuthMode: '{config.CliAuthMode}'. Erlaubt: 'sso' oder 'user'.");
         }
 
         // Action-Args
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 
-        using var p = Process.Start(psi)!;
+        using var p = System.Diagnostics.Process.Start(psi)!;
         var stdout = p.StandardOutput.ReadToEnd();
         var stderr = p.StandardError.ReadToEnd();
         p.WaitForExit();

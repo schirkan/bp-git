@@ -1,5 +1,5 @@
-using BPGit.Cli.Config;
 using BPGit.Cli.Worktree;
+using BPGit.Data;
 using BPGit.Data.Connection;
 using BPGit.Data.Repositories;
 using System;
@@ -16,25 +16,21 @@ namespace BPGit.Cli.Commands;
 /// bpgit pull — Materialize worktree from BP-DB into folder-aware layout (per #6289).
 ///
 /// Layout:
-///   processes/
+///   WorktreeDir/
 ///     Processes/                  (BPATree id=2 only; other Trees excluded per #6287)
 ///       Default/                  (BPAGroup name)
-///         MP - Subprocess A.xml    (filename = process.name + ".xml", no subfolder)
-///         Test Process.xml
+///         MP - Subprocess A.xml    (filename = process.name + ".xml")
 ///       System Update/
 ///         Microsoft Store.xml
 ///     Objects/                    (BPATree id=3)
 ///       Default/
 ///         Data - SQL Server.xml
-///       ...
 ///
-/// snapshot.json (extended per #6293) holds processid → worktree-relative path mapping,
-/// so commit/status/diff can resolve path → processid without meta.json sidecars.
-/// folders.json captures the full folder hierarchy for diagnostic / UX purposes.
+/// snapshot.json (extended per #6293) holds processid -> worktree-relative path mapping,
+/// so commit/status/diff can resolve path -> processid without meta.json sidecars.
 ///
 /// M:N Group-Process membership: same process appears under multiple folder paths
-/// (file duplication, accepted per #6287 — duplication is theoretical in practice).
-/// Processes without any BPAGroupProcess entry land under _orphaned/ as a warning.
+/// (file duplication, accepted per #6287).
 /// </summary>
 public static class PullCommand
 {
@@ -44,16 +40,12 @@ public static class PullCommand
     private static readonly char[] InvalidNameChars =
         Path.GetInvalidFileNameChars().Concat(new[] { '<', '>', ':', '"', '/', '\\', '|', '?', '*' }).Distinct().ToArray();
 
-    public static async Task RunAsync(string workdir)
+    public static async Task RunAsync(ServerConfig config)
     {
-        var configPath = Path.Combine(workdir, ".bpgit", "config.toml");
-        if (!File.Exists(configPath))
-        {
-            Console.Error.WriteLine("bpgit not initialized. Run 'bpgit init' first.");
-            return;
-        }
-        var cfg = AppConfig.Load(configPath);
-        var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
+        var workdir = config.WorktreePath;
+        Directory.CreateDirectory(workdir);
+
+        var factory = new ConnectionFactory(config.GetEffectiveConnectionString());
         var repo = new ProcessRepository(factory);
 
         var processes = await repo.ListAllAsync();
@@ -67,10 +59,9 @@ public static class PullCommand
             .GroupBy(m => m.ProcessId)
             .ToDictionary(g => g.Key, g => g.Select(m => m.GroupId).ToList());
 
-        // Wipe & recreate processes/ to avoid stale GUID-named dirs from old layout
-        var procDir = Path.Combine(workdir, "processes");
-        if (Directory.Exists(procDir)) Directory.Delete(procDir, recursive: true);
-        Directory.CreateDirectory(procDir);
+        // Wipe & recreate the configured worktree directory to avoid stale files
+        if (Directory.Exists(workdir)) Directory.Delete(workdir, recursive: true);
+        Directory.CreateDirectory(workdir);
 
         var snapshot = new Snapshot { ExtractedAt = DateTime.UtcNow };
         int skipped = 0;
@@ -91,10 +82,7 @@ public static class PullCommand
                 continue;
             }
 
-            // Build all folder paths for this process (M:N → file duplication).
-            // relPath ist procDir-relativ (fuer Path.Combine mit procDir beim File-Write);
-            // der Snapshot-Eintrag bekommt den "processes/"-Prefix fuer workdir-relativen Pfad
-            // (matcht Path.GetRelativePath(workdir, file) in Status/Diff/Commit).
+            // Build all folder paths for this process (M:N -> file duplication).
             var relPaths = new List<string>();
             if (membershipsByProcessId.TryGetValue(p.processid, out var groupIds))
             {
@@ -107,7 +95,7 @@ public static class PullCommand
                 }
             }
 
-            // Orphaned processes (no group membership) — put under _orphaned/ for review
+            // Orphaned processes (no group membership) - put under _orphaned/ for review
             if (relPaths.Count == 0)
             {
                 relPaths.Add($"_orphaned/{sanitized}.xml");
@@ -117,7 +105,7 @@ public static class PullCommand
             // Write XML to each group path
             foreach (var relPath in relPaths)
             {
-                var fullPath = Path.Combine(procDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+                var fullPath = Path.Combine(workdir, relPath.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
                 if (!string.IsNullOrEmpty(p.processxml))
                 {
@@ -130,25 +118,13 @@ public static class PullCommand
                 Hash = SnapshotStore.ComputeHash(p.processxml ?? ""),
                 Name = p.name,
                 Type = p.ProcessType,
-                // Snapshot-Path = workdir-relativ (mit "processes/"-Prefix),
-                // damit StatusCommand/DiffCommand/CommitCommand matchen koennen.
-                Path = $"processes/{relPaths[0]}"
+                Path = relPaths[0]
             };
         }
 
-        SnapshotStore.Save(workdir, snapshot);
+        SnapshotStore.Save(workdir, config.SnapshotFileName, snapshot);
 
-        // Also write folders.json for diagnostic / UX (optional, not consumed by commit/status/diff)
-        var foldersDoc = new
-        {
-            trees = folderStructure.Trees.Select(t => new { id = t.Id, name = t.Name }),
-            groups = folderStructure.Groups.Select(g => new { id = g.Id, treeId = g.TreeId, name = g.Name }),
-            memberships = folderStructure.Memberships.Select(m => new { processId = m.ProcessId, groupId = m.GroupId })
-        };
-        var foldersJson = JsonSerializer.Serialize(foldersDoc, new JsonSerializerOptions { WriteIndented = true });
-        await File.WriteAllTextAsync(Path.Combine(workdir, ".bpgit", "folders.json"), foldersJson);
-
-        Console.WriteLine($"Snapshot saved ({snapshot.Processes.Count} entries, {skipped} skipped)");
+        Console.WriteLine($"Snapshot saved ({snapshot.Processes.Count} entries, {skipped} skipped) to {Path.Combine(workdir, config.SnapshotFileName)}");
     }
 
     private static readonly Regex LeadingCommentsRegex =

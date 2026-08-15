@@ -1,6 +1,6 @@
-using BPGit.Cli.Config;
 using BPGit.Cli.Services;
 using BPGit.Cli.Worktree;
+using BPGit.Data;
 using BPGit.Data.Connection;
 using BPGit.Data.Repositories;
 using BPGit.Format;
@@ -16,13 +16,13 @@ namespace BPGit.Cli.Commands;
 /// <summary>
 /// bpgit commit --force — Write worktree XMLs back to BP-DB via AutomateC.exe /import.
 ///
-/// Folder-aware layout (per #6289): walks processes/**/*.xml, resolves each file's
-/// processid via snapshot.json (path → processid), strips leading XML comments
+/// Folder-aware layout (per #6289): walks WorktreeDir/**/*.xml, resolves each file's
+/// processid via snapshot.json (path -> processid), strips leading XML comments
 /// (per #6277 / BP's strict /import parser), and invokes AutomateC.exe
-/// /import + /forceid &lt;guid&gt; + /overwrite.
+/// /import + /forceid <guid> + /overwrite.
 ///
 /// Lock-check stays on SqlCommand (read-only is fine). Process-Delete via CLI is
-/// not supported (BP-CLI limitation, per #6276) — only warning.
+/// not supported (BP-CLI limitation, per #6276) - only warning.
 /// </summary>
 public static class CommitCommand
 {
@@ -37,27 +37,19 @@ public static class CommitCommand
         return LeadingXmlCommentsRegex.Replace(xml, string.Empty);
     }
 
-    public static async Task<int> RunAsync(string workdir, bool force = false)
+    public static async Task<int> RunAsync(ServerConfig config, bool force = false)
     {
-        var configPath = Path.Combine(workdir, ".bpgit", "config.toml");
-        if (!File.Exists(configPath))
+        var workdir = config.WorktreePath;
+        if (!Directory.Exists(workdir))
         {
-            Console.Error.WriteLine("bpgit not initialized. Run 'bpgit init' first.");
+            Console.Error.WriteLine($"No worktree directory at {workdir}");
             return 1;
         }
 
-        var cfg = AppConfig.Load(configPath);
-        var snapshot = SnapshotStore.Load(workdir);
+        var snapshot = SnapshotStore.Load(workdir, config.SnapshotFileName);
         if (snapshot == null)
         {
-            Console.Error.WriteLine("No snapshot. Run 'bpgit pull' first.");
-            return 1;
-        }
-
-        var procDir = Path.Combine(workdir, "processes");
-        if (!Directory.Exists(procDir))
-        {
-            Console.Error.WriteLine($"No processes directory at {procDir}");
+            Console.Error.WriteLine($"No snapshot at {config.SnapshotPath}. Run 'bpgit pull' first.");
             return 1;
         }
 
@@ -67,7 +59,7 @@ public static class CommitCommand
             return 1;
         }
 
-        // Build path → processid reverse-map from snapshot (forward-slash normalized)
+        // Build path -> processid reverse-map from snapshot (forward-slash normalized)
         var pathToId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var pathToEntry = new Dictionary<string, SnapshotEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var kv in snapshot.Processes)
@@ -81,7 +73,7 @@ public static class CommitCommand
         }
 
         // Connection factory for read-only operations (Lock-Check)
-        var factory = new ConnectionFactory(cfg.GetEffectiveConnectionString());
+        var factory = new ConnectionFactory(config.GetEffectiveConnectionString());
         var repo = new ProcessRepository(factory);
         var xml = new ProcessXmlSerializer();
 
@@ -92,7 +84,7 @@ public static class CommitCommand
 
         try
         {
-            foreach (var file in Directory.EnumerateFiles(procDir, "*.xml", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(workdir, "*.xml", SearchOption.AllDirectories))
             {
                 var relPath = Path.GetRelativePath(workdir, file).Replace('\\', '/');
 
@@ -143,7 +135,7 @@ public static class CommitCommand
                 AutomateCRunner.RunResult result;
                 try
                 {
-                    result = AutomateCRunner.Run(cfg, args.ToArray());
+                    result = AutomateCRunner.Run(config, args.ToArray());
                 }
                 catch (Exception ex)
                 {
@@ -183,7 +175,7 @@ public static class CommitCommand
             }
         }
 
-        SnapshotStore.Save(workdir, snapshot);
+        SnapshotStore.Save(workdir, config.SnapshotFileName, snapshot);
         Console.WriteLine($"\n{committed} committed, {skipped} skipped, {errors} errors");
         Console.WriteLine("Tip: query 'SELECT TOP 5 * FROM BPAAuditEvents ORDER BY eventid DESC' to verify audit entries.");
         return errors == 0 ? 0 : 1;
