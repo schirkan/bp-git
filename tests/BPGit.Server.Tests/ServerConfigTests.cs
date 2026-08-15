@@ -23,24 +23,24 @@ public class ServerConfigTests : IDisposable
     }
 
     [Fact]
-    public void Load_FromExplicitPath_ParsesBpPassword()
+    public void Load_FromExplicitPath_ParsesSqlPassword()
     {
-        File.WriteAllText(_tempConfigPath, @"{ ""bpPassword"": ""geheim"" }");
+        File.WriteAllText(_tempConfigPath, @"{ ""sqlPassword"": ""geheim"" }");
 
         var cfg = ServerConfig.Load(_tempConfigPath);
 
-        Assert.Equal("geheim", cfg.BpPassword);
+        Assert.Equal("geheim", cfg.SqlPassword);
     }
 
     [Fact]
-    public void Load_FromExplicitPath_ParsesListenUrlsAndBpAuth()
+    public void Load_FromExplicitPath_ParsesListenUrlsAndSqlAuth()
     {
         File.WriteAllText(_tempConfigPath, @"{
             ""listenUrls"": [""http://10.0.0.1:9999""],
-            ""bpAuth"": ""user"",
-            ""bpUser"": ""myuser"",
-            ""bpServer"": ""MYHOST\\SQLEXPRESS"",
-            ""bpDatabase"": ""bpdb"",
+            ""sqlAuth"": ""user"",
+            ""sqlUser"": ""myuser"",
+            ""sqlServer"": ""MYHOST\\SQLEXPRESS"",
+            ""sqlDatabase"": ""bpdb"",
             ""repoRoot"": ""C:\\bpgit\\data"",
             ""repoName"": ""myrepo""
         }");
@@ -49,10 +49,10 @@ public class ServerConfigTests : IDisposable
 
         Assert.Single(cfg.ListenUrls);
         Assert.Equal("http://10.0.0.1:9999", cfg.ListenUrls[0]);
-        Assert.Equal("user", cfg.BpAuth);
-        Assert.Equal("myuser", cfg.BpUser);
-        Assert.Equal(@"MYHOST\SQLEXPRESS", cfg.BpServer);
-        Assert.Equal("bpdb", cfg.BpDatabase);
+        Assert.Equal("user", cfg.SqlAuth);
+        Assert.Equal("myuser", cfg.SqlUser);
+        Assert.Equal(@"MYHOST\SQLEXPRESS", cfg.SqlServer);
+        Assert.Equal("bpdb", cfg.SqlDatabase);
         Assert.Equal(@"C:\bpgit\data", cfg.RepoRoot);
         Assert.Equal("myrepo", cfg.RepoName);
     }
@@ -62,10 +62,10 @@ public class ServerConfigTests : IDisposable
     {
         var cfg = ServerConfig.Load(_tempConfigPath);
 
-        Assert.Equal("sso", cfg.BpAuth);
+        Assert.Equal("sso", cfg.SqlAuth);
         Assert.NotEmpty(cfg.ListenUrls);
-        Assert.Null(cfg.BpUser);
-        Assert.Null(cfg.BpPassword);
+        Assert.Null(cfg.SqlUser);
+        Assert.Null(cfg.SqlPassword);
     }
 
     [Fact]
@@ -89,8 +89,8 @@ public class ServerConfigTests : IDisposable
         var cfg = ServerConfig.Load(missingPath);
 
         // Missing file -> defaults retained.
-        Assert.Equal("sso", cfg.BpAuth);
-        Assert.Equal(@"C:\bpgit\repos", cfg.RepoRoot);
+        Assert.Equal("sso", cfg.SqlAuth);
+        Assert.Equal(".\\repos", cfg.RepoRoot);
         Assert.Equal("bp-git", cfg.RepoName);
     }
 
@@ -122,9 +122,9 @@ public class ServerConfigTests : IDisposable
     public void GetEffectiveConnectionString_SsoMode_UsesIntegratedSecurity()
     {
         File.WriteAllText(_tempConfigPath, @"{
-            ""bpServer"": ""MYHOST\\SQLEXPRESS"",
-            ""bpDatabase"": ""bpdb"",
-            ""bpAuth"": ""sso""
+            ""sqlServer"": ""MYHOST\\SQLEXPRESS"",
+            ""sqlDatabase"": ""bpdb"",
+            ""sqlAuth"": ""sso""
         }");
 
         var cfg = ServerConfig.Load(_tempConfigPath);
@@ -141,11 +141,11 @@ public class ServerConfigTests : IDisposable
     public void GetEffectiveConnectionString_UserMode_AppendsUserIdAndPassword()
     {
         File.WriteAllText(_tempConfigPath, @"{
-            ""bpServer"": ""MYHOST\\SQLEXPRESS"",
-            ""bpDatabase"": ""bpdb"",
-            ""bpAuth"": ""user"",
-            ""bpUser"": ""myuser"",
-            ""bpPassword"": ""mypwd""
+            ""sqlServer"": ""MYHOST\\SQLEXPRESS"",
+            ""sqlDatabase"": ""bpdb"",
+            ""sqlAuth"": ""user"",
+            ""sqlUser"": ""myuser"",
+            ""sqlPassword"": ""mypwd""
         }");
 
         var cfg = ServerConfig.Load(_tempConfigPath);

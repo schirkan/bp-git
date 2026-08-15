@@ -20,7 +20,7 @@ public static class InitCommand
 
         Console.WriteLine($"bpgit init: workdir={workdir}");
         Console.WriteLine($"bpgit init: snapshot={config.SnapshotPath}");
-        Console.WriteLine($"bpgit init: bp-server={config.BpServer}, db={config.BpDatabase}");
+        Console.WriteLine($"bpgit init: bp-server={config.SqlServer}, db={config.SqlDatabase}");
         Console.WriteLine($"bpgit init: connect-string={config.GetEffectiveConnectionString()}");
 
         // Auto-pull from BP-DB into worktree

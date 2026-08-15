@@ -1,13 +1,13 @@
 {
   "listenUrls": ["http://0.0.0.0:8181"],
-  "repoRoot": "C:\\bpgit\\repos",
+  "repoRoot": ".\\repos",
   "repoName": "bp-git",
 
-  "bpServer": "(localdb)\\BluePrismLocalDB",
-  "bpDatabase": "BluePrism",
-  "bpAuth": "sso",
-  "bpUser": null,
-  "bpPassword": null,
+  "sqlServer": "(localdb)\\BluePrismLocalDB",
+  "sqlDatabase": "BluePrism",
+  "sqlAuth": "sso",
+  "sqlUser": null,
+  "sqlPassword": null,
 
   "worktreeDir": "./processes",
   "snapshotFileName": "bpgit-snapshot.json",

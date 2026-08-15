@@ -67,11 +67,11 @@ public static partial class Program
                     ListenUrls = cfg.ListenUrls,
                     RepoRoot = cfg.RepoRoot,
                     RepoName = overrideName,
-                    BpServer = cfg.BpServer,
-                    BpDatabase = cfg.BpDatabase,
-                    BpAuth = cfg.BpAuth,
-                    BpUser = cfg.BpUser,
-                    BpPassword = cfg.BpPassword,
+                    SqlServer = cfg.SqlServer,
+                    SqlDatabase = cfg.SqlDatabase,
+                    SqlAuth = cfg.SqlAuth,
+                    SqlUser = cfg.SqlUser,
+                    SqlPassword = cfg.SqlPassword,
                     WorktreeDir = cfg.WorktreeDir,
                     SnapshotFileName = cfg.SnapshotFileName,
                     AutomateCPath = cfg.AutomateCPath,
@@ -114,9 +114,9 @@ public static partial class Program
 
         // BP-DB Connection String (Windows Integrated Auth default fuer localdb)
         string BuildConnectionString(ServerConfig c) =>
-            c.BpAuth.Equals("sso", StringComparison.OrdinalIgnoreCase)
-                ? $"Server={c.BpServer};Database={c.BpDatabase};Integrated Security=SSPI;TrustServerCertificate=true;"
-                : $"Server={c.BpServer};Database={c.BpDatabase};User Id={c.BpUser};Password={c.BpPassword};TrustServerCertificate=true;";
+            c.SqlAuth.Equals("sso", StringComparison.OrdinalIgnoreCase)
+                ? $"Server={c.SqlServer};Database={c.SqlDatabase};Integrated Security=SSPI;TrustServerCertificate=true;"
+                : $"Server={c.SqlServer};Database={c.SqlDatabase};User Id={c.SqlUser};Password={c.SqlPassword};TrustServerCertificate=true;";
 
         builder.Services.AddSingleton<BpDbService>(sp =>
             new BpDbService(BuildConnectionString(sp.GetRequiredService<ServerConfig>())));

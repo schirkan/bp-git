@@ -41,33 +41,35 @@ public sealed class ServerConfig
     [JsonPropertyName("listenUrls")]
     public List<string> ListenUrls { get; init; } = new() { "http://0.0.0.0:8181" };
 
-    /// <summary>Root directory for bare git repos. Default: C:\bpgit\repos</summary>
+    /// <summary>Root directory for bare git repos. Relative paths (e.g. <c>.\repos</c>) resolve against
+    /// <c>AppContext.BaseDirectory</c> (the directory containing the <c>bpgit</c> executable per
+    /// Martin #6480). Absolute paths (e.g. <c>C:\bpgit\repos</c>) are used as-is.</summary>
     [JsonPropertyName("repoRoot")]
-    public string RepoRoot { get; init; } = @"C:\bpgit\repos";
+    public string RepoRoot { get; init; } = ".\\repos";
 
     /// <summary>Default repo name used by the <c>init</c> subcommand.</summary>
     [JsonPropertyName("repoName")]
     public string RepoName { get; init; } = "bp-git";
 
-    /// <summary>BP SQL Server instance (e.g. <c>(localdb)\BluePrismLocalDB</c>).</summary>
-    [JsonPropertyName("bpServer")]
-    public string BpServer { get; init; } = @"(localdb)\BluePrismLocalDB";
+    /// <summary>SQL Server instance for the BP-DB connection (e.g. <c>(localdb)\BluePrismLocalDB</c>).</summary>
+    [JsonPropertyName("sqlServer")]
+    public string SqlServer { get; init; } = @"(localdb)\BluePrismLocalDB";
 
     /// <summary>BP database name. Default: BluePrism</summary>
-    [JsonPropertyName("bpDatabase")]
-    public string BpDatabase { get; init; } = "BluePrism";
+    [JsonPropertyName("sqlDatabase")]
+    public string SqlDatabase { get; init; } = "BluePrism";
 
-    /// <summary>Auth mode for BP: <c>sso</c> (Windows Integrated) or <c>user</c> (SQL auth).</summary>
-    [JsonPropertyName("bpAuth")]
-    public string BpAuth { get; init; } = "sso";
+    /// <summary>Auth mode for BP-DB: <c>sso</c> (Windows Integrated) or <c>user</c> (SQL auth).</summary>
+    [JsonPropertyName("sqlAuth")]
+    public string SqlAuth { get; init; } = "sso";
 
-    /// <summary>BP SQL username (only used when <see cref="BpAuth"/> = <c>user</c>).</summary>
-    [JsonPropertyName("bpUser")]
-    public string? BpUser { get; init; }
+    /// <summary>SQL username (only used when <see cref="SqlAuth"/> = <c>user</c>).</summary>
+    [JsonPropertyName("sqlUser")]
+    public string? SqlUser { get; init; }
 
-    /// <summary>BP SQL password (plaintext in config file, only used when <see cref="BpAuth"/> = <c>user</c>). Sensitive - see .gitignore for bpgit.json.</summary>
-    [JsonPropertyName("bpPassword")]
-    public string? BpPassword { get; init; }
+    /// <summary>SQL password (plaintext in config file, only used when <see cref="SqlAuth"/> = <c>user</c>). Sensitive - see .gitignore for bpgit.json.</summary>
+    [JsonPropertyName("sqlPassword")]
+    public string? SqlPassword { get; init; }
 
     /// <summary>CLI output directory for pulled/written BP process XML files. Default: ./processes</summary>
     [JsonPropertyName("worktreeDir")]
@@ -93,9 +95,20 @@ public sealed class ServerConfig
     [JsonPropertyName("cliPassword")]
     public string? CliPassword { get; init; }
 
-    /// <summary>Absolute path to the bare repo (derived from <see cref="RepoRoot"/> + <see cref="RepoName"/>).</summary>
+    /// <summary>Absolute path to the bare repo (derived from <see cref="RepoRoot"/> + <see cref="RepoName"/>).
+    /// Relative <see cref="RepoRoot"/> is resolved against <c>AppContext.BaseDirectory</c> so the
+    /// server always finds its repos next to the executable, regardless of the CWD it was started from.</summary>
     [JsonIgnore]
-    public string BareRepoPath => Path.Combine(RepoRoot, $"{RepoName}.git");
+    public string BareRepoPath
+    {
+        get
+        {
+            var root = Path.IsPathRooted(RepoRoot)
+                ? RepoRoot
+                : Path.Combine(AppContext.BaseDirectory, RepoRoot);
+            return Path.Combine(root, $"{RepoName}.git");
+        }
+    }
 
     /// <summary>Effective snapshot path (derived from <see cref="WorktreeDir"/> + <see cref="SnapshotFileName"/>).</summary>
     [JsonIgnore]
@@ -112,13 +125,13 @@ public sealed class ServerConfig
     /// </summary>
     public string GetEffectiveConnectionString()
     {
-        if (BpAuth.Equals("sso", StringComparison.OrdinalIgnoreCase))
+        if (SqlAuth.Equals("sso", StringComparison.OrdinalIgnoreCase))
         {
-            return $"Server={BpServer};Database={BpDatabase};Integrated Security=SSPI;TrustServerCertificate=true;";
+            return $"Server={SqlServer};Database={SqlDatabase};Integrated Security=SSPI;TrustServerCertificate=true;";
         }
-        var userPart = string.IsNullOrWhiteSpace(BpUser) ? "" : $"User Id={BpUser};";
-        var pwdPart = string.IsNullOrWhiteSpace(BpPassword) ? "" : $"Password={BpPassword};";
-        return $"Server={BpServer};Database={BpDatabase};{userPart}{pwdPart}TrustServerCertificate=true;";
+        var userPart = string.IsNullOrWhiteSpace(SqlUser) ? "" : $"User Id={SqlUser};";
+        var pwdPart = string.IsNullOrWhiteSpace(SqlPassword) ? "" : $"Password={SqlPassword};";
+        return $"Server={SqlServer};Database={SqlDatabase};{userPart}{pwdPart}TrustServerCertificate=true;";
     }
 
     /// <summary>
