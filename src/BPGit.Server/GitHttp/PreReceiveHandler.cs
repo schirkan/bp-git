@@ -167,7 +167,18 @@ public sealed class PreReceiveHandler
         foreach (var entry in tree)
         {
             if (entry.Path is null) continue;
-            var entryPath = string.IsNullOrEmpty(prefix) ? entry.Path : prefix + "/" + entry.Path;
+            // LibGit2Sharp 0.32.0 quirk: blob entries inside sub-trees sometimes
+            // retain the full repository-relative path (e.g. "processes/old.xml"
+            // instead of just "old.xml"). Take only the last path component as
+            // the leaf name so path composition with the recursion prefix
+            // doesn't produce doubled paths like "processes/processes/old.xml".
+            var leafName = entry.Path;
+            var lastSlash = leafName.LastIndexOf('/');
+            if (lastSlash >= 0)
+            {
+                leafName = leafName.Substring(lastSlash + 1);
+            }
+            var entryPath = string.IsNullOrEmpty(prefix) ? leafName : prefix + "/" + leafName;
             if (entry.TargetType == TreeEntryTargetType.Tree && entry.Target is Tree subTree)
             {
                 WalkTreeEntriesRecursive(subTree, entryPath, result);
