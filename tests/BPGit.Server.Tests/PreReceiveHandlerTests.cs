@@ -179,4 +179,23 @@ public class PreReceiveHandlerTests : IDisposable
         Assert.Empty(fake.ModifyCalls);
         Assert.Empty(fake.DeleteCalls);
     }
+
+    [Fact]
+    public async Task HandleAsync_SameBlobInBothTrees_DoesNotCallSync()
+    {
+        // Two commits with identical file content -> same blob SHA -> tree SHA identical.
+        // SameBlob(...) in the refactored single-pass walk must skip the entry.
+        var oldSha = CommitXml("<process name=\"Same\"/>", "processes/Same.xml", "initial");
+        var newSha = CommitXml("<process name=\"Same\"/>", "processes/Same.xml", "no-op");
+
+        var fake = new FakeBpSyncService();
+        var handler = new PreReceiveHandler(fake);
+
+        var result = await handler.HandleAsync(_repo, oldSha, newSha, "refs/heads/main");
+
+        Assert.True(result.Ok);
+        Assert.Empty(fake.AddCalls);
+        Assert.Empty(fake.ModifyCalls);
+        Assert.Empty(fake.DeleteCalls);
+    }
 }

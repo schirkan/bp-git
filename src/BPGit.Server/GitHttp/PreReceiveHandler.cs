@@ -13,7 +13,7 @@ namespace BPGit.Server.GitHttp;
 /// <summary>
 /// Pre-Receive-Hook-Logik: parsed einen Git-Push (<paramref name="oldRev"/> ..
 /// <paramref name="newRev"/>) und ruft <see cref="BpSyncService"/> pro
-/// file-change auf. Siehe <c>context/SPEC-git-server.md</c> Kapitel 4
+/// file-change auf. Siehe <c>specs/SPEC-git-server.md</c> Kapitel 4
 /// (processid-Mapping) + 7 (Server-Side Hooks).
 ///
 /// Eingabe: <c>Repository</c> (LibGit2Sharp) + oldRev + newRev + refName
@@ -53,92 +53,34 @@ public sealed class PreReceiveHandler
             return PreReceiveResult.Failure(new[] { $"Cannot resolve newrev '{newRev}' for ref '{refName}'." });
         }
 
-        var oldCommit = IsZeroSha(oldRev)
-            ? null
-            : repo.Lookup<Commit>(oldRev);
-
-        var oldTree = oldCommit?.Tree;
-        var newTree = newCommit.Tree;
+        var oldCommit = IsZeroSha(oldRev) ? null : repo.Lookup<Commit>(oldRev);
+        var newFiles = WalkTreeEntries(newCommit.Tree, "");
+        var oldFiles = oldCommit?.Tree is null ? null : WalkTreeEntries(oldCommit.Tree, "");
 
         var successes = new List<string>();
         var failures = new List<string>();
 
-        // Flatten both trees into path-keyed dictionaries (handles nested dirs).
-        // LibGit2Sharp's Tree enumerator only iterates direct children — sub-trees
-        // appear as a single TreeEntry with Path="<dirname>" (no slash), so we
-        // recurse to reach the actual files.
-        var newFiles = WalkTreeEntries(newTree, "");
-        var oldFiles = oldTree is null ? null : WalkTreeEntries(oldTree, "");
-
-        // Pass 1: Walk NEW tree — Modified (mit oldEntry) oder Added (ohne oldEntry)
-        foreach (var (entryPath, newEntry) in newFiles)
+        // Single pass: iterate the union of both file maps. For each path we
+        // determine the action by which trees the entry appears in:
+        //   - in both, same SHA         -> Unmodified (skip)
+        //   - in both, different SHA    -> Modify (call ModifyAsync)
+        //   - in new only               -> Add    (call AddAsync)
+        //   - in old only               -> Delete (call DeleteAsync)
+        // This replaces the formerly separate Pass 1 + Pass 2 loops and keeps
+        // the dict-based lookup instead of the old Tree-Indexer hack.
+        foreach (var path in UnionKeys(newFiles, oldFiles))
         {
-            if (!entryPath.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!entryPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            if (!IsProcessXml(path, pathFilter))
                 continue;
 
-            var oldEntry = oldFiles is not null && oldFiles.TryGetValue(entryPath, out var oe) ? oe : null;
+            newFiles.TryGetValue(path, out var newEntry);
+            TreeEntry? oldEntry = null;
+            if (oldFiles is not null) oldFiles.TryGetValue(path, out oldEntry);
 
-            // SHA-Vergleich: wenn oldEntry existiert und gleicher Blob-SHA → Unmodified
-            if (oldEntry is not null
-                && oldEntry.Target is Blob oldBlob
-                && newEntry.Target is Blob newBlob
-                && oldBlob.Sha == newBlob.Sha)
-            {
+            if (SameBlob(newEntry, oldEntry))
                 continue;
-            }
 
-            var blob = newEntry.Target as Blob;
-            if (blob is null)
-            {
-                failures.Add($"Add/Modify: '{entryPath}' ist kein Blob (Mode={newEntry.Mode}).");
-                continue;
-            }
-            var xmlContent = blob.GetContentText(Utf8NoBom);
-            var newName = ExtractProcessName(xmlContent);
-            if (string.IsNullOrEmpty(newName))
-            {
-                failures.Add($"Add/Modify: cannot extract process name from '{entryPath}'.");
-                continue;
-            }
-            var oldName = Path.GetFileNameWithoutExtension(entryPath);
-
-            if (oldEntry is null)
-            {
-                // Added (in neuer Tree, nicht in alter)
-                var r = await _sync.AddAsync(xmlContent, newName);
-                if (r.Ok) successes.Add($"Add {newName}");
-                else failures.Add(r.Message ?? "Add failed (no message)");
-            }
-            else
-            {
-                // Modified (existiert in beiden Trees, aber SHA differs)
-                var r = await _sync.ModifyAsync(xmlContent, oldName, newName);
-                if (r.Ok) successes.Add($"Modify {oldName} -> {newName}");
-                else failures.Add(r.Message ?? "Modify failed (no message)");
-            }
-        }
-
-        // Pass 2: Walk OLD tree — Deleted (in alter Tree, nicht in neuer)
-        if (oldFiles is not null)
-        {
-            foreach (var (entryPath, oldEntry) in oldFiles)
-            {
-                if (!entryPath.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (!entryPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // Wenn entryPath in newTree existiert → wurde oben behandelt (Modified/Added/Unmodified)
-                if (newFiles.ContainsKey(entryPath))
-                    continue;
-
-                var oldName = Path.GetFileNameWithoutExtension(entryPath);
-                var r = await _sync.DeleteAsync(oldName);
-                if (r.Ok) successes.Add($"Delete {oldName}");
-                else failures.Add(r.Message ?? "Delete failed (no message)");
-            }
+            await DispatchAsync(newEntry, oldEntry, path, successes, failures);
         }
 
         return failures.Count == 0
@@ -188,6 +130,84 @@ public sealed class PreReceiveHandler
                 result[entryPath] = entry;
             }
         }
+    }
+
+    private static IEnumerable<string> UnionKeys(
+        Dictionary<string, TreeEntry> newFiles,
+        Dictionary<string, TreeEntry>? oldFiles)
+    {
+        if (oldFiles is null)
+            return newFiles.Keys;
+        var set = new HashSet<string>(newFiles.Keys, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in oldFiles.Keys)
+            set.Add(key);
+        return set;
+    }
+
+    private static bool IsProcessXml(string path, string pathFilter) =>
+        path.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase)
+        && path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool SameBlob(TreeEntry? newEntry, TreeEntry? oldEntry) =>
+        newEntry is not null
+        && oldEntry is not null
+        && newEntry.Target is Blob newBlob
+        && oldEntry.Target is Blob oldBlob
+        && newBlob.Sha == oldBlob.Sha;
+
+    private async Task DispatchAsync(
+        TreeEntry? newEntry,
+        TreeEntry? oldEntry,
+        string path,
+        List<string> successes,
+        List<string> failures)
+    {
+        // newEntry fehlt -> Delete (nur in oldTree)
+        if (newEntry is null)
+        {
+            var oldName = Path.GetFileNameWithoutExtension(path);
+            var r = await _sync.DeleteAsync(oldName);
+            if (r.Ok) successes.Add($"Delete {oldName}");
+            else failures.Add(r.Message ?? "Delete failed (no message)");
+            return;
+        }
+
+        // newEntry vorhanden -> Add oder Modify (lesen XML-Content + Namen extrahieren)
+        var xmlContent = TryGetXmlContent(newEntry, path, failures);
+        if (xmlContent is null) return;
+
+        var newName = ExtractProcessName(xmlContent);
+        if (string.IsNullOrEmpty(newName))
+        {
+            failures.Add($"Add/Modify: cannot extract process name from '{path}'.");
+            return;
+        }
+
+        if (oldEntry is null)
+        {
+            // Added (in neuer Tree, nicht in alter)
+            var r = await _sync.AddAsync(xmlContent, newName);
+            if (r.Ok) successes.Add($"Add {newName}");
+            else failures.Add(r.Message ?? "Add failed (no message)");
+        }
+        else
+        {
+            // Modified (existiert in beiden Trees, aber SHA differs)
+            var oldName = Path.GetFileNameWithoutExtension(path);
+            var r = await _sync.ModifyAsync(xmlContent, oldName, newName);
+            if (r.Ok) successes.Add($"Modify {oldName} -> {newName}");
+            else failures.Add(r.Message ?? "Modify failed (no message)");
+        }
+    }
+
+    private static string? TryGetXmlContent(TreeEntry entry, string path, List<string> failures)
+    {
+        if (entry.Target is not Blob blob)
+        {
+            failures.Add($"Add/Modify: '{path}' ist kein Blob (Mode={entry.Mode}).");
+            return null;
+        }
+        return blob.GetContentText(Utf8NoBom);
     }
 
     internal static bool IsZeroSha(string? sha) =>
