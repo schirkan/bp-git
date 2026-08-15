@@ -2,20 +2,20 @@
 
 **Stand:** 2026-08-12 (v4 — Git-Server-Architektur + Phase 4c + xunit-Tests-Welle)
 **Status:** draft v4 — Worktree-Layout final, processid-Mapping via git-diff; PostReceive/PostCheckout Hooks done (Phase 4c); git-CLI receive-pack + upload-pack delegation done (Phase 4b-follow-up); xunit-Tests-Welle done (12 Commits, 65 gruen + 4 skipped)
-**Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [context/SPEC-git-server.md](../context/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
+**Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [specs/SPEC-git-server.md](../specs/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
 ## Ziel
 
 Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentationen von Processes / Objects werden im Dateisystem sicht- und editierbar; Versionsverwaltung über Standard-Git-Befehle. Der Adapter läuft als self-hosted C#-Server (Kestrel + LibGit2Sharp) auf OpenClawPC — kein IIS, kein Apache, kein bpgit-CLI auf Developer-Workstations.
 
-> **Detaillierte Server-Architektur, Hook-Implementation, Deployment**: siehe [`context/SPEC-git-server.md`](../context/SPEC-git-server.md). Dieses Dokument beschreibt die **Adapter-Domain-Logik** (Worktree-Layout, processid-Mapping, XML-Serialisierung, Sanitisierung).
+> **Detaillierte Server-Architektur, Hook-Implementation, Deployment**: siehe [`specs/SPEC-git-server.md`](../specs/SPEC-git-server.md). Dieses Dokument beschreibt die **Adapter-Domain-Logik** (Worktree-Layout, processid-Mapping, XML-Serialisierung, Sanitisierung).
 
 ## High-Level-Architektur
 
 ```
 +-------------------+    git clone/push/pull       +-------------------------+    AutomateC.exe    +------------------+
 |                   |   (HTTP, Win-Auth/SSO)    |                         |    /import /        |                  |
-|   Developer       | <------------------------> |   bpgit-git-server      |    /forceid /       |  Blue Prism      |
+|   Developer       | <------------------------> |   bpgit.exe      |    /forceid /       |  Blue Prism      |
 |   Workstation     |     standard-git-protocol  |   (OpenClawPC)          |    /overwrite       |  Database        |
 |   (kein bpgit)    |                            |                         | <-----------------> |  (localdb)       |
 +-------------------+                            |  - Kestrel HTTP         |    SqlCommand       +------------------+
@@ -24,11 +24,11 @@ Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentatione
                                                 +-------------------------+
 ```
 
-**Developer Workstation** führt ausschliesslich Standard-git aus — kein `bpgit.exe`, keine Hooks, kein BP-CLI. **bpgit-git-server** auf OpenClawPC hält die BP-DB-Verbindung und führt alle Hooks serverseitig aus.
+**Developer Workstation** führt ausschliesslich Standard-git aus — kein `bpgit.exe`, keine Hooks, kein BP-CLI. **bpgit.exe** auf OpenClawPC hält die BP-DB-Verbindung und führt alle Hooks serverseitig aus.
 
 ## Komponenten (.NET 10, C# 13)
 
-### 1. bpgit-git-server (`BPGit.Server`)
+### 1. bpgit.exe (`BPGit.Server`)
 
 Kestrel-basierter HTTP-Server mit LibGit2Sharp für git-smart-HTTP-Protocol:
 
@@ -199,7 +199,7 @@ Beispiel: `<process name="MP - Subprocess A" ...>` → `"MP - Subprocess A"`
 
 ## Bridge-Architektur (git ↔ BP-DB)
 
-bpgit-git-server übersetzt zwischen zwei Welten:
+bpgit.exe übersetzt zwischen zwei Welten:
 
 - **VS Code / git**: datei-basiert, Working-Tree, Hashes, Commits, Diffs
 - **BP-DB**: SQL-basiert, `BPAProcess` / `BPARelease` / `BPA*`-Tabellen, Identity-PKs (`UNIQUEIDENTIFIER`)
@@ -352,6 +352,6 @@ naming = "by-name"
 ## Mitgeltende Specs
 
 - [`SPEC-target-environment.md`](./SPEC-target-environment.md) — Windows 11, .NET 10, BP 7.5.1, OpenClawPC
-- [`context/SPEC-git-server.md`](../context/SPEC-git-server.md) — **git-server-Architektur, Hooks, Auth, Deployment (autoritativ für Server-Aspekte)**
+- [`specs/SPEC-git-server.md`](../specs/SPEC-git-server.md) — **git-server-Architektur, Hooks, Auth, Deployment (autoritativ für Server-Aspekte)**
 - [`context/bp-cli-reference-7.5.1.md`](../context/bp-cli-reference-7.5.1.md) — AutomateC.exe CLI-Referenz
 - [`context/bp-database-schema.md`](../context/bp-database-schema.md) — BP-Schema-Dokumentation

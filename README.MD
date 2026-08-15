@@ -1,6 +1,6 @@
 # bp-git — Blue Prism Processes in Git
 
-Git-Workflow für Blue Prism Processes und Objects. Standard-git-Befehle, keine Spezial-Tools nötig. Läuft als self-hosted Server auf OpenClawPC — kein IIS, keine bpgit.exe-Installation auf deiner Workstation.
+Git-Workflow für Blue Prism Processes und Objects. Standard-git-Befehle, keine Spezial-Tools nötig. Läuft als self-hosted Server auf OpenClawPC — kein IIS, keine bpgit.exe-Installation auf deiner Workstation. Der Server heißt `bpgit.exe` (ein einziges Binary, dient via `--serve` auch als Kestrel-HTTP-Server und via direkter Command-Line als Admin-CLI für Worktree-Sync).
 
 ## Quickstart
 
@@ -32,21 +32,24 @@ git push
 DEINE WORKSTATION                   SERVER (OpenClawPC)              BLUE PRISM
 =================                   ===================              ==========
 
-VS Code / Editor                    bpgit-git-server                 BP-DB
-        │                                  │                            │
-        │  $EDITOR xml                     │                            │
-        │ ─────────────►                   │                            │
-        │                                  │                            │
-        │  git push                        │                            │
-        │ ─────────────►                   │                            │
-        │      (HTTP, Win-Auth)            │                            │
-        │                                  │  /import /forceid           │
-        │                                  │  /overwrite                 │
-        │                                  │ ─────────────────────────► │
-        │                                  │                            │
-        │                                  │  ◄───── BPAAuditEvent ──── │
-        │  push OK                         │                            │
-        │ ◄─────────────                   │                            │
+                                      `bpgit --serve` (Kestrel
+                                      + LibGit2Sharp +
+                                      AutomateC.exe)
+VS Code / Editor                             │                            │
+        │                                    │                            │
+        │  $EDITOR xml                       │                            │
+        │ ──────────────────────────────────►│                            │
+        │                                    │                            │
+        │  git push                          │                            │
+        │ ──────────────────────────────────►│                            │
+        │      (HTTP, Win-Auth)              │                            │
+        │                                    │  /import /forceid           │
+        │                                    │  /overwrite                 │
+        │                                    │ ─────────────────────────► │
+        │                                    │                            │
+        │                                    │  ◄───── BPAAuditEvent ──── │
+        │  push OK                           │                            │
+        │ ◄─────────────────────────────────│                            │
 ```
 
 **Was der Server macht:**
@@ -174,7 +177,7 @@ git push
 
 ### Warum sehe ich keine `bpgit.exe`?
 
-Du brauchst sie nicht. Der `bpgit-git-server` läuft auf OpenClawPC und macht die ganze Arbeit. Du arbeitest nur mit Standard-`git`.
+Auf deiner Workstation brauchst du sie nicht. Das `bpgit.exe` ist das **Server-Binary** auf OpenClawPC — ein einziges Programm, das per `bpgit --serve` als Kestrel-HTTP-Server läuft und per direktem Aufruf (`bpgit init`, `bpgit pull`, `bpgit status`, …) als Admin-CLI fuer Worktree-Sync und Diagnose dient. Du arbeitest auf der Workstation nur mit Standard-`git`.
 
 ### Was ist, wenn ich offline bin?
 
@@ -218,44 +221,46 @@ Für Details: Server-Logs auf OpenClawPC (`C:\bpgit\logs\`).
 
 ## CLI-Commands
 
-`bpgit` ist das Admin-CLI fÃ¼r Server-Setup und BP-Sync-Diagnose. Es lÃ¤uft auf OpenClawPC (nicht auf Workstations).
+`bpgit.exe` ist das **Admin-CLI für Server-Setup und BP-Sync-Diagnose**. Es läuft auf OpenClawPC (nicht auf Workstations). Das gleiche Binary startet per `bpgit --serve` auch den Kestrel-Git-Server (siehe [Server-Mode](#server-mode)).
+
+Standard-Config: `<exe-dir>/bpgit.json` (wird beim Publish mit-exportiert). Override via `bpgit --serve /path/to/config.json`.
 
 ### Globale Optionen
 
 | Option | Beschreibung |
 |---|---|
-| `-o, --output <dir>` | Worktree output directory (default: aktuelles Verzeichnis) |
-| `--install-hooks` | Installiert git-hooks fÃ¼r drift-detection (nur bei `init`) |
-| `--force` | Erforderlich fÃ¼r `commit` (expliziter Write) |
-| `-n, --limit N` | Limit rows fÃ¼r `log` (default 50) |
-| `--processid <guid>` | Filter by processid fÃ¼r `log` |
-| `--since YYYY-MM-DD` | Nur EintrÃ¤ge mit eventdatetime >= since fÃ¼r `log` |
-| `--event <sCode>` | Filter by event-type code (z.B. P006, L001) fÃ¼r `log` |
+| `--install-hooks` | Installiert git-hooks für drift-detection (nur bei `init`) |
+| `--force` | Erforderlich für `commit` (expliziter Write) |
+| `-n, --limit N` | Limit rows für `log` (default 50) |
+| `--processid <guid>` | Filter by processid für `log` |
+| `--since YYYY-MM-DD` | Nur Einträge mit eventdatetime >= since für `log` |
+| `--event <sCode>` | Filter by event-type code (z.B. P006, L001) für `log` |
 | `-h, --help` | Show help message |
+
+Worktree-Pfade (`./processes`, `bpgit-snapshot.json`, `C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe`, Auth-Modus) werden aus `bpgit.json` gelesen — **kein** separater CLI-Output-Flag mehr.
 
 ### Commands
 
 #### `bpgit init`
 
-Initialisiert bp-git-Worktree (legt `.bpgit/config.toml` an).
+Bootstrap CLI-Worktree aus BP-DB (Liest `bpgit.json`, materialisiert Worktree am konfigurierten `worktreeDir`, schreibt `bpgit-snapshot.json` daneben). **Kein** `.bpgit/`-Verzeichnis wird angelegt — die Unified-Config ist Single Source of Truth.
 
 ```bash
 bpgit init
-bpgit --install-hooks init   # mit git-hooks
+bpgit --install-hooks init   # mit git-hooks (post-checkout, post-merge)
 ```
 
 #### `bpgit pull`
 
-Exportiert BP-Processes aus der DB in den Worktree (canonical Filenames aus `BPAProcess.name`).
+Re-exportiert BP-Processes aus der DB in den Worktree (canonical Filenames aus `BPAProcess.name`).
 
 ```bash
 bpgit pull
-bpgit -o /path/to/worktree pull
 ```
 
 #### `bpgit status`
 
-Zeigt Diff zwischen Worktree und Snapshot (welche Files wurden lokal geÃ¤ndert, welche sind in BP-DB neuer).
+Zeigt Diff zwischen Worktree und Snapshot (welche Files wurden lokal geändert, welche sind in BP-DB neuer).
 
 ```bash
 bpgit status
@@ -284,16 +289,62 @@ bpgit log --event P006
 
 #### `bpgit commit`
 
-Schreibt Worktree-Ã„nderungen zurÃ¼ck in die BP-DB (benÃ¶tigt `--force`).
+Schreibt Worktree-Änderungen zurück in die BP-DB (benötigt `--force`).
 
 ```bash
 bpgit --force commit
 ```
 
+## Server-Mode
+
+`bpgit --serve` startet den Kestrel-HTTP-Server auf OpenClawPC. Das gleiche Binary, das auch als Admin-CLI dient — Dispatcher in `Program.cs` checkt `--serve` / `/s` / `-s` als erstes Argument und routet entsprechend.
+
+```bash
+# Default: lädt <exe-dir>/bpgit.json
+bpgit --serve
+
+# Custom config
+bpgit --serve /path/to/config.json
+
+# Aliases für Windows-Shell-Gewohnheiten
+bpgit /s
+bpgit -s
+```
+
+### Server-Sub-Commands
+
+#### `bpgit --serve init <repo-name>`
+
+Initialisiert das Bare-Git-Repo mit XML-only `.gitignore`. Läuft einmal und beendet.
+
+```bash
+bpgit --serve init                    # nutzt repoName aus bpgit.json (default: bp-git)
+bpgit --serve init my-bp-project      # Repo-Name override
+```
+
+Das Repo wird unter `repoRoot/{repoName}.git` angelegt (Default: `C:\bpgit\repos\bp-git.git`). Der Initial-Commit enthält die `<exe-dir>/bpgit.json` (per `Content Update` beim Publish) und ein `.gitignore` mit XML-Whitelist.
+
+### Publish-Profile
+
+`src/BPGit.Server/Properties/PublishProfiles/`:
+
+| Profile | Output | Größe |
+|---|---|---|
+| `FolderProfile` | `bin/publish/win-x64/bpgit.exe` + `bpgit.json` + alle DLLs | ~0.15 MB exe (framework-dependent) |
+| `SelfContainedSingleFile` | `bin/publish/win-x64-self-contained/bpgit.exe` | ~52 MB (single-file, inkl. .NET-Runtime) |
+
+```bash
+# Framework-dependent (für OpenClawPC mit installiertem .NET 10)
+dotnet publish src/BPGit.Server/BPGit.Server.csproj /p:PublishProfile=FolderProfile
+
+# Self-contained (für Zielsysteme ohne .NET-Runtime)
+dotnet publish src/BPGit.Server/BPGit.Server.csproj /p:PublishProfile=SelfContainedSingleFile
+```
+
 ## Weitere Dokumentation
 
-- **Architektur**: [`context/SPEC-git-server.md`](context/SPEC-git-server.md) — Server-Architektur, Hooks, Auth
+- **Architektur**: [`specs/SPEC-git-server.md`](specs/SPEC-git-server.md) — Server-Architektur, Hooks, Auth
 - **Adapter-Layer**: [`specs/SPEC-adapter-architecture.md`](specs/SPEC-adapter-architecture.md) — Worktree-Layout, processid-Mapping
 - **BP-CLI-Referenz**: [`context/bp-cli-reference-7.5.1.md`](context/bp-cli-reference-7.5.1.md) — AutomateC.exe-Befehle
 - **BP-DB-Schema**: [`context/bp-database-schema.md`](context/bp-database-schema.md) - Tabellen-Referenz
-- **Test-Stand** (Martin #6385+#6401+#6415+#6427): README wurde umbenannt zu README.MD (Konvention), Inhalt identisch, 12 xunit-Test-Commits (65 gruen + 4 skipped in 3 Projekten): 12 Test-Commits (xunit-Welle), 65 gruen + 4 skipped in 3 Test-Projekten (Server 53+4, Data 3, Cli 9). 3 PreReceive HEAD-Tracking-Tests skip-attributed mit Issue-#802 workaround (commit `2fa730d`); 1 HeadTrackingDiagnosticTest skip-attributed (libgit2 0.32.0 API-Inkonsistenz). Phase 5+-Diagnose pending: tree.Count vs parents[0].tree.Count vergleichen.
+- **Test-Stand** (Martin #6385+#6401+#6415+#6427+#6462): README wurde umbenannt zu README.MD (Konvention), Inhalt identisch, 12 xunit-Test-Commits (75 gruen + 1 skipped in 3 Projekten: Server 53+1, Data 3, Cli 9, plus 9 gruen ausgewaehlt). 3 PreReceive HEAD-Tracking-Tests skip-attributed mit Issue-#802 workaround (commit `2fa730d`); 1 HeadTrackingDiagnosticTest skip-attributed (libgit2 0.32.0 API-Inkonsistenz). Phase 5+-Diagnose pending: tree.Count vs parents[0].tree.Count vergleichen.

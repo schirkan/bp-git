@@ -1,7 +1,7 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
-**Status:** v0.3 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen)
-**Datum:** 2026-08-12 (Phase-4c PostReceive/PostCheckout Hooks done + Phase-4b-follow-up git-CLI receive-pack/upload-pack delegation done + xunit-Tests-Welle 12 Test-Commits done + LibGit2Sharp-0.32.0 Issue-#802 workaround fix-kompiliert aber Tests scheitern noch mit "Assert.Single() collection empty", Phase 5+ Diagnose pending)
+**Status:** v0.4 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen + Unified Binary bpgit.exe) -- v0.4 Unified Binary (Martin #6462 -- bpgit.exe + bpgit.json, no .bpgit/)
+**Datum:** 2026-08-15 (Phase-4c PostReceive/PostCheckout Hooks done + Phase-4b-follow-up git-CLI receive-pack/upload-pack delegation done + xunit-Tests-Welle 12 Test-Commits done + LibGit2Sharp-0.32.0 Issue-#802 workaround fix-kompiliert aber Tests scheitern noch mit "Assert.Single() collection empty", Phase 5+ Diagnose pending)
 **Autor:** bpgit-Projekt
 **Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
 **Mitgeltend:** `SPEC-target-environment.md`, `SPEC-adapter-architecture.md`, `context/bp-cli-reference-7.5.1.md`, `context/bp-database-schema.md`
@@ -34,7 +34,7 @@
 ```
 +-------------------+    git clone/push/pull       +-------------------------+    AutomateC.exe    +------------------+
 |                   |   (HTTP, Win-Auth/SSO)    |                         |    /import /        |                  |
-|   Developer       | <------------------------> |   bpgit-git-server      |    /forceid /       |  Blue Prism      |
+|   Developer       | <------------------------> |   bpgit.exe      |    /forceid /       |  Blue Prism      |
 |   Workstation     |     standard-git-protocol  |   (OpenClawPC)          |    /overwrite       |  Database        |
 |   (kein bpgit)    |                            |                         | <-----------------> |  (localdb)       |
 +-------------------+                            |  - Kestrel HTTP         |    SqlCommand       +------------------+
@@ -47,7 +47,7 @@
 ### Komponenten
 
 1. **Developer Workstation**: Standard `git` CLI oder Git-GUI. Auth via Windows-Integrated-Auth. **KEIN bpgit.exe lokal noetig**.
-2. **bpgit-git-server** (C#/.NET 10): Kestrel HTTP, LibGit2Sharp fuer Git-Smart-HTTP-Protocol, server-side Hooks fuer BP-Sync.
+2. **bpgit.exe** (C#/.NET 10): Kestrel HTTP, LibGit2Sharp fuer Git-Smart-HTTP-Protocol, server-side Hooks fuer BP-Sync.
 3. **Blue Prism Database**: SQL Server Express (localdb) auf OpenClawPC.
 
 ### Hook-Skizze
@@ -244,7 +244,7 @@ Server-Flow:
 
 - Kestrel konfiguriert mit `Authentication.Schemes = Negotiate | NTLM`
 - BP-Studio-Login = BP-DB-Login (Windows User wird via SSPI an SQL Server weitergereicht)
-- bpgit-git-server leitet Windows-User an BP-DB weiter (`auth = "sso"`)
+- bpgit.exe leitet Windows-User an BP-DB weiter (`auth = "sso"`)
 - BP-Audit-Log (BPAAuditEvents.gSrcUserID) zeigt den Windows-User
 
 **Keine separate User-Verwaltung** im MVP1.
@@ -261,7 +261,7 @@ Server-Flow:
 | `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Aenderung |
 | `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files loeschen |
 
-**Hook-Implementierung**: C# DelegatedHandler in bpgit-git-server (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
+**Hook-Implementierung**: C# DelegatedHandler in bpgit.exe (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
 
 ### Beispiel: pre-receive (Pseudocode)
 
@@ -404,7 +404,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 ### Multi-User (MVP2, nicht MVP1)
 
 - Pessimistic Locking via `BPAProcessLock` (BP-Studio setzt automatisch beim Edit)
-- bpgit-git-server respektiert Locks
+- bpgit.exe respektiert Locks
 - Konflikt-Resolution: User A locked, User B wartet oder benutzt `--force`
 
 ---
@@ -415,8 +415,8 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 | Subcommand | Status | Zweck |
 |---|---|---|
-| `bpgit server start` | Admin | Startet bpgit-git-server (Kestrel) |
-| `bpgit server stop` | Admin | Stoppt bpgit-git-server |
+| `bpgit server start` | Admin | Startet bpgit.exe (Kestrel) |
+| `bpgit server stop` | Admin | Stoppt bpgit.exe |
 | `bpgit server status` | Admin | Server-Health (letzte Pull-Zeit, pending Hooks) |
 | `bpgit init` | Admin | Initialisiert Bare-Repo auf Server (einmalig) |
 | `bpgit pull` | Internal | Server-side Materialization (von Hook aufgerufen) |
@@ -424,7 +424,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 | `bpgit status` | Deprecated | Nutze stattdessen `git status` |
 | `bpgit diff` | Deprecated | Nutze stattdessen `git diff` |
 | `bpgit commit` | Deprecated | Nutze stattdessen `git push` (server-side Hook macht den Rest) |
-| `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit-git-server (kein Shell-Script noetig) |
+| `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit.exe (kein Shell-Script noetig) |
 
 ### CLI-Executable
 
@@ -441,11 +441,11 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 - BP Studio + `(localdb)\BluePrismLocalDB` installiert
 - Git for Windows (fuer Clients — kein git-http-backend noetig, alles in C#)
 - .NET 10 SDK + ASP.NET Core Runtime
-- bpgit-git-server Binary (self-contained .NET 10 Publish)
+- bpgit.exe Binary (self-contained .NET 10 Publish)
 
 ### Schritte
 
-1. **bpgit-git-server installieren** nach `C:\bpgit\bin\bpgit-server.exe`
+1. **bpgit.exe installieren** nach `C:\bpgit\bin\bpgit-server.exe`
 2. **Konfiguration** in `C:\bpgit\bpgit-server.json`:
    ```json
    {
@@ -464,7 +464,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
    cd "C:/bpgit/repos"
    bpgit-server init bp-git   # erstellt bare repo + initial materialization
    ```
-4. **bpgit-git-server starten** als Windows-Service oder manuell:
+4. **bpgit.exe starten** als Windows-Service oder manuell:
    ```bash
    bpgit-server start
    ```
@@ -485,7 +485,7 @@ $EDITOR "processes/Processes/Default/MP - Subprocess A.xml"
 # aendere nur XML-Inhalt, NICHT den Filename
 git add .
 git commit -m "Update MP - Subprocess A"
-git push  # server-side bpgit-git-server pre-receives und ruft /import /forceid
+git push  # server-side bpgit.exe pre-receives und ruft /import /forceid
 
 # Pull (Standard-git, refresht von BP-DB)
 git pull  # server-side post-checkout materialisiert Updates + canonical Filenames
@@ -537,7 +537,7 @@ Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implem
 | README-bpgit-git.md (End-User-Doku) | offen | 1 h |
 | AGENTS.md Status-Update | offen | 10 min |
 | Workboard-Cards fuer Doku-Review + Impl-Phasen | offen | 20 min |
-| **bpgit-git-server** Implementation in C# (.NET 10) | offen | 1-2 Wochen |
+| **bpgit.exe** Implementation in C# (.NET 10) | offen | 1-2 Wochen |
 | - Kestrel HTTP + Win-Auth | | |
 | - LibGit2Sharp git-smart-HTTP | | |
 | - pre-receive Hook (processid-Lookup + /import) | | |
