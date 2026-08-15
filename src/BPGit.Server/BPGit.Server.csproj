@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BPGit.Cli\BPGit.Cli.csproj" />
     <ProjectReference Include="..\BPGit.Data\BPGit.Data.csproj" />
   </ItemGroup>
 
