@@ -12,7 +12,6 @@
   "worktreeDir": "./processes",
   "snapshotFileName": "bpgit-snapshot.json",
 
-  "automatecPath": "C:\\Program Files\\Blue Prism Limited\\Blue Prism Automate\\AutomateC.exe",
   "cliAuthMode": "sso",
   "cliUsername": null,
   "cliPassword": null
