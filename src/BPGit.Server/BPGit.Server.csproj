@@ -9,6 +9,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="appsettings.json" />
+    <Content Remove="appsettings.Development.json" />
+    <Content Remove="web.config" />
+    <Content Remove="bpgit.staticwebassets.endpoints.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Update="bpgit.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
