@@ -17,13 +17,9 @@ public static class AutomateCRunner
 {
     public record RunResult(int ExitCode, string StdOut, string StdErr);
 
-    private const string DefaultAutomateCPath =
-        @"C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe";
-
     public static RunResult Run(ServerConfig cfg, params string[] args)
     {
-        var envPath = Environment.GetEnvironmentVariable("BPGIT_AUTOMATE_PATH");
-        var automatePath = string.IsNullOrWhiteSpace(envPath) ? DefaultAutomateCPath : envPath;
+        var automatePath = cfg.AutomateCPath;
         if (!File.Exists(automatePath))
             throw new FileNotFoundException($"AutomateC.exe nicht gefunden: {automatePath}");
 
