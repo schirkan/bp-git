@@ -52,10 +52,21 @@ VS Code / Editor                             │                            │
         │ ◄─────────────────────────────────│                            │
 ```
 
-**Was der Server macht:**
-- **Bei `git push`**: liest deine geänderten XML-Dateien, schreibt sie via `AutomateC.exe /import /forceid /overwrite` in die BP-DB.
-- **Bei `git pull`**: liest die BP-DB, schreibt XML-Dateien mit canonical Filenames ins Worktree.
-- **Bei `git clone`**: einmalige Materialization — du bekommst ein fertiges Worktree mit allen Processes.
+## Funktionsumfang (Stand 2026-08-30)
+
+| Operation | Aus Server-Sicht | Status |
+|---|---|---|
+| `git clone` | Worktree wird einmalig aus BP-DB materialisiert | ✅ Phase 4c (commit `f399ad1`) |
+| `git fetch` / `git pull` | Stand vom letzten gepushten Commit. **KEINE** automatische BP-DB-Aktualisierung vom Server | ⚠️ **Pending Phase 5+** |
+| `git push` | Pack wird vom nativen `git receive-pack` akzeptiert. **KEIN** Pre-Receive-Check, **KEIN** `/import`-Aufruf vom Server | ⚠️ **Pending Phase 5+** |
+| Process-Edit in BP Studio → Worktree | **KEINE** automatische Aktualisierung — du musst `bpgit pull` manuell aufrufen | ⚠️ **Pending Phase 5+** |
+
+> **Wichtig — Hook-Disclaimer (Stand 2026-08-30):** Die Hooks `PreReceive`, `PostReceive`, `PostCheckout` existieren im Code als Library-Handler (`src/BPGit.Server/GitHttp/PreReceiveHandler.cs` + `PostReceiveHandler.cs` + `PostCheckoutHandler.cs`), sind aber **nicht** in `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` verdrahtet. Spec §9 dokumentiert das als "side-effect post-apply" (Trade-off: libgit2 0.32.0 hat keine public API für Server-seitiges receive-pack). Folge für MVP1: BP-DB-Edits propagieren erst nach manuellem `bpgit pull`, BP-Studio-Edits propagieren nicht in Worktree-Pulls. Workaround-Karten: `bp-git-pre-receive-wiring` (Phase 5+, priority urgent). Doku in `specs/SPEC-git-server.md` §9.
+
+**Was der Server heute tatsächlich macht:**
+- `/info/refs`: korrekt per LibGit2Sharp-`Repository.Refs` durch LibGit2Sharp-API (Smart-HTTP v2, voll funktional) — `git clone` + `git fetch` funktionieren.
+- `/git-upload-pack`, `/git-receive-pack`: Delegation an nativen `git --stateless-rpc`. Pack-Transfer funktioniert, aber **keine** BP-DB-Validierung.
+- `/healthz`: anonymous Service-Health-Check.
 
 ## Filename-Regeln (WICHTIG)
 
@@ -229,7 +240,7 @@ Standard-Config: `<exe-dir>/bpgit.json` (wird beim Publish mit-exportiert). Over
 
 | Option | Beschreibung |
 |---|---|
-| `--install-hooks` | Installiert git-hooks für drift-detection (nur bei `init`) |
+| `--install-hooks` | **DEPRECATED** (Spec §13, Martin #6295): no-op mit Warnung, ignorieren |
 | `--force` | Erforderlich für `commit` (expliziter Write) |
 | `-n, --limit N` | Limit rows für `log` (default 50) |
 | `--processid <guid>` | Filter by processid für `log` |
@@ -247,7 +258,6 @@ Bootstrap CLI-Worktree aus BP-DB (Liest `bpgit.json`, materialisiert Worktree am
 
 ```bash
 bpgit init
-bpgit --install-hooks init   # mit git-hooks (post-checkout, post-merge)
 ```
 
 #### `bpgit pull`
