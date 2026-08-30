@@ -147,13 +147,20 @@ public sealed class BpDbService : IBpDbService
                 });
         }
 
-        // Memberships (M:N Process-Group)
+        // Memberships (M:N Process-Group). Use a single parameter containing the
+        // comma-separated group IDs and SQL Server's STRING_SPLIT, so the IN-list
+        // comes from a typed parameter (no string concatenation). Mirrors the
+        // Dapper-style IN @groupIds pattern used in ProcessRepository.GetFolderStructureAsync.
         if (groups.Count > 0)
         {
-            var groupIds = string.Join(",", groups.Select(g => $"'{g.Id}'"));
+            var groupIdsCsv = string.Join(",", groups.Select(g => g.Id));
             await using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = $"SELECT groupid, processid FROM BPAGroupProcess WHERE groupid IN ({groupIds})";
+                cmd.CommandText = @"
+                    SELECT groupid, processid
+                    FROM BPAGroupProcess
+                    WHERE groupid IN (SELECT TRY_CONVERT(uniqueidentifier, value) FROM STRING_SPLIT(@groupIdsCsv, ','))";
+                cmd.Parameters.AddWithValue("@groupIdsCsv", groupIdsCsv);
                 await using var rdr = await cmd.ExecuteReaderAsync();
                 while (await rdr.ReadAsync())
                     memberships.Add(new ProcessMembership
