@@ -10,16 +10,15 @@ namespace BPGit.Server.GitHttp;
 /// <summary>
 /// Implements the git smart-HTTP protocol (v2) endpoints:
 /// <list type="bullet">
-///   <item><c>GET  /{repo}/info/refs?service=git-upload-pack</c>  — ref advertisement for fetch/clone</item>
-///   <item><c>POST /{repo}/git-upload-pack</c>                   — pack download (Phase 4b: full implementation)</item>
-///   <item><c>GET  /{repo}/info/refs?service=git-receive-pack</c> — ref advertisement for push</item>
-///   <item><c>POST /{repo}/git-receive-pack</c>                  — pack upload (Phase 4b: full implementation)</item>
+///   <item><c>GET  /{repo}/info/refs?service=git-upload-pack</c>  - ref advertisement for fetch/clone</item>
+///   <item><c>POST /{repo}/git-upload-pack</c>                   - pack download (Phase 4b: full implementation)</item>
+///   <item><c>GET  /{repo}/info/refs?service=git-receive-pack</c> - ref advertisement for push</item>
+///   <item><c>POST /{repo}/git-receive-pack</c>                  - pack upload (Phase 4b: full implementation)</item>
 /// </list>
 ///
 /// Phase 4a scope: <c>/info/refs</c> is fully implemented (pkt-line format with ref advertisement
-/// and capability list). <c>/git-upload-pack</c> and <c>/git-receive-pack</c> return
-/// <c>501 Not Implemented</c> with a clear explanation. Phase 4b/c will implement the pack
-/// protocol using LibGit2Sharp's <see cref="LibGit2Sharp.Network"/> primitives.
+/// and capability list). <c>/git-upload-pack</c> and <c>/git-receive-pack</c> are implemented
+/// via delegation to the native <c>git</c> CLI as <c>--stateless-rpc</c> subprocesses.
 /// </summary>
 public static class GitHttpHandler
 {
@@ -32,8 +31,16 @@ public static class GitHttpHandler
     private const string ReceivePackCapabilities = "report-status delete-refs side-band-64k quiet atomic ofs-delta agent=git/2.43-bpgit";
 
     /// <summary>
+    /// Hard timeout for git-CLI delegated pack operations. A client that hangs up
+    /// mid-pack would otherwise keep the worker thread and the git subprocess
+    /// alive indefinitely (5 minutes is generous: git upload-pack/receive-pack
+    /// normally completes in seconds for non-pathological repos).
+    /// </summary>
+    private static readonly TimeSpan GitRpcTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Routes <c>GET /{repo}/info/refs</c> and the two POST endpoints.
-    /// Returns <c>true</c> if the request was handled (even with 501); <c>false</c> if no
+    /// Returns <c>true</c> if the request was handled (even with 504/timeout); <c>false</c> if no
     /// git route matched (caller should return 404).
     /// </summary>
     public static async Task<bool> HandleAsync(HttpContext ctx, ServerConfig cfg)
@@ -133,7 +140,7 @@ public static class GitHttpHandler
         await Pkt.WriteFlushAsync(ctx.Response.Body);
         if (refs.Count == 0)
         {
-            // Empty repo — advertise only capabilities, no refs. Git client will report
+            // Empty repo - advertise only capabilities, no refs. Git client will report
             // "warning: no common commits" or similar, which is correct for an empty repo.
             await Pkt.WriteDataAsync(ctx.Response.Body, $" capabilities^{capabilities}\n");
         }
@@ -166,54 +173,15 @@ public static class GitHttpHandler
     ///
     /// Client sends: pkt-line with wants/haves + flush + PACK data.
     /// Server returns: pack data + flush.
+    ///
+    /// Bounded by <see cref="GitRpcTimeout"/>; on timeout the git subprocess is
+    /// killed (entire process tree) and the response stream is closed with 504.
     /// </summary>
-    private static async Task<bool> HandleUploadPackAsync(HttpContext ctx, string repoName, ServerConfig cfg)
-    {
-        var repoPath = ResolveRepoPath(cfg, repoName);
-        if (repoPath is null)
-        {
-            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-            await ctx.Response.WriteAsync($"Repository '{repoName}' not found.");
-            return true;
-        }
-
-        ctx.Response.StatusCode = StatusCodes.Status200OK;
-        ctx.Response.ContentType = UploadPackContentType;
-
-        var psi = new ProcessStartInfo("git")
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        psi.ArgumentList.Add("-C");
-        psi.ArgumentList.Add(repoPath);
-        psi.ArgumentList.Add("upload-pack");
-        psi.ArgumentList.Add("--stateless-rpc");
-
-        using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc is null)
-        {
-            ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await ctx.Response.WriteAsync("bpgit-server: failed to start git upload-pack process.");
-            return true;
-        }
-
-        var stderrTask = proc.StandardError.ReadToEndAsync();
-        await ctx.Request.Body.CopyToAsync(proc.StandardInput.BaseStream);
-        proc.StandardInput.Close();
-        await proc.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body);
-        await proc.WaitForExitAsync();
-
-        var stderr = await stderrTask;
-        if (!string.IsNullOrWhiteSpace(stderr))
-        {
-            Console.Error.WriteLine($"[bpgit-server /git-upload-pack] {stderr.TrimEnd()}");
-        }
-
-        return true;
-    }
+    private static Task<bool> HandleUploadPackAsync(HttpContext ctx, string repoName, ServerConfig cfg) =>
+        RunGitRpcAsync(
+            ctx, repoName, cfg,
+            subcommand: "upload-pack",
+            contentTypeOnSuccess: UploadPackContentType);
 
     /// <summary>
     /// Delegates to native <c>git receive-pack --stateless-rpc</c> via Process spawn.
@@ -227,8 +195,26 @@ public static class GitHttpHandler
     /// Why spawn <c>git</c>: libgit2 0.32.0 has no public API for the server side of
     /// receive-pack (Network.Fetch is client-side). Spawning the official CLI delegates
     /// pkt-line parsing, ref update, pack index/apply, and report-status generation.
+    ///
+    /// Bounded by <see cref="GitRpcTimeout"/>; on timeout the git subprocess is killed.
     /// </summary>
-    private static async Task<bool> HandleReceivePackAsync(HttpContext ctx, string repoName, ServerConfig cfg)
+    private static Task<bool> HandleReceivePackAsync(HttpContext ctx, string repoName, ServerConfig cfg) =>
+        RunGitRpcAsync(
+            ctx, repoName, cfg,
+            subcommand: "receive-pack",
+            contentTypeOnSuccess: ReceivePackContentType);
+
+    /// <summary>
+    /// Shared <c>git &lt;subcommand&gt; --stateless-rpc</c> delegator for upload-pack / receive-pack.
+    /// Centralizes the timeout + kill-on-timeout logic so a hung git subprocess cannot
+    /// keep a worker thread alive indefinitely.
+    /// </summary>
+    private static async Task<bool> RunGitRpcAsync(
+        HttpContext ctx,
+        string repoName,
+        ServerConfig cfg,
+        string subcommand,
+        string contentTypeOnSuccess)
     {
         var repoPath = ResolveRepoPath(cfg, repoName);
         if (repoPath is null)
@@ -239,7 +225,7 @@ public static class GitHttpHandler
         }
 
         ctx.Response.StatusCode = StatusCodes.Status200OK;
-        ctx.Response.ContentType = ReceivePackContentType;
+        ctx.Response.ContentType = contentTypeOnSuccess;
 
         var psi = new ProcessStartInfo("git")
         {
@@ -250,31 +236,71 @@ public static class GitHttpHandler
         };
         psi.ArgumentList.Add("-C");
         psi.ArgumentList.Add(repoPath);
-        psi.ArgumentList.Add("receive-pack");
+        psi.ArgumentList.Add(subcommand);
         psi.ArgumentList.Add("--stateless-rpc");
 
         using var proc = System.Diagnostics.Process.Start(psi);
         if (proc is null)
         {
             ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await ctx.Response.WriteAsync("bpgit-server: failed to start git receive-pack process.");
+            await ctx.Response.WriteAsync($"bpgit-server: failed to start git {subcommand} process.");
             return true;
         }
 
         var stderrTask = proc.StandardError.ReadToEndAsync();
 
-        // Pipe request body -> git's stdin, then close so git can process the pack.
-        await ctx.Request.Body.CopyToAsync(proc.StandardInput.BaseStream);
-        proc.StandardInput.Close();
+        using var cts = new CancellationTokenSource(GitRpcTimeout);
 
-        // Pipe git's stdout -> response (report-status pkt-line + any data).
-        await proc.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body);
-        await proc.WaitForExitAsync();
-
-        var stderr = await stderrTask;
-        if (!string.IsNullOrWhiteSpace(stderr))
+        try
         {
-            Console.Error.WriteLine($"[bpgit-server /git-receive-pack] {stderr.TrimEnd()}");
+            // Pipe request body -> git's stdin. We do NOT wait for completion; if
+            // the client hangs up mid-pack, we still want the subprocess to drain
+            // its input rather than block on Write.
+            var copyIn = ctx.Request.Body.CopyToAsync(proc.StandardInput.BaseStream, cts.Token);
+            try { await copyIn; }
+            catch (OperationCanceledException) { /* client disconnect or timeout */ }
+            proc.StandardInput.Close();
+
+            // Pipe git's stdout -> response. Same pattern: copy in background, bail on timeout.
+            var copyOut = proc.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body, cts.Token);
+            try { await copyOut; }
+            catch (OperationCanceledException) { /* client disconnect or timeout */ }
+
+            await proc.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Hard timeout: kill the git subprocess (entire tree) and report 504.
+            try
+            {
+                if (!proc.HasExited)
+                    proc.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[bpgit-server /git-{subcommand}] kill after timeout failed: {ex.Message}");
+            }
+
+            if (!ctx.Response.HasStarted)
+            {
+                ctx.Response.Clear();
+                ctx.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+                await ctx.Response.WriteAsync($"bpgit-server: git {subcommand} timed out after {GitRpcTimeout.TotalMinutes:0} min.");
+            }
+            else
+            {
+                // Headers were already sent; just abort the response.
+                ctx.Abort();
+            }
+        }
+        finally
+        {
+            // Always drain stderr so a slow consumer doesn't deadlock the git subprocess.
+            var stderr = await stderrTask;
+            if (!string.IsNullOrWhiteSpace(stderr))
+            {
+                Console.Error.WriteLine($"[bpgit-server /git-{subcommand}] {stderr.TrimEnd()}");
+            }
         }
 
         return true;
