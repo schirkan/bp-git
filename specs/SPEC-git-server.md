@@ -1,6 +1,18 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
 **Status:** v0.4 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen + Unified Binary bpgit.exe) -- v0.4 Unified Binary (Martin #6462 -- bpgit.exe + bpgit.json, no .bpgit/)
+
+> ⚠️ **WICHTIG — Hook-Status (Stand 2026-08-30, Workaround-Karte `bp-git-pre-receive-wiring`, Phase 5+):**
+>
+> Die in §7 spezifizierten Hooks `pre-receive`, `post-receive`, `post-checkout` existieren im Code als Library-Handler in `src/BPGit.Server/GitHttp/{PreReceiveHandler,PostReceiveHandler,PostCheckoutHandler}.cs` (verdrahtet via DI, voll getestet mit 65+ xunit-Tests), sind aber **NICHT** an `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` aufgerufen. Grund: libgit2 0.32.0 hat keine public API für Server-seitiges `receive-pack`. Phase 4b-follow-up (commit `18ec5db`) delegiert deshalb an den nativen `git --stateless-rpc`-Prozess.
+>
+> **Konkret heißt das für MVP1 (Stand 2026-08-30):**
+>
+> - `git push` schreibt direkt in den Bare-Repo. Es findet **keine** `/import`-Validierung statt, **kein** Lock-Check, **kein** processid-Lookup. BP-DB wird nicht aktualisiert vom Push.
+> - `git pull` fetched nur den letzten gepushten Stand. Es findet **keine** Materialization aus BP-DB statt. BP-Studio-Edits propagieren nicht in Worktrees.
+> - Workstation-Shell-Hooks (Phase 2a, Martin #6295) wurden 2026-08-30 vollständig entfernt (Spec §13 umgesetzt).
+>
+> Workaround: nach jedem BP-Studio-Edit manuell `bpgit pull` auf OpenClawPC. Push läuft durch, aber BP-DB-Update erfolgt **erst** nach PreReceive-Wiring in Phase 5+.
 **Datum:** 2026-08-15 (Phase-4c PostReceive/PostCheckout Hooks done + Phase-4b-follow-up git-CLI receive-pack/upload-pack delegation done + xunit-Tests-Welle 12 Test-Commits done + LibGit2Sharp-0.32.0 Issue-#802 workaround fix-kompiliert aber Tests scheitern noch mit "Assert.Single() collection empty", Phase 5+ Diagnose pending)
 **Autor:** bpgit-Projekt
 **Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
@@ -255,12 +267,14 @@ Server-Flow:
 
 ## 7. Server-Side Hooks
 
-| Hook | Trigger | Aktion |
-|---|---|---|
-| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) |
-| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Aenderung |
-| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files loeschen |
+| Hook | Trigger | Aktion | Status |
+|---|---|---|---|
+| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) | **Library vorhanden, NICHT gewired** (`PostCheckoutHandler.cs`, Phase 5+, siehe Workaround-Karte `bp-git-pre-receive-wiring`) |
+| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Änderung | **Library vorhanden, NICHT gewired** (`PreReceiveHandler.cs`, voll getestet in `tests/BPGit.Server.Tests/PreReceiveHandlerTests.cs`, Phase 5+) |
+| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files löschen | **Library vorhanden, NICHT gewired** (`PostReceiveHandler.cs`, Phase 5+) |
 
+
+> **Status-Disclaimer:** Hooks in der rechten Spalte als "Library vorhanden, NICHT gewired" markiert. Die Handler existieren als Libraries + sind via DI-Singleton verdrahtet, werden aber von `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` **nicht aufgerufen**. Grund: libgit2 0.32.0 hat keine public Server-side receive-pack-API; Phase 4b-follow-up delegiert deshalb an nativen `git --stateless-rpc`. `git push` schreibt direkt ins Bare-Repo, `git pull` lädt nur den letzten gepushten Stand, kein BP-DB-Read. Workaround: manuell `bpgit pull` auf OpenClawPC. Siehe Disclaimer am Doc-Anfang und Workaround-Karte `bp-git-pre-receive-wiring` (Phase 5+).
 **Hook-Implementierung**: C# DelegatedHandler in bpgit.exe (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
 
 ### Beispiel: pre-receive (Pseudocode)
