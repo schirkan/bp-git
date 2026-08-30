@@ -55,10 +55,31 @@ obj/
 *.releasepack.bak
 
 # --- bpgit runtime/test artifacts ---
-.bpgit/                        # runtime config dir (contains bpgit-server.json with BP password)
+.bpgit/                        # runtime config dir (legacy; superseded by unified bpgit.json)
 processes/                      # test worktree from smoke-phase4c.ps1
 src/BPGit.Server/BPGit.Server.http   # .http test artifact from `dotnet new webapi` scaffold
 src/BPGit.Server/Properties/    # launchSettings.json (debug-only)
+
+# --- bpgit config (sensitive: BP-credentials land in plaintext) ---
+# The committed src/BPGit.Server/bpgit.json is a harmless template (no
+# sqlPassword). If you override defaults for a local install — especially
+# sqlAuth="user" with sqlPassword filled in — copy the template to a
+# separate file (e.g. bpgit.local.json, bpgit.production.json) and pass it
+# via --serve. NEVER commit credentials to the tracked template.
+# --- bpgit config (sensitive: BP-credentials land in plaintext) ---
+# The committed src/BPGit.Server/bpgit.json is a harmless template (no
+# sqlPassword). If you override defaults for a local install - especially
+# sqlAuth="user" with sqlPassword filled in - copy the template to a
+# separate file (e.g. bpgit.local.json, bpgit.production.json) and pass it
+# via --serve <path>. NEVER commit credentials to the tracked template.
+#
+# Three separate patterns (instead of `bpgit.*.json` glob) so each rule
+# is independently testable with `git check-ignore` and does not suffer
+# from the git-glob quirks that arise when a tracked file's basename
+# collides with the ignore pattern.
+bpgit.local.json
+bpgit.production.json
+bpgit.*.local.json
 # --- Blue Prism Education License (lokal, nie committen) ---
 *.lic
 
