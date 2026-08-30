@@ -20,29 +20,30 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 //                         bpgit-server commit --force
 //
 // Internal sub-commands (server-side bare-repo bootstrap) live under --serve
-// so they don't collide with the CLI's worktree-space commands.
+// so they don't collide with CLI's worktree-space commands.
+
 public static partial class Program
 {
-    public static async Task<int> Main(string[] args)
+    static Task<int> Main(string[] args)
     {
         // Dispatch: --serve [config-path] | /s [config-path] | -s [config-path] starts server mode
         if (args.Length > 0 && IsServerFlag(args[0]))
         {
             var serverArgs = args.Length > 1 ? args[1..] : Array.Empty<string>();
-            return RunServer(serverArgs);
+            return Task.FromResult(RunServer(serverArgs));
         }
 
-        // CLI mode: delegate to BPGit.Cli (its Program.Main is a static method
-        // callable from this host assembly).
-        return await BPGit.Cli.Program.Main(args);
+        // CLI mode: delegate to BPGit.Cli (its Program.Main is the static entry
+        // point of the referenced assembly).
+        return BPGit.Cli.Program.Main(args);
     }
 
-    private static bool IsServerFlag(string flag) =>
+    static bool IsServerFlag(string flag) =>
         flag == "--serve" || flag == "/s" || flag == "-s";
 
-    private static int RunServer(string[] args)
+    static int RunServer(string[] args)
     {
-        // First arg (if not "init") is the config-path override. Default = <exe-dir>/bpgit.json.
+        // First positional arg (if not "init") = config-path override. Default = <exe-dir>/bpgit.json.
         string? configPath = null;
         var remainingArgs = args;
         if (args.Length > 0 && !args[0].Equals("init", StringComparison.OrdinalIgnoreCase))
@@ -53,74 +54,73 @@ public static partial class Program
 
         var cfg = ServerConfig.Load(configPath);
 
-        // Server-Mode subcommand: `bpgit --serve init [repo]` runs once and exits.
-        // Without this flag, the unified binary is in CLI mode and `init` is the CLI init.
+        // Server-Mode subcommand: `bpgit --serve init [repo]` - runs once and exits.
+        // Without flag, unified binary runs in CLI mode where `init` is the CLI init.
         if (remainingArgs.Length > 0 && remainingArgs[0].Equals("init", StringComparison.OrdinalIgnoreCase))
         {
-            if (remainingArgs.Length >= 2 && !string.IsNullOrWhiteSpace(remainingArgs[1]))
+            var overrideName = (remainingArgs.Length >= 2 && !string.IsNullOrWhiteSpace(remainingArgs[1]))
+                ? remainingArgs[1].TrimEnd('/')
+                : null;
+            if (overrideName is not null && overrideName.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                overrideName = overrideName[..^4];
+
+            cfg = new ServerConfig
             {
-                var overrideName = remainingArgs[1].TrimEnd('/');
-                if (overrideName.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-                    overrideName = overrideName[..^4];
-                cfg = new ServerConfig
-                {
-                    ListenUrls = cfg.ListenUrls,
-                    RepoRoot = cfg.RepoRoot,
-                    RepoName = overrideName,
-                    SqlServer = cfg.SqlServer,
-                    SqlDatabase = cfg.SqlDatabase,
-                    SqlAuth = cfg.SqlAuth,
-                    SqlUser = cfg.SqlUser,
-                    SqlPassword = cfg.SqlPassword,
-                    WorktreeDir = cfg.WorktreeDir,
-                    SnapshotFileName = cfg.SnapshotFileName,
-                    AutomateCPath = cfg.AutomateCPath,
-                    CliAuthMode = cfg.CliAuthMode,
-                    CliUsername = cfg.CliUsername,
-                    CliPassword = cfg.CliPassword,
-                };
-            }
+                ListenUrls = cfg.ListenUrls,
+                RepoRoot = cfg.RepoRoot,
+                RepoName = overrideName ?? cfg.RepoName,
+                SqlServer = cfg.SqlServer,
+                SqlDatabase = cfg.SqlDatabase,
+                SqlAuth = cfg.SqlAuth,
+                SqlUser = cfg.SqlUser,
+                SqlPassword = cfg.SqlPassword,
+                WorktreeDir = cfg.WorktreeDir,
+                SnapshotFileName = cfg.SnapshotFileName,
+                AutomateCPath = cfg.AutomateCPath,
+                CliAuthMode = cfg.CliAuthMode,
+                CliUsername = cfg.CliUsername,
+                CliPassword = cfg.CliPassword,
+            };
+
             return InitCommand.Run(cfg);
         }
 
         var builder = WebApplication.CreateBuilder(args);
-
         builder.WebHost.UseUrls(cfg.ListenUrls.ToArray());
 
+        // ------------------------------------------------------------------
+        // Auth-Setup
+        //
+        // Heutiger Stand (post Code-Review 2026-08-30):
+        //  - /admin/* und /healthz waren AllowAnonymous() — ein MVP-Smoke-Test-
+        //    Kompromiss (vor Hook-Wiring, Phase 5+ geplant — siehe Spec §9 + Finding #1).
+        //    Inzwischen entfernt: /admin/db-lookup, /admin/db-lock, /admin/sync-worktree.
+        //    Diagnose-Funktionen wandern in CLI-Subcommands (z.B. `bpgit sync --root <path>`).
+        //  - Smart-HTTP-Endpoints (/{repo}/info/refs, /{repo}/git-*-pack) bleiben anonym,
+        //    weil git-Clients per Spec keine Credentials mitschicken. Das explizite
+        //    `AllowAnonymousGit`-Policy-Pattern steht weiter unten.
+        //  - Es gibt aktuell keine authentifizierten Endpoints. Wenn welche hinzukommen:
+        //    .RequireAuthorization() auf der jeweiligen Route, NICHT auf options.DefaultPolicy
+        //    (würde sonst smart-HTTP-Routes brechen).
+        // ------------------------------------------------------------------
         builder.Services
             .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
             .AddNegotiate();
 
         builder.Services.AddAuthorization(options =>
         {
-            // Default policy requires an authenticated Negotiate user - protects the
-            // /admin/* endpoints. Git smart-HTTP routes are explicitly opted out via
-            // .AllowAnonymous() (smart-HTTP clients don't ship credentials unless the
-            // URL embeds them, and forcing Negotiate here breaks all non-Windows clients).
-            options.DefaultPolicy = options.GetPolicy("RequireAdmin");
-
-            options.AddPolicy("RequireAdmin", policy =>
-                policy.RequireAuthenticatedUser());
-
-            // Git smart-HTTP routes use this no-op policy - explicit override of the
-            // FallbackPolicy for the catch-all endpoint. We also use .AllowAnonymous()
-            // which together with this no-op policy guarantees no auth challenge on
-            // /{repo}/info/refs and /{repo}/git-*-pack.
             options.AddPolicy("AllowAnonymousGit", policy =>
                 policy.RequireAssertion(_ => true));
         });
 
         builder.Services.AddSingleton(cfg);
 
-        // BP-DB Connection String (Windows Integrated Auth default fuer localdb)
-        string BuildConnectionString(ServerConfig c) =>
-            c.SqlAuth.Equals("sso", StringComparison.OrdinalIgnoreCase)
-                ? $"Server={c.SqlServer};Database={c.SqlDatabase};Integrated Security=SSPI;TrustServerCertificate=true;"
-                : $"Server={c.SqlServer};Database={c.SqlDatabase};User Id={c.SqlUser};Password={c.SqlPassword};TrustServerCertificate=true;";
-
+        // BP-DB Connection String: single source of truth ist
+        // ServerConfig.GetEffectiveConnectionString() — kein Duplikat-Builder hier.
         builder.Services.AddSingleton<BpDbService>(sp =>
-            new BpDbService(BuildConnectionString(sp.GetRequiredService<ServerConfig>())));
-        builder.Services.AddSingleton(sp =>
+            new BpDbService(sp.GetRequiredService<ServerConfig>().GetEffectiveConnectionString()));
+
+        builder.Services.AddSingleton<BpSyncService>(sp =>
         {
             var db = sp.GetRequiredService<BpDbService>();
             var srvCfg = sp.GetRequiredService<ServerConfig>();
@@ -129,20 +129,24 @@ public static partial class Program
             return sync;
         });
         builder.Services.AddSingleton<PreReceiveHandler>();
-        builder.Services.AddSingleton(sp =>
+        builder.Services.AddSingleton<WorktreeSyncService>(sp =>
         {
             var db = sp.GetRequiredService<BpDbService>();
             return new WorktreeSyncService(db);
         });
+
+        // Phase-5+: these handlers are wired but not yet invoked from
+        // GitHttpHandler (see Phase 4b-follow-up git-CLI delegation path,
+        // Spec §9 + Finding #1). DI registration kept so the call sites can be
+        // added without touching Program.cs.
         builder.Services.AddSingleton<PostReceiveHandler>();
         builder.Services.AddSingleton<PostCheckoutHandler>();
 
         var app = builder.Build();
-
         app.UseAuthentication();
         app.UseAuthorization();
 
-        // Health endpoint - anonymous, no auth required (useful for monitoring).
+        // Health endpoint: anonymous, no auth required (standard for monitoring/lb).
         app.MapGet("/healthz", () => Results.Ok(new
         {
             status = "ok",
@@ -153,68 +157,19 @@ public static partial class Program
             bareRepo = cfg.BareRepoPath,
         })).AllowAnonymous();
 
-        // Admin-Endpoint: BP-DB-Lookup per Name (Phase 4b MVP - Smoke-Test-Zweck).
-        // Liefert {found, processId, name} oder 404. Auth via FallbackPolicy erforderlich.
-        app.MapGet("/admin/db-lookup", async (string name, BpDbService db) =>
-        {
-            var processId = await db.LookupProcessIdByNameAsync(name);
-            if (processId is null)
-                return Results.NotFound(new { name, found = false });
-            var dbName = await db.GetProcessNameAsync(processId.Value);
-            return Results.Ok(new { name, found = true, processId, dbName });
-        }).AllowAnonymous();
-
-        // Admin-Endpoint: Process-Lock-Check
-        app.MapGet("/admin/db-lock", async (Guid processId, BpDbService db) =>
-        {
-            var lockInfo = await db.GetProcessLockAsync(processId);
-            if (lockInfo is null)
-                return Results.Ok(new { processId, locked = false });
-            return Results.Ok(new
-            {
-                processId,
-                locked = true,
-                username = lockInfo.Username,
-                machineName = lockInfo.MachineName,
-                lockDateTime = lockInfo.LockDateTime
-            });
-        }).AllowAnonymous();
-
-        // Admin-Endpoint: Worktree-Syncronisation (Phase 4c - BP-DB -> Worktree).
-        // Trigger via POST /admin/sync-worktree?root=<worktree-path>
-        // Returns counts of written/deleted/skipped files + errors.
-        app.MapPost("/admin/sync-worktree", async (HttpContext ctx, WorktreeSyncService sync) =>
-        {
-            var root = ctx.Request.Query["root"].ToString();
-            if (string.IsNullOrWhiteSpace(root))
-                return Results.BadRequest(new { error = "Query parameter 'root' (worktree path) required" });
-
-            try
-            {
-                var result = await sync.MaterializeAsync(root);
-                return Results.Ok(new
-                {
-                    worktreeRoot = root,
-                    written = result.Written,
-                    deleted = result.Deleted,
-                    skipped = result.Skipped,
-                    errors = result.Errors
-                });
-            }
-            catch (Exception ex)
-            {
-                return Results.Problem(detail: ex.Message, statusCode: 500);
-            }
-        }).AllowAnonymous();
-
-        // Git smart-HTTP endpoints. Smart-HTTP is anonymous by protocol design - git
-        // clients don't ship credentials with /info/refs or /git-*-pack requests unless
-        // the URL embeds them. FallbackPolicy + .AllowAnonymous() alone is not enough
-        // in ASP.NET Core (FallbackPolicy still triggers a 401 before the Anonymous
-        // override), so we explicitly apply the no-op "AllowAnonymousGit" policy.
+        // Git smart-HTTP endpoints (v2 spec):
+        //   /{repo}/info/refs?service=git-upload-pack|git-receive-pack
+        //   /{repo}/git-upload-pack
+        //   /{repo}/git-receive-pack
+        // Smart-HTTP is anonymous by protocol design - git clients don't ship
+        // credentials with /info/refs or /git-*-pack requests unless they are
+        // embedded in the URL. .AllowAnonymous() alone is not enough in ASP.NET
+        // Core once an authentication scheme is registered (the scheme still
+        // triggers 401 before the anonymous override), so we apply an explicit
+        // no-op "AllowAnonymousGit" policy.
         //
-        // The catch-all is registered as MapFallback so it does not collide with
-        // /healthz, /admin/*, or other explicit routes.
+        // The catch-all is registered as MapFallback so it does not collide
+        // with /healthz or other explicit routes.
         app.MapFallback(async (HttpContext ctx, ServerConfig srvCfg) =>
         {
             var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg);
@@ -234,7 +189,7 @@ public static partial class Program
             : firstUrl;
 
         Console.WriteLine($"[bpgit-server] Listening on {string.Join(", ", cfg.ListenUrls)}");
-        Console.WriteLine($"[bpgit-server] Connect URL: {connectable}  (0.0.0.0 is bind-only - clients use localhost / hostname / IP)");
+        Console.WriteLine($"[bpgit-server] Connect URL: {connectable} (0.0.0.0 bind-only - clients use localhost / hostname / IP)");
         Console.WriteLine($"[bpgit-server] Bare repo: {cfg.BareRepoPath}");
         if (!Directory.Exists(cfg.BareRepoPath) || !LibGit2Sharp.Repository.IsValid(cfg.BareRepoPath))
         {
