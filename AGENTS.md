@@ -17,6 +17,7 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
 - **Implementation: Phasen 4a (Kestrel) + 4b (pre-receive) + 4b-follow-up (git-CLI receive-pack + upload-pack delegation) + 4c (PostReceive/PostCheckout Hooks + WorktreeSyncService) done.**
 - **xunit-Tests-Welle done** (12 Test-Commits, 65 gruen + 4 skipped in 3 Test-Projekten).
 - **Backlog Phase 5+** (Martin #6401 nach Doku-Pass): (i) 3 PreReceive HEAD-Tracking-Tests scheitern mit `Assert.Single() collection empty` (Issue-#802 workaround in commit `2fa730d`; tree.Count vs parents[0].tree.Count vergleichen); (ii) LibGit2Sharp 0.32.0 ist einzige stabile Version auf NuGet (libgit2-v1.8.6-Security-Release in Vorbereitung, noch nicht stable); (iii) MVP1-Deployment (`bpgit-server.exe` als Windows-Service + SPN + Firewall) + Demo-DB-Cleanup (1 `BPARelease`-Row `releaseid=2` + 35 `BPAReleaseEntry`-Rows DELETE) — gestrichen per #6385.
+- **Hook-Status (Code-Review 2026-08-30):** `PreReceiveHandler` / `PostReceiveHandler` / `PostCheckoutHandler` existieren als Library-Handler (commits `37fc525`, `f399ad1`), voll getestet, **aber NICHT verdrahtet** in `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync`. Grund: libgit2 0.32.0 hat keine Server-side receive-pack-API. Workaround-Karte `bp-git-pre-receive-wiring` (urgent, Workboard-ID `866e5346`). Konsequenz: `git push` schreibt unkontrolliert; `git pull` materialisiert nicht aus BP-DB. Worktree-Shell-Hooks aus Phase 2a wurden 2026-08-30 entfernt (Spec §13).
 
 ## Project Files
 
@@ -49,6 +50,7 @@ Backlog enthält:
 - `bp-git-tests` — xunit-Tests für Adapter-CLI + Data-Layer
 - `bp-git-mvp1-deployment` — Deployment auf OpenClawPC + End-to-End-Test
 - `bp-git-demo-db-cleanup` — Demo-DB Cleanup (1 zusätzliche BPARelease-Row aus früherem `/importrelease`-Test)
+- `bp-git-pre-receive-wiring` (Karte `866e5346`, priority **urgent**, Board bp-git) — Pre-/Post-Receive/Checkout-Hooks im Server verdrahten. Library-Handler existieren (Phase 4b/4c, commits `37fc525` + `f399ad1`), sind aber nicht aufgerufen. Root Cause: libgit2 0.32.0 hat keine Server-side receive-pack-API. Specs-Work zuerst (Pack-Format, Locking, Fork-Strategie); dann Implementation + xunit-Integration gegen echtes BP-DB-Smoke-Setup.
 
 Erledigt:
 - Phase 1 MVP (commit `b6d7e02`)
@@ -88,3 +90,5 @@ Erledigt:
 | 2026-08-12 | LibGit2Sharp 0.32.0: `ObjectDatabase.CreateCommit(Signature, Signature, string, Tree, Commit[], bool)` 6-arg positional; `CreateBlob(Stream)`; `TreeDefinition.Add(path, blob, Mode)`; `Refs.Add(string, ObjectId)` + `Refs.UpdateTarget(Reference, ObjectId)` | Diagnose-Befund |
 | 2026-08-12 | MVP1-Deployment + Demo-DB-Cleanup gestrichen | Martin #6385 |
 | 2026-08-12 | Doku + Tests + Refactoring komplettieren (Phase 1/2/3) | Martin #6401 |
+| 2026-08-30 | Workstation-Shell-Hooks (`InstallGitHooksAsync`) entfernt; `--install-hooks` als deprecated no-op | Spec §13 umgesetzt (Martin #6295) |
+| 2026-08-30 | Hook-Libraries `PreReceive`/`PostReceive`/`PostCheckout` als "Library vorhanden, NICHT gewired" dokumentiert | Code-Review #1, Spec §7 + §9 + Doc-Anfang-Disclaimer, Backlog-Karte `866e5346` |
