@@ -156,4 +156,31 @@ public class ServerConfigTests : IDisposable
         Assert.Contains("User Id=myuser", conn);
         Assert.Contains("Password=mypwd", conn);
     }
+
+    [Fact]
+    public void AutomateCPath_DefaultsToBpInstallPath_WhenAbsentFromJson()
+    {
+        // Per Martin #6487: automatecPath is optional in bpgit.json. Default path
+        // is set in the C# property initializer; System.Text.Json leaves the
+        // default intact when the JSON field is absent.
+        File.WriteAllText(_tempConfigPath, @"{ ""repoName"": ""x"" }");
+
+        var cfg = ServerConfig.Load(_tempConfigPath);
+
+        Assert.Equal(
+            @"C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe",
+            cfg.AutomateCPath);
+    }
+
+    [Fact]
+    public void AutomateCPath_JsonOverridesDefault_WhenFieldPresent()
+    {
+        // Per Martin #6487: user with non-standard BP install path can override
+        // the default via bpgit.json. Override must win over the C# default.
+        File.WriteAllText(_tempConfigPath, @"{ ""automatecPath"": ""D:\\BP\\AutomateC.exe"" }");
+
+        var cfg = ServerConfig.Load(_tempConfigPath);
+
+        Assert.Equal(@"D:\BP\AutomateC.exe", cfg.AutomateCPath);
+    }
 }
