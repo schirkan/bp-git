@@ -59,8 +59,6 @@ obj/
 processes/                      # test worktree from smoke-phase4c.ps1
 src/BPGit.Server/BPGit.Server.http   # .http test artifact from `dotnet new webapi` scaffold
 src/BPGit.Server/Properties/    # launchSettings.json (debug-only)
-src/BPGit.Server/WeatherForecast.cs  # default scaffold leftover from `dotnet new webapi`
-
 # --- Blue Prism Education License (lokal, nie committen) ---
 *.lic
 
