@@ -435,9 +435,9 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 | `bpgit init` | Admin | Initialisiert Bare-Repo auf Server (einmalig) |
 | `bpgit pull` | Internal | Server-side Materialization (von Hook aufgerufen) |
 | `bpgit log` | Diagnostic | BPAAuditEvents aus BP-DB (per-User-Audit) |
-| `bpgit status` | Deprecated | Nutze stattdessen `git status` |
-| `bpgit diff` | Deprecated | Nutze stattdessen `git diff` |
-| `bpgit commit` | Deprecated | Nutze stattdessen `git push` (server-side Hook macht den Rest) |
+| `bpgit status` | Deprecated | Nutze stattdessen `git status` (Worktree-vs-Snapshot-Drift-Detection ist jetzt Standard-`git`-Funktionalität) |
+| `bpgit diff` | Deprecated | Nutze stattdessen `git diff` (Hash-basierter Drift-Report entspricht dem nativen `git diff` für den BP-XML-Worktree) |
+| `bpgit commit` | Deprecated | Nutze stattdessen `git push` -- **aber: in MVP1 hat `git push` KEINE Server-seitige `/import`-Validierung** (Hooks nicht gewired, Phase 5+, Karte `866e5346`). Bis dahin manuell `bpgit status` + `bpgit pull` triggern um Worktree-Synchronisation zu erzwingen. |
 | `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit.exe (kein Shell-Script noetig) |
 
 ### CLI-Executable
