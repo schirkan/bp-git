@@ -90,5 +90,5 @@ Erledigt:
 | 2026-08-12 | LibGit2Sharp 0.32.0: `ObjectDatabase.CreateCommit(Signature, Signature, string, Tree, Commit[], bool)` 6-arg positional; `CreateBlob(Stream)`; `TreeDefinition.Add(path, blob, Mode)`; `Refs.Add(string, ObjectId)` + `Refs.UpdateTarget(Reference, ObjectId)` | Diagnose-Befund |
 | 2026-08-12 | MVP1-Deployment + Demo-DB-Cleanup gestrichen | Martin #6385 |
 | 2026-08-12 | Doku + Tests + Refactoring komplettieren (Phase 1/2/3) | Martin #6401 |
-| 2026-08-30 | Workstation-Shell-Hooks (`InstallGitHooksAsync`) entfernt; `--install-hooks` als deprecated no-op | Spec §13 umgesetzt (Martin #6295) |
+| 2026-08-30 | Workstation-Shell-Hooks (`InstallGitHooksAsync`) + `--install-hooks`-Flag vollständig entfernt | Spec §13 umgesetzt (Martin #6295) |
 | 2026-08-30 | Hook-Libraries `PreReceive`/`PostReceive`/`PostCheckout` als "Library vorhanden, NICHT gewired" dokumentiert | Code-Review #1, Spec §7 + §9 + Doc-Anfang-Disclaimer, Backlog-Karte `866e5346` |

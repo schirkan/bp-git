@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 //                         bpgit-server --serve init [repo-name]
 //                         bpgit-server --serve init my-repo
 //
-// CLI-Mode (default):      bpgit-server init [--install-hooks]
+// CLI-Mode (default):      bpgit-server init
 //                         bpgit-server pull
 //                         bpgit-server status
 //                         bpgit-server diff  [processid]

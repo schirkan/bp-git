@@ -240,7 +240,6 @@ Standard-Config: `<exe-dir>/bpgit.json` (wird beim Publish mit-exportiert). Over
 
 | Option | Beschreibung |
 |---|---|
-| `--install-hooks` | **DEPRECATED** (Spec §13, Martin #6295): no-op mit Warnung, ignorieren |
 | `--force` | Erforderlich für `commit` (expliziter Write) |
 | `-n, --limit N` | Limit rows für `log` (default 50) |
 | `--processid <guid>` | Filter by processid für `log` |

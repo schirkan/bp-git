@@ -23,20 +23,8 @@ public static class InitCommand
     /// <summary>
     /// Bootstrap the CLI worktree from BP-DB into <c>config.WorktreePath</c>.
     /// </summary>
-    public static async Task RunAsync(ServerConfig config, bool installHooks = false)
+    public static async Task RunAsync(ServerConfig config)
     {
-        // Workstation-shell-hook install path was removed (Spec §13). The parameter
-        // is kept for CLI parsing compatibility but is intentionally a no-op with
-        // a one-time warning. New callers should drop --install-hooks from their
-        // command line.
-        if (installHooks)
-        {
-            Console.Error.WriteLine(
-                "[bpgit] --install-hooks is deprecated and ignored (Spec §13, Martin #6295). " +
-                "Drift warnings are not needed in the Git-Server architecture - " +
-                "run 'bpgit pull' manually if you suspect staleness.");
-        }
-
         var workdir = config.WorktreePath;
         Directory.CreateDirectory(workdir);
 

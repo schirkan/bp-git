@@ -523,7 +523,7 @@ git pull  # server-side post-checkout materialisiert Updates + canonical Filenam
 
 ### Phase 2c ist obsolet
 
-Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implementation (Card `98e9d43f-...`). `--install-hooks`-Flag in `InitCommand` wird deprecated.
+Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implementation (Card `98e9d43f-...` ist nie gebaut worden). `--install-hooks`-Flag wurde 2026-08-31 vollständig aus `InitCommand` und CLI-Parser entfernt (commit siehe `AGENTS.md`-Decisions-Tabelle).
 
 ---
 

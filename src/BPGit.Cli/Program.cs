@@ -23,7 +23,6 @@ public class Program
 
         // Parse args: first non-option is the command, options are global
         string? command = null;
-        bool installHooks = false;
         bool force = false;
         int limit = 50;
         Guid? processId = null;
@@ -35,14 +34,6 @@ public class Program
         {
             switch (args[i])
             {
-                case "--install-hooks":
-                    // Deprecated since Spec §13 (Martin #6295). Pre-Server architecture
-                    // had workstation-shell hooks for drift warnings; the Git-Server
-                    // architecture uses WorktreeSyncService.MaterializeAsync on the
-                    // server side instead. InitCommand ignores the flag with a warning
-                    // so old scripts don't break.
-                    installHooks = true;
-                    break;
                 case "--force":
                     force = true;
                     break;
@@ -87,7 +78,7 @@ public class Program
             switch (command)
             {
                 case "init":
-                    await InitCommand.RunAsync(config, installHooks);
+                    await InitCommand.RunAsync(config);
                     return 0;
                 case "pull":
                     await PullCommand.RunAsync(config);
@@ -131,7 +122,6 @@ public class Program
         Console.WriteLine("  --serve init <repo>  Initialize bare git-repo for the BP project");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("      --install-hooks    DEPRECATED (Spec §13): no-op with warning, ignored");
         Console.WriteLine("      --force            Required for 'commit' (explicit write)");
         Console.WriteLine("  -n, --limit N          Limit rows for 'log' (default 50)");
         Console.WriteLine("      --processid <guid> Filter by processid for 'log'");
