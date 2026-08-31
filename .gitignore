@@ -17,6 +17,7 @@ $RECYCLE.BIN/
 
 # --- Logs / Scratch ---
 *.log
+*.trx
 logs/
 temp/
 
@@ -42,6 +43,7 @@ secrets/
 # --- .NET build outputs ---
 bin/
 obj/
+TestResults/
 *.user
 *.suo
 
