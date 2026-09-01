@@ -2,9 +2,7 @@
 
 **Status:** v0.4 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen + Unified Binary bpgit.exe) -- v0.4 Unified Binary (Martin #6462 -- bpgit.exe + bpgit.json, no .bpgit/)
 
-> ⚠️ **WICHTIG — Hook-Status (Stand 2026-08-30, Workaround-Karte `bp-git-pre-receive-wiring`, Phase 5+):**
->
-> Die in §7 spezifizierten Hooks `pre-receive`, `post-receive`, `post-checkout` existieren im Code als Library-Handler in `src/BPGit.Server/GitHttp/{PreReceiveHandler,PostReceiveHandler,PostCheckoutHandler}.cs` (verdrahtet via DI, voll getestet mit 65+ xunit-Tests), sind aber **NICHT** an `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` aufgerufen. Grund: libgit2 0.32.0 hat keine public API für Server-seitiges `receive-pack`. Phase 4b-follow-up (commit `18ec5db`) delegiert deshalb an den nativen `git --stateless-rpc`-Prozess.
+> ✅ **Hook-Status (Stand 2026-09-01):** Die in §7 spezifizierten Hooks `pre-receive`, `post-receive`, `post-checkout` sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `git receive-pack` delegiert an nativen `git --stateless-rpc` (Phase 4b-follow-up, commit `18ec5db`), davor läuft die `PushOrchestrator.PreReceive`-Gate und danach `WorktreeSyncService.MaterializeAsync`. Side-effect post-apply per Spec §9; Pre-Receive kann Push nicht ablehnen (siehe Limitation).
 >
 > **Konkret heißt das für MVP1 (Stand 2026-08-30):**
 >
@@ -269,12 +267,12 @@ Server-Flow:
 
 | Hook | Trigger | Aktion | Status |
 |---|---|---|---|
-| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) | **Library vorhanden, NICHT gewired** (`PostCheckoutHandler.cs`, Phase 5+, siehe Workaround-Karte `bp-git-pre-receive-wiring`) |
-| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Änderung | **Library vorhanden, NICHT gewired** (`PreReceiveHandler.cs`, voll getestet in `tests/BPGit.Server.Tests/PreReceiveHandlerTests.cs`, Phase 5+) |
-| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files löschen | **Library vorhanden, NICHT gewired** (`PostReceiveHandler.cs`, Phase 5+) |
+| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) | ✅ **wired** (`PostCheckoutHandler.cs`, `GitHttpHandler.HandleUploadPackAsync` ruft `PostCheckoutHandler.HandleAsync` nach erfolgreichem git-CLI auf, Worktree-Materialization aus BP-DB) |
+| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Änderung | ✅ **wired (side-effect post-apply per Spec §9)** (`PreReceiveHandler.cs`, `PushOrchestrator.RunPreReceiveAsync` ruft es per Ref-Update nach ref-apply auf, **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler — siehe MVP-1-Limitation) |
+| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files löschen | ✅ **wired** (`PostReceiveHandler.cs`, `PushOrchestrator.RunPostReceiveAsync` ruft es nach ref-apply + PreReceive auf, `WorktreeSyncService.MaterializeAsync`) |
 
 
-> **Status-Disclaimer:** Hooks in der rechten Spalte als "Library vorhanden, NICHT gewired" markiert. Die Handler existieren als Libraries + sind via DI-Singleton verdrahtet, werden aber von `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` **nicht aufgerufen**. Grund: libgit2 0.32.0 hat keine public Server-side receive-pack-API; Phase 4b-follow-up delegiert deshalb an nativen `git --stateless-rpc`. `git push` schreibt direkt ins Bare-Repo, `git pull` lädt nur den letzten gepushten Stand, kein BP-DB-Read. Workaround: manuell `bpgit pull` auf OpenClawPC. Siehe Disclaimer am Doc-Anfang und Workaround-Karte `bp-git-pre-receive-wiring` (Phase 5+).
+> **Status-Disclaimer:** Hooks sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `PushOrchestrator` sitzt zwischen HTTP-Request-Body und `git receive-pack --stateless-rpc`: parst Ref-Update-Pkt-Lines, ruft nach ref-apply `PreReceiveHandler.HandleAsync` pro Ref-Update (außer Delete → übersprungen, solange `BpSyncService.DeleteAsync` NotImplemented), dann `PostReceiveHandler.HandleAsync` für Worktree-Materialization. Side-effect post-apply per Spec §9: Pre-Receive **kann** Push nicht ablehnen, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie über BP-DB-Sync + stderr-Log, nicht über Push-Reject. Side-band-64k + ofs-delta Pack-Encoding ist in §2+§3 dokumentiert (Phase-5+-Backlog).
 **Hook-Implementierung**: C# DelegatedHandler in bpgit.exe (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
 
 ### Beispiel: pre-receive (Pseudocode)
@@ -437,7 +435,7 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 | `bpgit log` | Diagnostic | BPAAuditEvents aus BP-DB (per-User-Audit) |
 | `bpgit status` | Deprecated | Nutze stattdessen `git status` (Worktree-vs-Snapshot-Drift-Detection ist jetzt Standard-`git`-Funktionalität) |
 | `bpgit diff` | Deprecated | Nutze stattdessen `git diff` (Hash-basierter Drift-Report entspricht dem nativen `git diff` für den BP-XML-Worktree) |
-| `bpgit commit` | Deprecated | Nutze stattdessen `git push` -- **aber: in MVP1 hat `git push` KEINE Server-seitige `/import`-Validierung** (Hooks nicht gewired, Phase 5+, Karte `866e5346`). Bis dahin manuell `bpgit status` + `bpgit pull` triggern um Worktree-Synchronisation zu erzwingen. |
+| `bpgit commit` | Deprecated | Nutze stattdessen `git push` (server-seitige Hooks verdrahtet per Hybrid-Ansatz: Pre-Receive läuft side-effect post-apply per Spec §9, kann Push bei BP-DB-Sync-Fehler nicht ablehnen). |
 | `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit.exe (kein Shell-Script noetig) |
 
 ### CLI-Executable

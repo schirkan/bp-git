@@ -57,15 +57,15 @@ VS Code / Editor                             │                            │
 | Operation | Aus Server-Sicht | Status |
 |---|---|---|
 | `git clone` | Worktree wird einmalig aus BP-DB materialisiert | ✅ Phase 4c (commit `f399ad1`) |
-| `git fetch` / `git pull` | Stand vom letzten gepushten Commit. **KEINE** automatische BP-DB-Aktualisierung vom Server | ⚠️ **Pending Phase 5+** |
-| `git push` | Pack wird vom nativen `git receive-pack` akzeptiert. **KEIN** Pre-Receive-Check, **KEIN** `/import`-Aufruf vom Server | ⚠️ **Pending Phase 5+** |
-| Process-Edit in BP Studio → Worktree | **KEINE** automatische Aktualisierung — du musst `bpgit pull` manuell aufrufen | ⚠️ **Pending Phase 5+** |
+| `git fetch` / `git pull` | Server liest nach erfolgreichem `git-upload-pack` aus BP-DB und materialisiert Worktree via `PostCheckoutHandler` → `WorktreeSyncService.MaterializeAsync(cfg.WorktreePath)` | ✅ **wired (side-effect post-apply per Spec §9)** |
+| `git push` | Server parst Ref-Update-Pkt-Lines, ruft `git receive-pack --stateless-rpc` (ref-update + pack-apply), danach `PreReceiveHandler` (processid-Lookup + Lock-Check + `/import`) und `PostReceiveHandler` (Worktree-Materialization). Side-effect post-apply: **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler. | ✅ **wired (side-effect post-apply per Spec §9)** |
+| Process-Edit in BP Studio → Worktree | Worktree wird beim nächsten `git fetch` / `git pull` durch `PostCheckoutHandler` aktualisiert (server-side Hook) | ✅ **wired** |
 
-> **Wichtig — Hook-Disclaimer (Stand 2026-08-30):** Die Hooks `PreReceive`, `PostReceive`, `PostCheckout` existieren im Code als Library-Handler (`src/BPGit.Server/GitHttp/PreReceiveHandler.cs` + `PostReceiveHandler.cs` + `PostCheckoutHandler.cs`), sind aber **nicht** in `GitHttpHandler.HandleReceivePackAsync` / `HandleUploadPackAsync` verdrahtet. Spec §9 dokumentiert das als "side-effect post-apply" (Trade-off: libgit2 0.32.0 hat keine public API für Server-seitiges receive-pack). Folge für MVP1: BP-DB-Edits propagieren erst nach manuellem `bpgit pull`, BP-Studio-Edits propagieren nicht in Worktree-Pulls. Workaround-Karten: `bp-git-pre-receive-wiring` (Phase 5+, priority urgent). Doku in `specs/SPEC-git-server.md` §9.
+> ✅ **Hook-Status (Stand 2026-09-01):** Die drei Hooks `PreReceive`, `PostReceive`, `PostCheckout` sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `git receive-pack` delegiert an nativen `git --stateless-rpc` (Phase 4b-follow-up, commit `18ec5db`); davor läuft `PushOrchestrator.PreReceive`-Gate und danach `WorktreeSyncService.MaterializeAsync` per `PostReceive`. **Wichtiger Trade-off (Side-effect post-apply per Spec §9):** `PreReceive` läuft NACH `git receive-pack` ref-update, nicht davor. Push kann **nicht** abgelehnt werden, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie via BP-DB-Sync + stderr-Log, nicht via Push-Reject. Pre-emptive Validate-then-Apply bleibt Phase 5+ Backlog (Karte `866e5346`).
 
 **Was der Server heute tatsächlich macht:**
 - `/info/refs`: korrekt per LibGit2Sharp-`Repository.Refs` durch LibGit2Sharp-API (Smart-HTTP v2, voll funktional) — `git clone` + `git fetch` funktionieren.
-- `/git-upload-pack`, `/git-receive-pack`: Delegation an nativen `git --stateless-rpc`. Pack-Transfer funktioniert, aber **keine** BP-DB-Validierung.
+- `/git-upload-pack`, `/git-receive-pack`: Delegation an nativen `git --stateless-rpc` mit dazwischengeschalteter `PushOrchestrator`-Pipeline. Bei `/git-upload-pack` (clone/fetch) folgt `PostCheckoutHandler`-Hook; bei `/git-receive-pack` (push) folgt Pre-Receive + Post-Receive side-effect post-apply per Spec §9.
 - `/healthz`: anonymous Service-Health-Check.
 
 ## Filename-Regeln (WICHTIG)
