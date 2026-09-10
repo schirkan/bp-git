@@ -135,13 +135,11 @@ public static partial class Program
             return new WorktreeSyncService(db);
         });
 
-        // Hook-Handler (Phase 5+, per SPEC-pre-receive-wiring.md §1.3):
-        //   PreReceiveHandler    - side-effect post-apply for git-receive-pack
-        //   PostReceiveHandler   - worktree materialization after git-receive-pack
-        //   PostCheckoutHandler  - worktree materialization after git-upload-pack (clone/fetch)
-        // PushOrchestrator orchestriert receive-pack (body-puffer + git-CLI delegation + hook invocation).
+        // Pre-/Post-Receive-Handler als C# im HTTP-Handler (kein Git-Hook-Script, Stand 2026-09-10):
+        //   PreReceiveHandler   - side-effect post-apply für git-receive-pack
+        //   PostReceiveHandler  - Worktree-Materialization nach git-receive-pack
+        // PushOrchestrator orchestriert receive-pack (body-puffer + git-CLI delegation + handler invocation).
         builder.Services.AddSingleton<PostReceiveHandler>();
-        builder.Services.AddSingleton<PostCheckoutHandler>();
         builder.Services.AddSingleton<PushOrchestrator>();
 
         var app = builder.Build();
@@ -173,9 +171,9 @@ public static partial class Program
         // The catch-all is registered as MapFallback so it does not collide
         // with /healthz or other explicit routes.
         app.MapFallback(async (HttpContext ctx, ServerConfig srvCfg,
-                                PushOrchestrator push, PostCheckoutHandler postCheckout) =>
+                                PushOrchestrator push) =>
         {
-            var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg, push, postCheckout);
+            var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg, push);
             if (!handled)
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;

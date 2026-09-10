@@ -263,17 +263,28 @@ Server-Flow:
 
 ---
 
-## 7. Server-Side Hooks
+## 7. Pre-/Post-Receive-Logik im bpgit-server (keine Git-Hook-Scripts)
 
-| Hook | Trigger | Aktion | Status |
+**Architektur-Wechsel (Stand 2026-09-10):** Keine Git-Hook-Scripts in `<bare-repo>/hooks/`, keine `core.hooksPath`, kein `bpgit install-hooks`. **Alle Logik läuft als C# im `bpgit-server`-HTTP-Handler**, typsicher, atomar mit dem HTTP-Request, eine Codebase, eine Teststrategie.
+
+| Handler | Trigger | Aktion | Status |
 |---|---|---|---|
-| `post-checkout` | nach `git clone` oder `git checkout` | `bpgit pull` materialisiert/refreshed Worktree (canonical Filenames) | ✅ **wired** (`PostCheckoutHandler.cs`, `GitHttpHandler.HandleUploadPackAsync` ruft `PostCheckoutHandler.HandleAsync` nach erfolgreichem git-CLI auf, Worktree-Materialization aus BP-DB) |
-| `pre-receive` | vor `git push` (Push-Validierung) | parse `git diff`, processid-Lookup, `/import /forceid /overwrite` pro Änderung | ✅ **wired (side-effect post-apply per Spec §9)** (`PreReceiveHandler.cs`, `PushOrchestrator.RunPreReceiveAsync` ruft es per Ref-Update nach ref-apply auf, **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler — siehe MVP-1-Limitation) |
-| `post-receive` | nach erfolgreichem Push | BP-DB pollen, canonical Filenames schreiben, alte Files löschen | ✅ **wired** (`PostReceiveHandler.cs`, `PushOrchestrator.RunPostReceiveAsync` ruft es nach ref-apply + PreReceive auf, `WorktreeSyncService.MaterializeAsync`) |
+| `PreReceiveHandler` | in HTTP-Handler vor ref-apply (side-effect post-apply per Spec §9) | parse `git diff`, name-Lookup via SQL, `/import /forceid /overwrite` pro Änderung | ✅ **wired** (`GitHttpHandler.HandleReceivePackAsync` ruft `PreReceiveHandler.HandleAsync` pro ref-update auf, **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler — siehe MVP-1-Limitation) |
+| `PostReceiveHandler` | in HTTP-Handler nach ref-apply | BP-DB-Sync (`WorktreeSyncService.MaterializeAsync` — canonical-Filenames schreiben, stale-Files löschen) | ✅ **wired** (`GitHttpHandler.HandleReceivePackAsync` ruft `PostReceiveHandler.HandleAsync` nach ref-apply + PreReceive auf) |
+| ~~`PostCheckoutHandler`~~ | — | — | **gestrichen 2026-09-10** — Filename = `sanitize(BPAProcess.name) + ".xml"` per #6311, kein Client-Rename nötig, kein post-checkout-Hook mehr. File `PostCheckoutHandler.cs` kann gelöscht werden. |
 
 
-> **Status-Disclaimer:** Hooks sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `PushOrchestrator` sitzt zwischen HTTP-Request-Body und `git receive-pack --stateless-rpc`: parst Ref-Update-Pkt-Lines, ruft nach ref-apply `PreReceiveHandler.HandleAsync` pro Ref-Update (außer Delete → übersprungen, solange `BpSyncService.DeleteAsync` NotImplemented), dann `PostReceiveHandler.HandleAsync` für Worktree-Materialization. Side-effect post-apply per Spec §9: Pre-Receive **kann** Push nicht ablehnen, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie über BP-DB-Sync + stderr-Log, nicht über Push-Reject. Side-band-64k + ofs-delta Pack-Encoding ist in §2+§3 dokumentiert (Phase-5+-Backlog).
-**Hook-Implementierung**: C# DelegatedHandler in bpgit.exe (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer).
+> **Status-Disclaimer:** Die Handler sind im HTTP-Lifecycle verdrahtet (nicht als Git-Hook-Scripts). `PushOrchestrator` sitzt zwischen HTTP-Request-Body und `git receive-pack --stateless-rpc`: parst Ref-Update-Pkt-Lines, ruft nach ref-apply `PreReceiveHandler.HandleAsync` pro Ref-Update (außer Delete → übersprungen, solange `BpSyncService.DeleteAsync` NotImplemented), dann `PostReceiveHandler.HandleAsync` für Worktree-Materialization. Side-effect post-apply per Spec §9: Pre-Receive **kann** Push nicht ablehnen, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie über BP-DB-Sync + stderr-Log, nicht über Push-Reject. Side-band-64k + ofs-delta Pack-Encoding bleibt obsolet (Hybrid-Ansatz aus §1.3 verworfen 2026-09-10, Spec §2/§3 in SPEC-pre-receive-wiring.md als "obsolete" markiert).
+
+**Implementierung:** C# DelegatedHandler in bpgit.exe (NICHT Shell-Scripts — bessere Testbarkeit, typsicherer, atomare Transaktion mit HTTP-Request).
+
+**Warum keine Git-Hook-Scripts:**
+
+- Kein zusätzlicher Installations-Schritt beim `bpgit-server init` (nur Bare-Repo anlegen)
+- Kein `core.hooksPath`-Konflikt
+- Eine Codebase (C#), eine Teststrategie
+- Atomare Transaktion: HTTP-Request-Lifecycle umfasst Validation + Apply + Post-Sync
+- `post-checkout` ist obsolet, weil das Filename-Format bereits kanonisch ist (per #6311)
 
 ### Beispiel: pre-receive (Pseudocode)
 
@@ -354,25 +365,30 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 ### Pull-Flow (git clone, git pull)
 
-`post-checkout` Hook (oder initial-clone Handler) ruft `WorktreeSyncService.MaterializeAsync(targetRoot, ct)` auf. Phase-4c-Algorithmus (Commits `d2fd04f`, `f7dc718`):
+**Stand 2026-09-10:** **Kein `post-checkout`-Hook mehr.** Pull-Flow ist zweistufig:
 
-1. SqlCommand gegen `BPAProcess` (alle Rows, liest `name` + `processxml`)
-2. SqlCommand gegen `BPATree` (Filter: `id IN (2, 3)` — nur Processes + Objects; andere Trees per #6287 ausgeschlossen)
-3. SqlCommand gegen `BPAGroup` (fuer Trees 2, 3)
-4. SqlCommand gegen `BPAGroupProcess` (M:N-Mapping)
-5. **Snapshot existing XML files** unter `targetRoot` (fuer stale-Detection, kein Full-Reinit)
-6. Pro Process:
-   - Skip wenn `name` leer oder keine Folder-Membership
-   - **Sanitize filename** via `Path.GetInvalidFileNameChars()` + `TrimEnd('.', ' ')` — deckt ALLE Windows-inkompatiblen Zeichen ab inkl. / \ : * ? " < > |
-   - **StripLeadingXmlComments** vor jedem Write (per #6277, BP `/import`-Parser bricht sonst mit "Failed to create ... already exists" ab)
-   - **M:N-Duplikation**: Process in mehreren Groups → File in jedem Folder
-   - Path = `<TreeName>/<GroupName>/<sanitized(name)>.xml`
-   - Write XML zu worktree — Skip wenn Content identisch (kein Re-Write noetig)
-7. **Delete stale XML files**: alles in Snapshot aber nicht in kept-set loeschen (Renames/Deletes in BP-DB propagieren automatisch in Worktree)
+1. **Stage 1 (git-seitig):** `git clone` / `git pull` ruft `git-upload-pack` auf dem Server. Server liefert Pack + Refs. Client-Worktree enthält **kanonisch benannte XML-Files** (per #6311, weil Filename = `sanitize(BPAProcess.name) + ".xml"` und der Developer diese Files bereits so commited hat).
+2. **Stage 2 (BP-seitig, lokal):** Developer ruft `bpgit pull` (oder `bpgit materialize`) als CLI-Subcommand auf. Dieses ruft `WorktreeSyncService.MaterializeAsync(targetRoot, ct)` auf, das **gegen die lokale BP-DB** materialisiert (nicht gegen Git). Phase-4c-Algorithmus (Commits `d2fd04f`, `f7dc718`):
 
-**Performance-Hinweis** (per Martin #6285): NIEMALS `AutomateC.exe /export` fuer Pull — zu langsam. SqlCommand direkt ist Pflicht.
+   1. SqlCommand gegen `BPAProcess` (alle Rows, liest `name` + `processxml`)
+   2. SqlCommand gegen `BPATree` (Filter: `id IN (2, 3)` - nur Processes + Objects; andere Trees per #6287 ausgeschlossen)
+   3. SqlCommand gegen `BPAGroup` (fuer Trees 2, 3)
+   4. SqlCommand gegen `BPAGroupProcess` (M:N-Mapping)
+   5. **Snapshot existing XML files** unter `targetRoot` (fuer stale-Detection, kein Full-Reinit)
+   6. Pro Process:
+      - Skip wenn `name` leer oder keine Folder-Membership
+      - **Sanitize filename** via `Path.GetInvalidFileNameChars()` + `TrimEnd('.', ' ')` - deckt ALLE Windows-inkompatiblen Zeichen ab inkl. / \ : * ? " < > |
+      - **StripLeadingXmlComments** vor jedem Write (per #6277, BP `/import`-Parser bricht sonst mit "Failed to create ... already exists" ab)
+      - **M:N-Duplikation**: Process in mehreren Groups → File in jedem Folder
+      - Path = `<TreeName>/<GroupName>/<sanitized(name)>.xml`
+      - Write XML zu worktree - Skip wenn Content identisch (kein Re-Write noetig)
+   7. **Delete stale XML files**: alles in Snapshot aber nicht in kept-set loeschen (Renames/Deletes in BP-DB propagieren automatisch in Worktree)
 
-**Worktree-Invariante** (per Martin #6311): `filename = sanitize(BPAProcess.name) + ".xml"` — derived, niemals manuell editierbar. Worktree enthaelt pure XML + git (kein `snapshot.json`, kein `folders.json`, keine Registry).
+**Performance-Hinweis** (per Martin #6285): NIEMALS `AutomateC.exe /export` fuer Pull - zu langsam. SqlCommand direkt ist Pflicht.
+
+**Worktree-Invariante** (per Martin #6311): `filename = sanitize(BPAProcess.name) + ".xml"` - derived, niemals manuell editierbar. Worktree enthaelt pure XML + git (kein `snapshot.json`, kein `folders.json`, keine Registry).
+
+**Hinweis seit Hook-Entfernung (2026-09-10):** `git clone` ohne anschließendes `bpgit pull` liefert nur den **Git-Stand** (canonical-named Files, so wie gepusht). Wenn die lokale BP-DB neuer ist als der Git-Stand, bekommt der Developer den Unterschied erst durch `bpgit pull` mit. Bei CI-Pipelines, die nur Git brauchen, ist `bpgit pull` optional.
 
 ### Push-Flow (git push)
 

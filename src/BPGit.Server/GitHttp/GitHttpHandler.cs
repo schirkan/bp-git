@@ -10,19 +10,18 @@ namespace BPGit.Server.GitHttp;
 /// Implements the git smart-HTTP protocol (v2) endpoints:
 /// <list type="bullet">
 ///   <item><c>GET  /{repo}/info/refs?service=git-upload-pack</c>  - ref advertisement for fetch/clone</item>
-///   <item><c>POST /{repo}/git-upload-pack</c>                   - pack download (Phase 4b: full implementation + post-checkout hook)</item>
+///   <item><c>POST /{repo}/git-upload-pack</c>                   - pack download (Phase 4b: full implementation; Materialization läuft lokal via `bpgit pull` CLI)</item>
 ///   <item><c>GET  /{repo}/info/refs?service=git-receive-pack</c> - ref advertisement for push</item>
 ///   <item><c>POST /{repo}/git-receive-pack</c>                  - pack upload (Phase 4b + 5+: full implementation + pre/post-receive hooks)</item>
 /// </list>
 ///
-/// Hook-Wiring (Phase 5+ Hybrid-Ansatz per <c>specs/SPEC-pre-receive-wiring.md</c> §1.3):
+/// Pre-/Post-Receive-Logik im HTTP-Handler (kein Git-Hook-Script, Stand 2026-09-10, per <c>specs/SPEC-pre-receive-wiring.md</c> §1):
 ///  - <c>POST /git-receive-pack</c>: <see cref="PushOrchestrator"/> runs the receive-pack flow, then invokes
 ///    <see cref="PreReceiveHandler"/> as a **side-effect post-apply** (Spec §9 Architektur-Update, MVP-1 trade-off
 ///    documented in SPEC-pre-receive-wiring.md §1.3) followed by <see cref="PostReceiveHandler"/>
 ///    for worktree materialization. The pack-apply itself remains delegated to native
 ///    <c>git receive-pack --stateless-rpc</c>.
-///  - <c>POST /git-upload-pack</c>: after a successful fetch/clone, <see cref="PostCheckoutHandler"/>
-///    re-materializes the configured worktree from BP-DB (canonical XML format).
+///  - <c>POST /git-upload-pack</c>: nur pack-delivery an den Client. KEINE server-seitige Materialisierung — Filename ist bereits kanonisch (`sanitize(BPAProcess.name) + ".xml"` per #6311). Falls der Client eine Aktualisierung gegen die lokale BP-DB braucht, ruft er `bpgit pull` (CLI) auf.
 /// </summary>
 public static class GitHttpHandler
 {
@@ -49,8 +48,7 @@ public static class GitHttpHandler
     public static async Task<bool> HandleAsync(
         HttpContext ctx,
         ServerConfig cfg,
-        PushOrchestrator push,
-        PostCheckoutHandler postCheckout)
+        PushOrchestrator push)
     {
         var path = ctx.Request.Path.Value ?? string.Empty;
 
@@ -65,7 +63,7 @@ public static class GitHttpHandler
         var uploadMatch = MatchRoute(path, suffix: "/git-upload-pack");
         if (uploadMatch is { } repo2 && HttpMethods.IsPost(ctx.Request.Method))
         {
-            return await HandleUploadPackAsync(ctx, repo2, cfg, postCheckout);
+            return await HandleUploadPackAsync(ctx, repo2, cfg);
         }
 
         // Route: /{repo}/git-receive-pack  (POST)
@@ -176,16 +174,14 @@ public static class GitHttpHandler
 
     /// <summary>
     /// Delegates to native <c>git upload-pack --stateless-rpc</c> via Process spawn.
-    /// After successful exit (git applied the pack to client-side worktree),
-    /// invokes <see cref="PostCheckoutHandler"/> to re-materialize the configured
-    /// worktree from BP-DB so the user sees canonical XML formatting on
-    /// the very next filesystem access.
+    /// Pack wird an den Client gestreamt; **keine** server-seitige Materialisierung
+    /// (Stand 2026-09-10, post-checkout-Hook gestrichen). Falls der Client eine
+    /// Aktualisierung gegen die lokale BP-DB braucht, ruft er `bpgit pull` (CLI) auf.
     /// </summary>
     private static async Task<bool> HandleUploadPackAsync(
         HttpContext ctx,
         string repoName,
-        ServerConfig cfg,
-        PostCheckoutHandler postCheckout)
+        ServerConfig cfg)
     {
         var repoPath = ResolveRepoPath(cfg, repoName);
         if (repoPath is null)
@@ -266,22 +262,9 @@ public static class GitHttpHandler
             }
         }
 
-        // Post-Checkout hook: re-materialize worktree from BP-DB after successful
-        // fetch/clone. Runs only when git-exit was 0 (no header-sent abort).
-        if (proc.ExitCode == 0)
-        {
-            try
-            {
-                var result = await postCheckout.HandleAsync(cfg.WorktreePath, cts.Token);
-                Console.WriteLine(
-                    $"[bpgit-server /git-upload-pack] PostCheckout materialization: " +
-                    $"written={result.Written} deleted={result.Deleted} skipped={result.Skipped} errors={result.Errors.Count}");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[bpgit-server /git-upload-pack] PostCheckout failed: {ex.Message}");
-            }
-        }
+        // Stand 2026-09-10: kein server-seitiges Post-Checkout mehr.
+        // Pack wurde an Client geliefert; eine etwaige Worktree-Aktualisierung gegen
+        // die lokale BP-DB macht der Client per `bpgit pull` (CLI).
 
         return true;
     }

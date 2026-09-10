@@ -1,14 +1,14 @@
 # SPEC — BP-Git-Adapter-Architektur
 
-**Stand:** 2026-08-12 (v4 — Git-Server-Architektur + Phase 4c + xunit-Tests-Welle)
-**Status:** draft v4 — Worktree-Layout final, processid-Mapping via git-diff; PostReceive/PostCheckout Hooks done (Phase 4c); git-CLI receive-pack + upload-pack delegation done (Phase 4b-follow-up); xunit-Tests-Welle done (12 Commits, 65 gruen + 4 skipped)
+**Stand:** 2026-09-10 (v5 — Hooks entfernt, pre-/post-receive als C# im HTTP-Handler, post-checkout gestrichen, SQL-Name-Lookup verifiziert)
+**Status:** draft v5 — Worktree-Layout final (per #6311), processid-Mapping via SQL-Lookup `BPAProcess.name` (kein separater Cache); pre-receive + post-receive als C# im `bpgit-server` HTTP-Handler (kein Git-Hook-Script); post-checkout gestrichen 2026-09-10 (Martin-Entscheid: keine Client-Hooks); SQL-Query in `BpDbService.LookupProcessIdByNameAsync` verifiziert (live gegen `(localdb)\BluePrismLocalDB` am 2026-09-10: 31 Rows, 0 Duplicates, kein Index)
 **Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [specs/SPEC-git-server.md](../specs/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
 ## Ziel
 
 Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentationen von Processes / Objects werden im Dateisystem sicht- und editierbar; Versionsverwaltung über Standard-Git-Befehle. Der Adapter läuft als self-hosted C#-Server (Kestrel + LibGit2Sharp) auf OpenClawPC — kein IIS, kein Apache, kein bpgit-CLI auf Developer-Workstations.
 
-> **Detaillierte Server-Architektur, Hook-Implementation, Deployment**: siehe [`specs/SPEC-git-server.md`](../specs/SPEC-git-server.md). Dieses Dokument beschreibt die **Adapter-Domain-Logik** (Worktree-Layout, processid-Mapping, XML-Serialisierung, Sanitisierung).
+> **Detaillierte Server-Architektur, Pre-/Post-Receive-Logik im HTTP-Handler, Deployment**: siehe [`specs/SPEC-git-server.md`](../specs/SPEC-git-server.md) §7. Dieses Dokument beschreibt die **Adapter-Domain-Logik** (Worktree-Layout, processid-Mapping, XML-Serialisierung, Sanitisierung).
 
 ## High-Level-Architektur
 
@@ -20,11 +20,11 @@ Git-konformer Read/Write-Adapter für Blue Prism (BP) v7.5. XML-Repräsentatione
 |   (kein bpgit)    |                            |                         | <-----------------> |  (localdb)       |
 +-------------------+                            |  - Kestrel HTTP         |    SqlCommand       +------------------+
                                                 |  - LibGit2Sharp         |
-                                                |  - pre-/post-receive Hooks|
+                                                |  - pre-/post-receive Handler im HTTP-Lifecycle (kein Git-Hook-Script, Stand 2026-09-10)|
                                                 +-------------------------+
 ```
 
-**Developer Workstation** führt ausschliesslich Standard-git aus — kein `bpgit.exe`, keine Hooks, kein BP-CLI. **bpgit.exe** auf OpenClawPC hält die BP-DB-Verbindung und führt alle Hooks serverseitig aus.
+**Developer Workstation** führt ausschliesslich Standard-git aus — kein `bpgit.exe`, keine Hooks, kein BP-CLI. **bpgit.exe** auf OpenClawPC hält die BP-DB-Verbindung und führt alle Pre-/Post-Receive-Logik als C# im HTTP-Handler aus (Stand 2026-09-10: keine Git-Hook-Scripts mehr).
 
 ## Komponenten (.NET 10, C# 13)
 
@@ -37,9 +37,9 @@ Kestrel-basierter HTTP-Server mit LibGit2Sharp für git-smart-HTTP-Protocol:
 | `KestrelListener`    | HTTP-Listener auf konfigurierbarem Port (Default 8181)                                    |
 | `WindowsAuthHandler` | Negotiate/NTLM-Authentifizierung                                                          |
 | `GitHttpHandler`     | git-smart-HTTP (`/info/refs`, `/git-upload-pack`, `/git-receive-pack`) via LibGit2Sharp   |
-| `PreReceiveHook`     | Processid-Lookup + `AutomateC.exe /import /forceid /overwrite`                            |
-| `PostReceiveHook`    | BP-DB → canonical Filenames schreiben                                                     |
-| `PostCheckoutHook`   | Worktree-Materialization bei `git clone` und `git checkout`                               |
+| `PreReceiveHandler`  | Processid-Lookup via SQL (`BpDbService.LookupProcessIdByNameAsync`) + `AutomateC.exe /import /forceid /overwrite` — C# im HTTP-Handler |
+| `PostReceiveHandler` | BP-DB → canonical Filenames schreiben (`WorktreeSyncService.MaterializeAsync`) — C# im HTTP-Handler |
+| ~~`PostCheckoutHandler`~~ | **gestrichen 2026-09-10** — Worktree-Materialization entfällt, Filename = `sanitize(BPAProcess.name) + ".xml"` per #6311 ist bereits kanonisch |
 | `BpDbService`        | SqlCommand-Zugriff auf BPAProcess + BPATree + BPAGroup + BPAGroupProcess + BPAAuditEvents |
 | `AutomateCRunner`    | Process.Start-Wrapper für AutomateC.exe `/import /importrelease /export`                  |
 
@@ -239,9 +239,14 @@ VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit X
 
 ### Pull-Flow (git clone, git pull)
 
-`post-checkout` Hook:
+**Stand 2026-09-10:** kein Hook mehr. Pull-Flow ist zweistufig:
 
 ```
+Stage 1 (git-seitig):
+git clone/pull → git-upload-pack → Pack-Stream an Client → Client-Worktree
+enthält canonical-named XML-Files (per #6311, weil Developer sie so gepusht hat)
+
+Stage 2 (BP-seitig, lokal, via `bpgit pull` CLI):
 SqlCommand öffnet (localdb)\BluePrismLocalDB (Win-Integrated-Auth)
      ↓
 Dapper-Mapping BPAProcess → List<Process>
@@ -258,17 +263,18 @@ git add . && git commit (auto-detected Renames)
 
 ### Push-Flow (git push)
 
-`pre-receive` Hook:
+**Stand 2026-09-10:** Pre-/Post-Receive laufen als C# im `bpgit-server` HTTP-Handler (kein Git-Hook-Script).
 
 ```
-git diff oldrev..newrev -- processes/
+git diff oldrev..newrev -- processes/   (innerhalb PushOrchestrator)
      ↓
 Für jede Änderung (R/M/A/D):
-  - processid via DB-Lookup (siehe Tabelle oben)
+  - processid via SQL-Lookup (BpDbService.LookupProcessIdByNameAsync, BPAProcess.name)
   - AutomateC.exe /import /forceid <pid> /overwrite <tmpfile>
-  - Bei Fehler: Push ablehnen
+  - Bei Fehler: Push ablehnen (side-effect post-apply, MVP-1-Trade-off per SPEC-pre-receive-wiring §1)
      ↓
-post-receive Hook:
+PostReceiveHandler (im HTTP-Handler):
+  - WorktreeSyncService.MaterializeAsync
   - BP-DB pollen, canonical Filenames schreiben
   - Alte Files löschen
 ```
