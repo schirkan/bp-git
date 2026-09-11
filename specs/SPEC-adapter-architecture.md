@@ -239,27 +239,19 @@ VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit X
 
 ### Pull-Flow (git clone, git pull)
 
-**Stand 2026-09-10:** kein Hook mehr. Pull-Flow ist zweistufig:
+**Stand 2026-09-11:** Single-Stage. CLI auf nur `init` reduziert, kein `bpgit pull`-CLI mehr (BP-DB-Sync passiert serverseitig im pre-receive). Pull-Flow ist trivial:
+```
+git clone/pull -> git-upload-pack -> Pack-Stream an Client -> Client-Worktree
+enthaelt canonical-named XML-Files (per #6311)
+```
+
 
 ```
 Stage 1 (git-seitig):
 git clone/pull → git-upload-pack → Pack-Stream an Client → Client-Worktree
 enthält canonical-named XML-Files (per #6311, weil Developer sie so gepusht hat)
 
-Stage 2 (BP-seitig, lokal, via `bpgit pull` CLI):
-SqlCommand öffnet (localdb)\BluePrismLocalDB (Win-Integrated-Auth)
-     ↓
-Dapper-Mapping BPAProcess → List<Process>
-     ↓
-Für jeden Process:
-  - Filename aus processxml extrahieren (Regex)
-  - Sanitize + Path ableiten
-  - XML zu worktree schreiben (canonical Filename)
-     ↓
-Alte Files im processes/ löschen (canonical Filename-Normalisierung)
-     ↓
-git add . && git commit (auto-detected Renames)
-```
+
 
 ### Push-Flow (git push)
 

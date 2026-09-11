@@ -365,30 +365,21 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 ### Pull-Flow (git clone, git pull)
 
-**Stand 2026-09-10:** **Kein `post-checkout`-Hook mehr.** Pull-Flow ist zweistufig:
+**Stand 2026-09-11:** **Single-Stage.** CLI auf nur `init` reduziert (siehe §11), post-checkout komplett entfällt:
+
+1. **Single Stage:** `git clone` / `git pull` ruft `git-upload-pack` auf dem Server. Server liefert Pack + Refs. Client-Worktree enthaelt **kanonisch benannte XML-Files** (per #6311, weil Filename = `sanitize(BPAProcess.name) + ".xml"` und der Developer diese Files bereits so commited hat). **BP-DB ist bereits synchron** - der pre-receive `/import /forceid` hat den BP-DB-Stand bei jedem Push mit den Git-Objekten gleichgezogen, daher bekommt der Client auf Pull die Files, die exakt dem aktuellen BP-DB-Stand entsprechen.
+
+Kein Client-seitiger Sync noetig. Kein post-checkout. Kein `bpgit pull`. Kein `bpgit refresh`. Nur Standard-`git`.
+
+(Falls die lokale BP-DB jemals neuer ist als der Git-Stand - z.B. durch direkte BP-Studio-Edits ohne Push - ist das ein **Anti-Pattern** in dieser Architektur. Die korrekte Vorgehensweise ist: Export aus BP Studio -> Commit -> Push. Der pre-receive macht den Rest.)
+
 
 1. **Stage 1 (git-seitig):** `git clone` / `git pull` ruft `git-upload-pack` auf dem Server. Server liefert Pack + Refs. Client-Worktree enthält **kanonisch benannte XML-Files** (per #6311, weil Filename = `sanitize(BPAProcess.name) + ".xml"` und der Developer diese Files bereits so commited hat).
-2. **Stage 2 (BP-seitig, lokal):** Developer ruft `bpgit pull` (oder `bpgit materialize`) als CLI-Subcommand auf. Dieses ruft `WorktreeSyncService.MaterializeAsync(targetRoot, ct)` auf, das **gegen die lokale BP-DB** materialisiert (nicht gegen Git). Phase-4c-Algorithmus (Commits `d2fd04f`, `f7dc718`):
-
-   1. SqlCommand gegen `BPAProcess` (alle Rows, liest `name` + `processxml`)
-   2. SqlCommand gegen `BPATree` (Filter: `id IN (2, 3)` - nur Processes + Objects; andere Trees per #6287 ausgeschlossen)
-   3. SqlCommand gegen `BPAGroup` (fuer Trees 2, 3)
-   4. SqlCommand gegen `BPAGroupProcess` (M:N-Mapping)
-   5. **Snapshot existing XML files** unter `targetRoot` (fuer stale-Detection, kein Full-Reinit)
-   6. Pro Process:
-      - Skip wenn `name` leer oder keine Folder-Membership
-      - **Sanitize filename** via `Path.GetInvalidFileNameChars()` + `TrimEnd('.', ' ')` - deckt ALLE Windows-inkompatiblen Zeichen ab inkl. / \ : * ? " < > |
-      - **StripLeadingXmlComments** vor jedem Write (per #6277, BP `/import`-Parser bricht sonst mit "Failed to create ... already exists" ab)
-      - **M:N-Duplikation**: Process in mehreren Groups → File in jedem Folder
-      - Path = `<TreeName>/<GroupName>/<sanitized(name)>.xml`
-      - Write XML zu worktree - Skip wenn Content identisch (kein Re-Write noetig)
-   7. **Delete stale XML files**: alles in Snapshot aber nicht in kept-set loeschen (Renames/Deletes in BP-DB propagieren automatisch in Worktree)
-
 **Performance-Hinweis** (per Martin #6285): NIEMALS `AutomateC.exe /export` fuer Pull - zu langsam. SqlCommand direkt ist Pflicht.
 
 **Worktree-Invariante** (per Martin #6311): `filename = sanitize(BPAProcess.name) + ".xml"` - derived, niemals manuell editierbar. Worktree enthaelt pure XML + git (kein `snapshot.json`, kein `folders.json`, keine Registry).
 
-**Hinweis seit Hook-Entfernung (2026-09-10):** `git clone` ohne anschließendes `bpgit pull` liefert nur den **Git-Stand** (canonical-named Files, so wie gepusht). Wenn die lokale BP-DB neuer ist als der Git-Stand, bekommt der Developer den Unterschied erst durch `bpgit pull` mit. Bei CI-Pipelines, die nur Git brauchen, ist `bpgit pull` optional.
+**Hinweis seit CLI-Reduktion (2026-09-11):** `git clone` ohne weitere Schritte liefert den vollstaendigen Stand. BP-DB-Sync passiert automatisch im pre-receive bei jedem Push. Kein Client-Workflow braucht BP-DB-Zugriff.
 
 ### Push-Flow (git push)
 
@@ -437,27 +428,59 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 ---
 
-## 11. CLI-Reduktion (per #6295)
+## 11. CLI-Reduktion (per #6295, final 2026-09-11)
 
-### Subcommands — End-State
+### Subcommands - End-State
+
+Nach Architektur-Switch zu server-side BP-DB-Sync (`PreReceiveHandler` macht `/import /forceid /overwrite` atomar mit jedem Push) ist die CLI auf **ein einziges Subcommand** reduziert — alle anderen Funktionen laufen über die Git-Smart-HTTP-API. Der Server hält die Single Source of Truth für BP-DB und Git, der Client braucht keinen eigenen BP-DB-Zugriff.
 
 | Subcommand | Status | Zweck |
 |---|---|---|
-| `bpgit server start` | Admin | Startet bpgit.exe (Kestrel) |
-| `bpgit server stop` | Admin | Stoppt bpgit.exe |
-| `bpgit server status` | Admin | Server-Health (letzte Pull-Zeit, pending Hooks) |
-| `bpgit init` | Admin | Initialisiert Bare-Repo auf Server (einmalig) |
-| `bpgit pull` | Internal | Server-side Materialization (von Hook aufgerufen) |
-| `bpgit log` | Diagnostic | BPAAuditEvents aus BP-DB (per-User-Audit) |
-| `bpgit status` | Deprecated | Nutze stattdessen `git status` (Worktree-vs-Snapshot-Drift-Detection ist jetzt Standard-`git`-Funktionalität) |
-| `bpgit diff` | Deprecated | Nutze stattdessen `git diff` (Hash-basierter Drift-Report entspricht dem nativen `git diff` für den BP-XML-Worktree) |
-| `bpgit commit` | Deprecated | Nutze stattdessen `git push` (server-seitige Hooks verdrahtet per Hybrid-Ansatz: Pre-Receive läuft side-effect post-apply per Spec §9, kann Push bei BP-DB-Sync-Fehler nicht ablehnen). |
-| `bpgit hook install` | **Obsolet** | Server-side Hooks via bpgit.exe (kein Shell-Script noetig) |
+| `bpgit init` | Admin | Initialisiert Bare-Repo + Worktree auf Server (einmalig pro Repo) |
+
+**Alle anderen Subcommands wurden gestrichen** (Martin-Entscheid 2026-09-11, Konsequenz aus §7 + §9 Architektur):
+
+| Ehemals | Ersetzt durch |
+|---|---|
+| `bpgit commit --force` (Worktree → BP-DB via AutomateC.exe `/import`) | Standard `git commit && git push` — Server-`PreReceiveHandler` macht `/import /forceid /overwrite` atomar mit dem Push (per #6274) |
+| `bpgit pull` (Worktree-Materialisierung gegen lokale BP-DB) | Standard `git pull` — Client bekommt canonical-named Files direkt aus Bare-Repo; BP-DB ist nach jedem Push via PreReceive synchron |
+| `bpgit diff` / `bpgit status` / `bpgit log` | Standard `git diff` / `git status` / `git log` |
+| `bpgit server start/stop/status` | Kestrel-Server läuft als separate Binary `bpgit-server.exe` (eigener Entry-Point in `src/BPGit.Server/Program.cs`) |
+| `bpgit hook install` | Obsolet — alle Hooks sind im HTTP-Handler integriert, kein Shell-Script |
 
 ### CLI-Executable
 
 - `bpgit.exe` bleibt im PATH **nur auf dem Server** (OpenClawPC)
-- User benoetigt KEIN `bpgit.exe` lokal — nur `git`
+- User benötigt KEIN `bpgit.exe` lokal — nur Standard-`git`
+- Kestrel-Server läuft als separate Binary `bpgit-server.exe` (eigener Entry-Point)
+
+### Architektur-Begründung
+
+Der Server macht die DB-Synchronisierung im pre-receive **atomar mit dem Push** (kein Client-Sync nötig):
+
+```
+Developer pusht XML-Änderung
+     ↓
+HTTP POST /git-receive-pack
+     ↓
+PushOrchestrator
+     ├─► PreReceiveHandler (C# im HTTP-Handler)
+     │   ├─ parsed git diff
+     │   ├─ SQL: BPAProcess WHERE name = @name
+     │   ├─ Lock-Check
+     │   └─ AutomateC.exe /import /forceid /overwrite  ← BP-DB SCHREIBEN
+     ├─► git receive-pack --stateless-rpc              ← Git-Objekte SCHREIBEN
+     └─► PostReceiveHandler (C# im HTTP-Handler)
+         └─ WorktreeSyncService.MaterializeAsync       ← Server-Monitoring (optional)
+
+Beim nächsten git pull:
+     ↓
+HTTP POST /git-upload-pack
+     ↓
+git upload-pack --stateless-rpc                       ← Client bekommt canonical-named Files
+```
+
+Es gibt keinen Workflow, der Client-seitig BP-DB-Zugriff bräuchte — daher kein Bedarf für eine Workstation-CLI.
 
 ---
 
