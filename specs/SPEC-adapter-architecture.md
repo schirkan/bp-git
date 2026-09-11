@@ -1,6 +1,6 @@
 # SPEC — BP-Git-Adapter-Architektur
 
-**Stand:** 2026-09-10 (v5 — Hooks entfernt, pre-/post-receive als C# im HTTP-Handler, post-checkout gestrichen, SQL-Name-Lookup verifiziert)
+**Stand:** 2026-09-11 (v6 — Hooks entfernt, pre-/post-receive als C# im HTTP-Handler, post-checkout gestrichen, SQL-Name-Lookup verifiziert)
 **Status:** draft v5 — Worktree-Layout final (per #6311), processid-Mapping via SQL-Lookup `BPAProcess.name` (kein separater Cache); pre-receive + post-receive als C# im `bpgit-server` HTTP-Handler (kein Git-Hook-Script); post-checkout gestrichen 2026-09-10 (Martin-Entscheid: keine Client-Hooks); SQL-Query in `BpDbService.LookupProcessIdByNameAsync` verifiziert (live gegen `(localdb)\BluePrismLocalDB` am 2026-09-10: 31 Rows, 0 Duplicates, kein Index)
 **Bezieht sich auf:** [SPEC-target-environment.md](./SPEC-target-environment.md), [specs/SPEC-git-server.md](../specs/SPEC-git-server.md), [context/bp-database-schema.md](../context/bp-database-schema.md)
 
@@ -177,11 +177,6 @@ Beispiel: `<process name="MP - Subprocess A" ...>` → `"MP - Subprocess A"`
 1. User benennt Prozess in BP Studio: "Old Name" → "New Name"
 2. BP aktualisiert `BPAProcess.name` + `processxml`, schreibt BPAAuditEvent (sCode=P006)
 3. User `git pull`
-4. Server `post-checkout` Hook:
-   - Liest `BPAProcess.name="New Name"` → schreibt `New Name.xml`
-   - Löscht `Old Name.xml`
-   - Git committet als **Auto-Rename** (Similarity-Match)
-
 **Phase 3 — git mv (manuell, unerwünscht):**
 
 1. User `git mv Old Name.xml Renamed.xml` (kein XML-Content-Edit)

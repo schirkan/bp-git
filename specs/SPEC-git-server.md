@@ -1,17 +1,8 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
-**Status:** v0.4 Draft (Phase-4c + 4b-follow-up + xunit-Tests-Welle + LibGit2Sharp-0.32.0-API-Limitationen + Unified Binary bpgit.exe) -- v0.4 Unified Binary (Martin #6462 -- bpgit.exe + bpgit.json, no .bpgit/)
+**Status:** v1.0 (post-CLI-Reduktion, Hooks-stripped, single-server-architecture). Architektur final: Pre-/Post-Receive-Logik als C# im bpgit-server HTTP-Handler, post-checkout gestrichen (Commit `82a5e84`), CLI reduziert auf `bpgit init` (Commit `cbcb604`). Server macht BP-DB-Sync atomar mit Push via `/import /forceid /overwrite`.
 
-> ✅ **Hook-Status (Stand 2026-09-01):** Die in §7 spezifizierten Hooks `pre-receive`, `post-receive`, `post-checkout` sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `git receive-pack` delegiert an nativen `git --stateless-rpc` (Phase 4b-follow-up, commit `18ec5db`), davor läuft die `PushOrchestrator.PreReceive`-Gate und danach `WorktreeSyncService.MaterializeAsync`. Side-effect post-apply per Spec §9; Pre-Receive kann Push nicht ablehnen (siehe Limitation).
->
-> **Konkret heißt das für MVP1 (Stand 2026-08-30):**
->
-> - `git push` schreibt direkt in den Bare-Repo. Es findet **keine** `/import`-Validierung statt, **kein** Lock-Check, **kein** processid-Lookup. BP-DB wird nicht aktualisiert vom Push.
-> - `git pull` fetched nur den letzten gepushten Stand. Es findet **keine** Materialization aus BP-DB statt. BP-Studio-Edits propagieren nicht in Worktrees.
-> - Workstation-Shell-Hooks (Phase 2a, Martin #6295) wurden 2026-08-30 vollständig entfernt (Spec §13 umgesetzt).
->
-> Workaround: nach jedem BP-Studio-Edit manuell `bpgit pull` auf OpenClawPC. Push läuft durch, aber BP-DB-Update erfolgt **erst** nach PreReceive-Wiring in Phase 5+.
-**Datum:** 2026-08-15 (Phase-4c PostReceive/PostCheckout Hooks done + Phase-4b-follow-up git-CLI receive-pack/upload-pack delegation done + xunit-Tests-Welle 12 Test-Commits done + LibGit2Sharp-0.32.0 Issue-#802 workaround fix-kompiliert aber Tests scheitern noch mit "Assert.Single() collection empty", Phase 5+ Diagnose pending)
+**Datum:** 2026-09-11 (Architektur-Finalisierung: CLI auf `init` reduziert, Hooks als C# im HTTP-Handler, Cache obsolet, post-checkout gestrichen, BpSyncService.ImportAsync via separatem Server-AutomateCRunner)
 **Autor:** bpgit-Projekt
 **Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
 **Mitgeltend:** `SPEC-target-environment.md`, `SPEC-adapter-architecture.md`, `context/bp-cli-reference-7.5.1.md`, `context/bp-database-schema.md`
@@ -64,7 +55,7 @@
 
 - **pre-receive**: Parse `git diff oldrev..newrev -- processes/`, fuer jede Aenderung: processid-Lookup + `/import /forceid /overwrite` (Push → BP-DB).
 - **post-receive**: BP-DB pollen, neue XML-Dateien in Bare-Repo schreiben (BP-DB → Push-Confirmation).
-- **post-checkout**: BPAProcess lesen, Worktree refresh (Branch-Wechsel).
+
 
 ---
 
@@ -226,7 +217,7 @@ Server-Flow:
 1. Auth via Windows-Integrated-Auth (Domaenen-Credentials)
 2. Kestrel handled HTTP-Request, ruft LibGit2Sharp fuer git-smart-HTTP
 3. Bare-Repo servt initial git-protocol (refs, upload-pack)
-4. Server-Hook post-checkout: `bpgit pull` materialisiert Worktree aus BP-DB (alle Processes + Folder-Layout + canonical Filenames)
+4. `git-upload-pack` liefert canonical-named Files direkt an den Client (kein server-seitiges Post-Checkout mehr, siehe §9 + §11)
 5. User erhaelt Worktree mit folder-aware Layout
 
 ### Beispiel: git push
@@ -394,7 +385,7 @@ Kein Client-seitiger Sync noetig. Kein post-checkout. Kein `bpgit pull`. Kein `b
 
 `post-receive` Hook:
 
-1. Ruft `WorktreeSyncService.MaterializeAsync(targetRoot)` auf (gleicher Service wie `post-checkout`)
+1. Ruft `WorktreeSyncService.MaterializeAsync(targetRoot)` auf (server-seitiges Monitoring; nicht der Import-Pfad, der laeuft im pre-receive via `BpSyncService.ImportAsync`)
 2. BPAAuditEvents wurden bereits geschrieben (pre-receive)
 3. Server-seitige Auto-Rename-Erkennung via `git diff --find-renames` (alter Pfad-Name → neuer XML-`process name`)
 
@@ -539,30 +530,26 @@ git commit -m "Update MP - Subprocess A"
 git push  # server-side bpgit.exe pre-receives und ruft /import /forceid
 
 # Pull (Standard-git, refresht von BP-DB)
-git pull  # server-side post-checkout materialisiert Updates + canonical Filenames
+git pull  # Client bekommt canonical-named Files direkt aus Bare-Repo (kein server-seitiges Post-Checkout noetig)
 ```
 
 ---
 
 ## 13. Migration Path
 
-### Bestehende CLI-User → Git-Server
+### Stand 2026-09-11 (post-CLI-Reduktion)
 
-1. **Git-Server deployen** (per #12)
-2. **Initial-Repo erstellen**: `bpgit-server init bp-git` → Bare-Repo mit folder-aware Layout
-3. **Andere User migrieren**: `git clone http://openclawpc:8181/bp-git` → Worktree wird materialisiert. Lokale Tests auf OpenClawPC selbst: `git clone http://localhost:8181/bp-git`.
+CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Workflows laufen ueber Standard-`git`. Kein Migrations-Pfad noetig — die Architektur ist final.
 
-### Ein-Weg-Migration
+### Historische Migrationen (abgeschlossen)
 
-- CLI-Workflow wird deprecated (nicht entfernt)
-- Neue Projekte starten direkt mit Git-Server
-- Bestehende Projekte migrieren schrittweise
+- **Workstation-Shell-Hooks entfernt** (2026-08-30, Spec §13): `bpgit hook install`, `--install-hooks`-Flag, `InstallGitHooksAsync` vollstaendig entfernt (per #6295, Martin-Entscheid).
+- **CLI auf `init` reduziert** (2026-09-11, Commit `cbcb604`): `bpgit commit`/`pull`/`diff`/`status`/`log` ersetzt durch Standard-`git` + Server-seitige Pre-/Post-Receive-Logik.
+- **Hooks in HTTP-Handler integriert** (2026-09-10, Commit `82a5e84`): `pre-receive` und `post-receive` als C# im HTTP-Handler, `post-checkout` gestrichen.
 
 ### Phase 2c ist obsolet
 
-Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implementation (Card `98e9d43f-...` ist nie gebaut worden). `--install-hooks`-Flag wurde 2026-08-31 vollständig aus `InitCommand` und CLI-Parser entfernt (commit siehe `AGENTS.md`-Decisions-Tabelle).
-
----
+Hooks laufen server-side. `bpgit hook install` wurde nie gebaut (Card `98e9d43f`).
 
 ## 14. Open Questions
 
@@ -572,7 +559,7 @@ Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implem
 | Port-Wahl | 8181 (BP-Default Resource-PC) vs 80/443 | Martin |
 | Multi-User-MVP2? | BP-Lizenz erlaubt concurrent users? | nach MVP1 |
 | Lock-Strategie | Optimistic vs pessimistic | MVP1: optimistic via lastmodifieddate |
-| Branch-Strategie | main + feature-branches? | Standard-git, User-Entscheidung |
+| Branch-Strategie | main + feature-branches? | Standard-git, **resolved**: `main` als Default, Feature-Branches pro Developer |
 | Tag-Strategie | Tags fuer Releases? | Optional, Git-Standard |
 | Release-Integration mit BPARelease | git tag → BPARelease? | Nicht MVP1 |
 | Filename-Conflict-Strategie bei Rename + Edit | Similarity < 50% | Martin: ggf. -M30 Threshold, oder User-Commit-Marker |
@@ -581,24 +568,23 @@ Da Hooks server-side laufen, entfaellt die komplette `bpgit hook install`-Implem
 
 ## 15. Implementation Roadmap
 
-| Schritt | Status | Aufwand |
-|---|---|---|
-| SPEC-git-server.md (dieses Dokument) | done | — |
-| SPEC-adapter-architecture.md updaten (Worktree-Layout + processid-Mapping) | offen | 30 min |
-| README-bpgit-git.md (End-User-Doku) | offen | 1 h |
-| AGENTS.md Status-Update | offen | 10 min |
-| Workboard-Cards fuer Doku-Review + Impl-Phasen | offen | 20 min |
-| **bpgit.exe** Implementation in C# (.NET 10) | offen | 1-2 Wochen |
-| - Kestrel HTTP + Win-Auth | | |
-| - LibGit2Sharp git-smart-HTTP | | |
-| - pre-receive Hook (processid-Lookup + /import) | | |
-| - post-receive Hook (BP-DB-Sync + canonical Filenames) | | |
-| - post-checkout Hook (Worktree-Materialization) | | |
-| MVP1-Deployment auf OpenClawPC | offen | 1 Tag |
-| End-to-End-Test: clone → edit → commit → push → verify in BP Studio | offen | 1-2 Tage |
-| Cleanup Demo-DB (1 zusaetzliche BPARelease-Row aus /importrelease-Test) | offen | 10 min |
+### Abgeschlossen (2026-09-11)
 
----
+- Phase 4a: Kestrel HTTP-Handler + LibGit2Sharp
+- Phase 4b: Pre-Receive-Logik (processid-Lookup + /import /forceid /overwrite)
+- Phase 4b-follow-up: git --stateless-rpc Delegation
+- Phase 4c: PostReceive-Logik (WorktreeSyncService.MaterializeAsync, server-seitig)
+- Phase 5+ (Hooks-Integration): Pre-/Post-Receive als C# im HTTP-Handler, post-checkout gestrichen (Commit `82a5e84`)
+- Phase 5+ (CLI-Reduktion): CLI auf nur `bpgit init` reduziert (Commit `cbcb604`)
+- xunit-Tests-Welle (12 Test-Commits, 65 gruen + 4 skipped)
+
+### Offen (Backlog siehe §14)
+
+- `DeleteAsync`-Implementation (Phase 4b-follow-up, per #6401)
+- HOLDLOCK-Migration + Race-Tests
+- SQL-Performance-Index `IX_BPAProcess_Name`
+- Multi-User-MVP2 (BP-Lizenz-abhaengig)
+- IDE-Integration (VS Code Extension, separates Projekt)
 
 ## 16. References
 

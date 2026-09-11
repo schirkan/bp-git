@@ -98,14 +98,6 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 ---
 
-## 2. Pack-Format-Handling (entfällt)
-
-**Status:** obsolete — kein eigener Pack-Parser mehr nötig.
-
-Begründung: Da wir den Hybrid-Ansatz (Pre-Receive-Gate mit eigenem Pack-Parser) verworfen haben und stattdessen die existierende `git --stateless-rpc`-Delegation beibehalten, müssen wir den Pack-Stream nicht selbst parsen. Die pkt-line-Logik für die HTTP-Frames bleibt in `GitHttpHandler` (siehe `Pkt.WriteDataAsync` etc.), aber das Pack-Encoding (ofs-delta, ref-delta, side-band-64k) wird vom nativen `git`-CLI gehandhabt.
-
-Falls in einer späteren Phase ein eigener Pack-Parser doch nötig wird (z.B. für Atomic-Validate-then-Apply), kann diese Section reaktiviert werden. Stand 2026-09-10 nicht relevant.
-
 ---
 
 ## 3. Locking/Fork-Strategie
