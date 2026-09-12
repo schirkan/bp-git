@@ -74,7 +74,8 @@ public sealed class BpSyncService : IBpSyncService
 
     /// <summary>
     /// Loescht einen Process (via SqlCommand — AutomateC.exe hat kein /removeprocess).
-    /// Status: noch nicht voll implementiert, gibt NotImplemented zurueck bis Phase 4b-follow-up.
+    /// Out of scope per design per Martin 2026-09-12: referenzielle Verbindungen zu `BPAProcessBackup`/`BPAObject`/`BPARelease`
+    /// verhindern Delete ohne Cascade-Logik. Wirft `DeleteResult.NotImplemented()` by design. Phase 4b-follow-up obsolet.
     /// </summary>
     public async Task<DeleteResult> DeleteAsync(string name)
     {

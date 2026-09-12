@@ -545,8 +545,8 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 |---|---|---|
 | HTTPS statt HTTP? | Remote-Zugriff noetig? | nach MVP1 |
 | Port-Wahl | 8181 (BP-Default Resource-PC) vs 80/443 | Martin |
-| Multi-User-MVP2? | BP-Lizenz erlaubt concurrent users? | nach MVP1 |
-| Lock-Strategie | Optimistic vs pessimistic | MVP1: optimistic via lastmodifieddate |
+| Multi-User-MVP2? | BP-Lizenz erlaubt concurrent users? | **resolved 2026-09-12 (Martin)**: Lizenz irrelevant — concurrent Pushes über Git Smart-HTTP API (`receive-pack` serialisiert Ref-Updates atomar pro Receive-Request) |
+| Lock-Strategie | Optimistic vs pessimistic | **resolved 2026-09-12 (Martin)**: optimistic via `lastmodifieddate`-CAS. Pessimistic `HOLDLOCK`/`BPAProcessLock` verworfen — Lock vor `/import` wäre fatal. Multi-Push-Concurrency via Gits Smart-HTTP-Receive-Lock auf Ref-Ebene. |
 | Branch-Strategie | main + feature-branches? | Standard-git, **resolved**: `main` als Default, Feature-Branches pro Developer |
 | Tag-Strategie | Tags fuer Releases? | Optional, Git-Standard |
 | Release-Integration mit BPARelease | git tag → BPARelease? | Nicht MVP1 |
@@ -568,11 +568,15 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 
 ### Offen (Backlog siehe §14)
 
-- `DeleteAsync`-Implementation (Phase 4b-follow-up, per #6401)
-- HOLDLOCK-Migration + Race-Tests
-- SQL-Performance-Index `IX_BPAProcess_Name`
-- Multi-User-MVP2 (BP-Lizenz-abhaengig)
-- IDE-Integration (VS Code Extension, separates Projekt)
+- SQL-Performance-Index `IX_BPAProcess_Name` — Performance ab >1000 BP-Prozessen, `bpgit-server init` Migrations-Step (Martin)
+
+### Out of scope / obsolet per Martin 2026-09-12 (zur Info, nicht mehr offen)
+
+- `DeleteAsync`-Implementation — referenzielle Verbindungen zu `BPAProcessBackup`/`BPAObject`/`BPARelease` (kein Cascade-Delete ohne Risiko), gibt `DeleteResult.NotImplemented()` by design zurück
+- HOLDLOCK-Migration + Race-Tests — Lock vor `/import` wäre fatal, optimistic `lastmodifieddate`-CAS reicht
+- Multi-User-MVP2 — Lizenz-Frage irrelevant, Git Smart-HTTP API reicht (siehe §14)
+- IDE-Integration (VS Code Extension) — separates Projekt obsolet, Workstation-Editor/Standard-IDE mit Git-Integration reicht
+- Workboard-Karte `bp-git-pre-receive-wiring` (`866e5346`) — done per Commit `82a5e84` (gestrichen)
 
 ## 16. References
 

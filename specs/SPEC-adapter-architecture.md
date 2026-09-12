@@ -228,7 +228,7 @@ VS Code muss nichts von BP wissen — es sieht einen normalen Git-Worktree mit X
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | **Jetzt v1** | Worktree als VS-Code-Ordner öffnen, Standard-git-Integration, Standard-XML-Syntax-Highlighting.                                                                       | ✓ fertig, kein Code         |
 | **Phase 2**  | Custom Diff-Driver via `.gitattributes`: `*.xml diff=bp-xml-clean` → git nutzt `bpgit diff-xml` für semantische Diffs (Stage-Order, Inputs/Outputs) statt Text-Diffs. | ~50 LoC                     |
-| **Phase 3**  | VS-Code-Extension: Snippets für BP-Stages, `BPAValCheck`-Validierung, Inline-Vorschau der Stage-Effekte.                                                              | separates Extension-Projekt |
+| **Phase 3**  | ~~VS-Code-Extension~~ — obsolet per Martin 2026-09-12. Workstation-Editor/Standard-IDE mit Git-Integration reicht, separates Extension-Projekt entfällt.                                                              | — (entfällt) |
 
 ## Datenfluss
 

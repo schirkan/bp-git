@@ -108,13 +108,11 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 - `BpSyncService.ModifyAsync`: Lookup → Lock-Check → `/import` mit `/forceid` — TOCTOU zwischen Lock-Check und Import (Finding #7 aus Code-Review 2026-08-30)
 - `BpSyncService.DeleteAsync`: `NotImplemented` (Phase 4b-follow-up)
 
-**Strategie-Optionen (zur Entscheidung):**
-- **HOLDLOCK** via `BPAProcessLock`-Tabelle: vor `/import` einfügen, danach wieder löschen. Blockiert andere Sessions für die Dauer des Imports.
-- **`lastmodifieddate`-CAS**: vor `/import` lesen, nach `/import` nochmal vergleichen, bei Differenz Push ablehnen. Keine Lock-Tabelle nötig, aber komplexer.
+**Strategie (final 2026-09-12):** Optimistic `lastmodifieddate`-CAS (Martin-Entscheid). Vor `/import` lesen, nach `/import` nochmal vergleichen, bei Differenz Push ablehnen. Keine Lock-Tabelle nötig — und kein Lock, das den Import selbst behindern könnte.
 
-**Empfehlung:** vorerst HOLDLOCK (existierende `BPAProcessLock`-Tabelle wird bereits read-only abgefragt in `BpDbService.GetProcessLockAsync`). Schema-Erweiterung minimal, Tests gegen lokale localdb aussagekräftig.
+**HOLDLOCK verworfen** (Martin 2026-09-12): Lock vor `/import` ist fatal — ein Lock würde den Import, den es schützen soll, selbst blockieren. Die existierende `BPAProcessLock`-Tabelle bleibt read-only für Diagnostics (`BpDbService.GetProcessLockAsync`), wird aber nicht in den Receive-Flow eingebunden.
 
-**Sub-Task Phase 5+:** HOLDLOCK-Implementation + Race-Condition-Tests (`tests/BPGit.Server.Tests/PreReceiveRaceTests.cs`).
+**Race-Mitigation:** CAS-Vergleich auf `BPAProcess.lastmodifieddate` reicht für den Single-User-MVP1-Use-Case (Stand 2026-09-11). Multi-Push-Concurrency wird durch Gits Smart-HTTP-Receive-Lock auf Ref-Ebene serialisiert (`receive-pack` schreibt atomar).
 
 ---
 
@@ -129,12 +127,12 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 | 5 | Pre-Receive-Wiring (C# im HTTP-Handler) | 0.5 Tag | `GitHttpHandler.HandleReceivePackAsync` | **done (2026-09-10, Phase 4b-follow-up commit `18ec5db`)** |
 | 6 | Post-Receive-Wiring (BP-DB-Sync) | 0.5 Tag | `GitHttpHandler.HandleReceivePackAsync` | **done (2026-09-10)** |
 | ~~6b~~ | ~~Post-Checkout-Wiring (Client-Hook)~~ | — | — | **obsolete — Hook gestrichen 2026-09-10** |
-| 7 | Delete-Implementation (Phase 4b-follow-up) | 1 Tag | `BpSyncService.DeleteAsync` mit SqlCommand | open |
-| 8 | HOLDLOCK-Implementation + Race-Tests | 1 Tag | `tests/BPGit.Server.Tests/PreReceiveRaceTests.cs` | open |
+| ~~7~~ | ~~Delete-Implementation (Phase 4b-follow-up)~~ | — | `BpSyncService.DeleteAsync` mit SqlCommand | **out of scope (Martin 2026-09-12): referenzielle Verbindungen zu `BPAObject`/`BPAProcessBackup`/`BPAAssociate`. Wird in `BpSyncService.DeleteAsync` als `NotImplemented by design` zurückgegeben und in `AGENTS.md` dokumentiert. Doku-Markierung explizit "not implemented by design".** |
+| ~~8~~ | ~~HOLDLOCK-Implementation + Race-Tests~~ | — | `tests/BPGit.Server.Tests/PreReceiveRaceTests.cs` | **obsolete (Martin 2026-09-12): Lock vor `/import` ist fatal. Strategie umgestellt auf `lastmodifieddate`-CAS, siehe §3.** |
 | 9 | SQL-Index `IX_BPAProcess_Name` Migration | 0.25 Tag | `bpgit-server init` Migrations-Schritt | open |
 | 10 | xunit-Integration gegen echtes BP-DB-Smoke | 1-2 Tage | smoke-test-script | open |
 
-**Gesamt-Aufwand (verbleibend):** ~3-4 Tage (Delete + HOLDLOCK + Index-Migration + Tests).
+**Gesamt-Aufwand (verbleibend):** ~0.5-1 Tag (Index-Migration + Smoke-Tests). Delete + HOLDLOCK weg per Martin 2026-09-12.
 
 ---
 
@@ -146,7 +144,7 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 ## 6. Verweise
 
-- **Workboard-Karte:** `bp-git-pre-receive-wiring` (ID `866e5346`, priority urgent)
+- **Workboard-Karte `bp-git-pre-receive-wiring` (`866e5346`):** done per Commit `82a5e84` (2026-09-10), Karte aus Workboard-Backlog entfernt (Martin 2026-09-12).
 - **Specs:**
   - `specs/SPEC-git-server.md` §5 (Git-Server Stack) + §7 (Pre-/Post-Receive-Logik, **umbenennen von "Server-Side Hooks"**) + §9 (Push-Flow)
   - `specs/SPEC-adapter-architecture.md` (Worktree-Layout, processid-Mapping)
@@ -171,7 +169,7 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 | Frage | Entscheidung nötig |
 |---|---|
-| HOLDLOCK vs `lastmodifieddate`-CAS? | Martin — Spec §3 |
+| ~~HOLDLOCK vs `lastmodifieddate`-CAS?~~ | ~~Martin - Spec §3~~ | **resolved 2026-09-12:** `lastmodifieddate`-CAS (HOLDLOCK verworfen, Lock vor Import fatal) |
 | SQL-Index `IX_BPAProcess_Name` Migration: in `bpgit-server init` oder separates Migrations-Script? | Martin — Spec §1.3 |
 | `PostCheckoutHandler.cs` Source-File löschen oder als Stub behalten? | Martin — Cleanup |
 | AGENTS.md Backlog-Block (iv) auf "done" setzen? | Martin — Doku-Hygiene |
