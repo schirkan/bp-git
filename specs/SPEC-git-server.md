@@ -22,7 +22,6 @@
 
 ### Non-Goals
 
-- **Client-side Hooks** (post-checkout/post-merge im Worktree) — obsolet per #6295.
 - **Multi-User-Sync** in MVP1 (single-user auf OpenClawPC).
 - **Remote-Zugriff ueber Internet** (nur lokal auf OpenClawPC, MVP1).
 - **Branch-basiertes Release-Management** via git — kann spaeter via BP-eigene Release-Mechanismen kommen.
@@ -50,11 +49,6 @@
 1. **Developer Workstation**: Standard `git` CLI oder Git-GUI. Auth via Windows-Integrated-Auth. **KEIN bpgit.exe lokal noetig**.
 2. **bpgit.exe** (C#/.NET 10): Kestrel HTTP, LibGit2Sharp fuer Git-Smart-HTTP-Protocol, server-side Hooks fuer BP-Sync.
 3. **Blue Prism Database**: SQL Server Express (localdb) auf OpenClawPC.
-
-### Hook-Skizze
-
-- **pre-receive**: Parse `git diff oldrev..newrev -- processes/`, fuer jede Aenderung: processid-Lookup + `/import /forceid /overwrite` (Push → BP-DB).
-- **post-receive**: BP-DB pollen, neue XML-Dateien in Bare-Repo schreiben (BP-DB → Push-Confirmation).
 
 
 ---
@@ -156,11 +150,9 @@ Theoretisch, Demo-DB hat 0 Duplicates: bei zwei Processes mit gleichem Namen in 
 
 1. User benennt Prozess in BP Studio: "Old Name" → "New Name"
 2. BP aktualisiert `BPAProcess.name` + `processxml`, schreibt BPAAuditEvent (sCode=P006)
-3. User `git pull`
-4. Server `post-checkout` Hook (oder post-receive falls Push-getriggert):
-   - Liest `BPAProcess.name="New Name"` → schreibt `New Name.xml`
-   - Loescht `Old Name.xml`
-   - Git committet als **Auto-Rename** (Similarity-Match)
+3. Renname wird erst beim **nächsten Push** dieses Prozesses sichtbar:
+   - Server `pre-receive` (Phase 1-Mechanik) sieht Modify auf `Old Name.xml` mit XML-Root `name="New Name"` → DB-Lookup findet processid (alter Name passt nicht mehr) → server-seitige Renamierung des Worktrees im `post-receive`
+   - Da der Worktree nach `post-receive` kanonisch ist, sieht jeder nachfolgende `git pull` / `git clone` sofort `New Name.xml` ohne Client-Automation.
 
 **Phase 3 — git mv (manuell, unerwuenscht):**
 
@@ -530,7 +522,7 @@ git commit -m "Update MP - Subprocess A"
 git push  # server-side bpgit.exe pre-receives und ruft /import /forceid
 
 # Pull (Standard-git, refresht von BP-DB)
-git pull  # Client bekommt canonical-named Files direkt aus Bare-Repo (kein server-seitiges Post-Checkout noetig)
+git pull  # Client bekommt canonical-named Files direkt aus Bare-Repo
 ```
 
 ---
@@ -546,10 +538,6 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 - **Workstation-Shell-Hooks entfernt** (2026-08-30, Spec §13): `bpgit hook install`, `--install-hooks`-Flag, `InstallGitHooksAsync` vollstaendig entfernt (per #6295, Martin-Entscheid).
 - **CLI auf `init` reduziert** (2026-09-11, Commit `cbcb604`): `bpgit commit`/`pull`/`diff`/`status`/`log` ersetzt durch Standard-`git` + Server-seitige Pre-/Post-Receive-Logik.
 - **Hooks in HTTP-Handler integriert** (2026-09-10, Commit `82a5e84`): `pre-receive` und `post-receive` als C# im HTTP-Handler, `post-checkout` gestrichen.
-
-### Phase 2c ist obsolet
-
-Hooks laufen server-side. `bpgit hook install` wurde nie gebaut (Card `98e9d43f`).
 
 ## 14. Open Questions
 

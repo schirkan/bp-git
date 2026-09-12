@@ -199,7 +199,7 @@ bpgit.exe übersetzt zwischen zwei Welten:
 - **VS Code / git**: datei-basiert, Working-Tree, Hashes, Commits, Diffs
 - **BP-DB**: SQL-basiert, `BPAProcess` / `BPARelease` / `BPA*`-Tabellen, Identity-PKs (`UNIQUEIDENTIFIER`)
 
-**DB → XML-Dateien** (Pull): Post-Checkout-Hook liest BP-DB via SqlCommand, schreibt XML-Dateien mit canonical Filenames.
+**DB → XML-Dateien** (Pull, serverseitig): `WorktreeSyncService.MaterializeAsync` (PostReceiveHandler) liest BP-DB via SqlCommand, schreibt XML-Dateien mit canonical Filenames. Client-seitige Materialisierung ist obsolet (Stand 2026-09-11, post-CLI-Reduktion).
 
 **XML → DB-UPSERT** (Push): Pre-Receive-Hook parsed `git diff`, ermittelt processid via DB-Lookup, ruft `/import /forceid /overwrite`.
 

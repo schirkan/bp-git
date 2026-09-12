@@ -14,7 +14,7 @@
 
 ### 1.1 Status quo (Stand 2026-09-10)
 
-`src/BPGit.Server/GitHttp/PreReceiveHandler.cs`, `PostReceiveHandler.cs` und `PostCheckoutHandler.cs` existieren als Library-Handler und sind via DI als Singleton registriert.
+`src/BPGit.Server/GitHttp/PreReceiveHandler.cs` und `PostReceiveHandler.cs` existieren als Library-Handler und sind via DI als Singleton registriert. (`PostCheckoutHandler.cs` wurde 2026-09-10 geloescht, Commit `82a5e84`.)
 
 **Aktuelle Verdrahtung** (Stand 2026-09-10):
 - `GitHttpHandler.HandleReceivePackAsync` ruft die Library-Handler direkt aus dem HTTP-Request-Lifecycle auf (kein Git-Hook-Script-Bridge mehr)
@@ -138,9 +138,9 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 ---
 
-## 5. Workaround bis Phase 5+ shipped
+## 5. Status Quo (Phase 5+ shipped 2026-09-10)
 
-**Stand 2026-09-10:** Workaround nicht mehr nötig — pre-receive und post-receive laufen direkt im HTTP-Handler, post-checkout entfällt komplett. Früherer Workaround (`bpgit pull` manuell) ist obsolet.
+**Stand 2026-09-11:** Pre-/Post-Receive-Logik läuft als C# im `bpgit-server`-HTTP-Handler (`PushOrchestrator` + `PreReceiveHandler`/`PostReceiveHandler`). `post-checkout` ist ersatzlos gestrichen (Commit `82a5e84`). Der ehemalige `bpgit pull`-Workaround entfällt, weil der Pull-Flow jetzt Single-Stage ist (Standard `git pull` reicht — siehe `SPEC-git-server.md` §9).
 
 ---
 

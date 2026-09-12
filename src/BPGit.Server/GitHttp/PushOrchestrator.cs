@@ -11,7 +11,7 @@ using Process = System.Diagnostics.Process;
 namespace BPGit.Server.GitHttp;
 
 /// <summary>
-/// Orchestrates the smart-HTTP receive-pack flow per the Hybrid-Ansatz
+/// Orchestrates the smart-HTTP receive-pack flow (C# im HTTP-Handler, kein Git-Hook-Script)
 /// documented in <c>specs/SPEC-pre-receive-wiring.md</c> §1.3:
 ///
 ///  1. Read the request body into a memory buffer.

@@ -20,7 +20,7 @@ Git-Workflows für Blue Prism Processes und Objects via self-hosted C#-Server (K
   - **(i) PreReceive HEAD-Tracking-Tests → abgeschlossen.** Issue-#802 workaround via `ObjectDatabase.CreateBlob/CreateTree/CreateCommit` (commit `aa81c91`) hat die ursprünglichen Skip-Tests (`2fa730d`) obsolet gemacht; Tests laufen heute grün. Permanently-skipped Diagnostic-Test (`HeadTrackingDiagnosticTests.cs`) wurde 2026-08-15 per YAGNI gelöscht (commit `9e678fa`).
   - **(ii) LibGit2Sharp 0.32.0** ist weiterhin einzige stabile Version auf NuGet. libgit2-v1.8.6-Security-Release in Vorbereitung, noch nicht stable.
   - **(iii) MVP1-Deployment** (`bpgit-server.exe` als Windows-Service + SPN + Firewall) + Demo-DB-Cleanup (1 `BPARelease`-Row `releaseid=2` + 35 `BPAReleaseEntry`-Rows DELETE) — gestrichen per #6385.
-  - **(iv) Hook-Wiring** — siehe Workboard-Karte `bp-git-pre-receive-wiring` (ID `866e5346`, urgent). Library-Handler existieren + sind getestet, aber nicht in `GitHttpHandler` verdrahtet. Spec-Skizze + Library-Recherche ausstehend.
+  - **(iv) Hook-Wiring** → **abgeschlossen** (Commit `82a5e84`, Martin #6295). Pre-/Post-Receive als C# im bpgit-server HTTP-Handler, post-checkout gestrichen (`PostCheckoutHandler.cs` gelöscht), keine Git-Hook-Scripts, keine `core.hooksPath`, keine Client-Automation. Workboard-Karte `bp-git-pre-receive-wiring` (`866e5346`) ist obsolet — Hook-Wiring ist jetzt integraler Bestandteil von `PushOrchestrator`, kein separates Work-Item mehr.
 - **Hook-Architektur (Stand 2026-09-11):** Pre-/Post-Receive-Logik als C# im `bpgit-server` HTTP-Handler (kein Git-Hook-Script). `PushOrchestrator` sitzt zwischen HTTP-Request-Body und `git receive-pack --stateless-rpc`, parst Ref-Update-Pkt-Lines (`PktReader.cs` + `RefUpdateParser.cs`), ruft nach ref-apply `PreReceiveHandler.HandleAsync` pro Ref-Update und `PostReceiveHandler.HandleAsync` für Server-Worktree-Materialization. **Keine Git-Hook-Scripts, keine Client-Hooks, keine `core.hooksPath`.** `PostCheckoutHandler` ist gelöscht (Commit `82a5e84`) - Worktree-Materialization entfaellt, weil BP-DB bereits im pre-receive atomar mit dem Push synchronisiert wird. CLI reduziert auf `bpgit init` (Server-Setup); alle anderen Funktionen laufen ueber die Git-Smart-HTTP-API (Commit `cbcb604`). **Side-effect post-apply per Spec §9:** `PreReceive` laeuft NACH ref-update, **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler.
 
 ## Project Files
@@ -54,14 +54,13 @@ Backlog enthält:
 - `bp-git-tests` — xunit-Tests für Adapter-CLI + Data-Layer
 - `bp-git-mvp1-deployment` — Deployment auf OpenClawPC + End-to-End-Test
 - `bp-git-demo-db-cleanup` — Demo-DB Cleanup (1 zusätzliche BPARelease-Row aus früherem `/importrelease`-Test)
-- `bp-git-pre-receive-wiring` (Karte `866e5346`, priority **urgent**, Board bp-git) — Pre-/Post-Receive/Checkout-Hooks im Server verdrahten. Library-Handler existieren (Phase 4b/4c, commits `37fc525` + `f399ad1`), sind aber nicht aufgerufen. Root Cause: libgit2 0.32.0 hat keine Server-side receive-pack-API. Specs-Work zuerst (Pack-Format, Locking, Fork-Strategie); dann Implementation + xunit-Integration gegen echtes BP-DB-Smoke-Setup.
 
 Erledigt:
 - Phase 1 MVP (commit `b6d7e02`)
 - Phase 2a `bpgit commit` via AutomateC.exe (`2b53c4f`, `663a07f`)
 - Phase 2b `bpgit log` + `bpgit diff` (`41842c7`, `76da584`)
 - Phase 3 SnapshotEntry + PullCommand folder-aware (`e0e0109`) — **durch Git-Server-Architektur obsolet**
-- Phase 2c Hooks (`98e9d43f`) — **obsolet** per #6295 (Hooks laufen serverseitig)
+
 - Doku-Round v0.2 (SPEC-git-server, SPEC-adapter-architecture, README-bpgit-git)
 - **Phase 4a** bpgit-git-server Kestrel + LibGit2Sharp (commit `9c53960`)
 - **Phase 4b** pre-receive Hook (processid-Lookup + `/import /forceid /overwrite`) (commits `d0f87b3`, `37fc525`)
@@ -69,7 +68,6 @@ Erledigt:
 - **Phase 4c** WorktreeSyncService + PostReceive Hook (BP-DB Sync) (commits `d2fd04f`, `f399ad1`; PostCheckoutHook-Slot gelöscht in `82a5e84`)
 - **Phase 5+ Hooks-Integration** (Commit `82a5e84`): pre-/post-receive + post-receive als C# im HTTP-Handler, post-checkout gestrichen, `PostCheckoutHandler.cs` gelöscht
 - **CLI-Reduktion** (Commit `cbcb604`): `bpgit commit`/`pull`/`diff`/`status`/`log` ersetzt durch Standard-`git`, CLI auf nur `bpgit init` reduziert; `AutomateCRunner` (CLI) + `SnapshotStore` + zugehörige Tests gelöscht
-- **Phase 5+ Hooks-Strip** (Commit `82a5e84`): `PostCheckoutHandler.cs` gelöscht, `Program.cs`/`GitHttpHandler.cs`/`InitCommand.cs` aufgeräumt, Specs aktualisiert
 - **CLI-Reduktion** (Commit `cbcb604`): CLI auf nur `bpgit init` reduziert; 5 Commands + 3 Support-Files + 1 Test gelöscht
 - **xunit-Tests-Welle** (Martin #6385+#6401): xunit scaffold (`8b4ee35`), `IBpDbService` extrahieren + `MaterializeAsync` Tests (`666e6f7`), `IBpSyncService` extrahieren + PreReceive-Tests (`4c8c8e9`), `BpSyncService` `IBpDbService` ctor + Fehler-Pfad-Tests (`e194869`), `AssemblyInfo` + `StripLeadingXmlComments` internal Helpers (`0a668e1`), `PreReceiveHandler`-internals (`4de3138`), `ServerConfig.Load` (`a2e2b32`), `Pkt` pkt-line (`0141ff9`), `IsZeroSha` nullable + `ConnectionFactory` (`47b2417`), `Data.Tests` `ProjectReference` (`226fc38`), `Cli.Tests` scaffold + `SnapshotStore` V2 (`e7de7bb`), `PreReceive` HEAD-Tracking mit Issue-#802 workaround skip-attributed (`2fa730d`).
 
@@ -99,8 +97,8 @@ Erledigt:
 | 2026-08-12 | MVP1-Deployment + Demo-DB-Cleanup gestrichen | Martin #6385 |
 | 2026-08-12 | Doku + Tests + Refactoring komplettieren (Phase 1/2/3) | Martin #6401 |
 | 2026-08-30 | Workstation-Shell-Hooks (`InstallGitHooksAsync`) + `--install-hooks`-Flag vollständig entfernt | Spec §13 umgesetzt (Martin #6295) |
-| 2026-08-30 | Hook-Libraries `PreReceive`/`PostReceive`/`PostCheckout` als "Library vorhanden, NICHT gewired" dokumentiert | Code-Review #1, Spec §7 + §9 + Doc-Anfang-Disclaimer, Backlog-Karte `866e5346` |
-| 2026-09-01 | Hooks produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3): `PushOrchestrator` orchestriert receive-pack + side-effect-post-apply Pre-/Post-Receive | `src/BPGit.Server/GitHttp/{PktReader,RefUpdateParser,PushOrchestrator}.cs` (neu), `GitHttpHandler.cs` + `Program.cs` (DI-Wiring), `tests/BPGit.Server.Tests/{PktReader,RefUpdateParser}Tests.cs` (24 Tests) |
+| 2026-08-30 | Hook-Libraries `PreReceive`/`PostReceive`/`PostCheckout` als Library dokumentiert (später ersatzlos entfernt 2026-09-10, Commit `82a5e84`) | Code-Review #1, Spec §7 + §9 + Doc-Anfang-Disclaimer, Backlog-Karte `866e5346` (obsolet) |
+| 2026-09-01 | Hooks wired in `PushOrchestrator` (C# im HTTP-Handler, pre-/post-receive side-effect post-apply per SPEC-pre-receive-wiring.md §1.3) | `src/BPGit.Server/GitHttp/{PktReader,RefUpdateParser,PushOrchestrator}.cs`, `GitHttpHandler.cs` + `Program.cs` (DI-Wiring), `tests/BPGit.Server.Tests/{PktReader,RefUpdateParser}Tests.cs` (24 Tests); Hook-Wiring am 2026-09-10 radikal vereinfacht (Commit `82a5e84`, kein `post-checkout`, keine `core.hooksPath`) |
 | 2026-09-10 | Hooks-Strip + post-checkout gestrichen (Commit `82a5e84`): kein Git-Hook-Script, kein Client-Hook, keine `core.hooksPath`. Pre-/Post-Receive-Logik als C# im bpgit-server HTTP-Handler | `src/BPGit.Server/GitHttp/PostCheckoutHandler.cs` gelöscht, `Program.cs` + `GitHttpHandler.cs` + `InitCommand.cs` aufgeräumt, Specs (SPEC-pre-receive-wiring, SPEC-git-server §7/§9, SPEC-adapter-architecture) aktualisiert |
 | 2026-09-11 | CLI-Reduktion auf nur `bpgit init` (Commit `cbcb604`): Server macht BP-DB-Sync atomar im pre-receive via `/import /forceid /overwrite`, daher kein Client-Sync-Tool nötig. 5 Commands + 3 Support-Files + 1 Test gelöscht, `Program.cs` + `InitCommand.cs` vereinfacht | 13 Files, +453/-1357 Zeilen, Build grün |
 | 2026-09-11 | Spezielle Implementierung auf dem Server: `AutomateCRunner` existiert in `src/BPGit.Server/Services/` (separat vom gelöschten CLI-Pendant) und wird von `BpSyncService.ImportAsync` aufgerufen — Import-Pfad intakt | `BpSyncService.cs:100-120` |
