@@ -1,7 +1,7 @@
 # SPEC-pre-receive-wiring — Pre-/Post-Receive-Logik im bpgit-server (ohne Git-Hooks)
 
-**Status:** v0.2 — Hooks entfernt, C#-Integration in bpgit-server HTTP-Handler, post-checkout gestrichen, SQL-Query-Verifikation abgeschlossen.
-**Datum:** 2026-09-10
+**Status:** v0.3 — C#-Integration im HTTP-Handler; BP→Git-Preflight vor Upload-Pack und Receive-Pack; DB-CAS-Risiko dokumentiert.
+**Datum:** 2026-10-26
 **Autor:** bpgit-Projekt
 **Bezug:** Workboard-Karte `bp-git-pre-receive-wiring` (ID `866e5346`, priority urgent), SPEC-git-server §7/§9, AGENTS.md Backlog (iv)
 **Mitgeltend:** `SPEC-git-server.md`, `SPEC-adapter-architecture.md`, `SPEC-target-environment.md`
@@ -33,21 +33,20 @@
 
 ```
 HTTP POST /<repo>/git-receive-pack
-  → GitHttpHandler.HandleReceivePackAsync
-    → PreReceiveHandler.HandleAsync(repo, oldrev, newrev, refname)
-       (parsed Tree-Diff, pro File:
-          - XmlNameRegex extrahiert name aus XML-Content
-          - BpDbService.LookupProcessIdByNameAsync(name)  ← SQL-Query
-          - BpSyncService.AddAsync/ModifyAsync  → /import /forceid /overwrite
-          - BpSyncService.DeleteAsync  → NotImplemented (Phase 4b-follow-up)
-       )
-    → git receive-pack --stateless-rpc  (Ref-Apply + Pack-Apply)
+  → PushOrchestrator.ExecuteAsync (RepositoryOperationLock)
+    → BpToGitSyncService.SyncUnderRepositoryLockAsync
+       (BP-DB materialisieren, Änderungen auf Default-Branch committen)
+    → Request-Body puffern und Ref-Updates parsen
+    → git receive-pack --stateless-rpc (Pack- und Ref-Apply)
+    → PreReceiveHandler.HandleAsync nach erfolgreichem Ref-Apply
+       (pro Ref-Update: Tree-Diff, Prozessname aus XML, DB-Lookup,
+        BP `/import /forceid /overwrite`; Fehler können den Push nicht zurückweisen)
     → PostReceiveHandler.HandleAsync
-       (BP `/import` Sync, WorktreeSyncService.MaterializeAsync)
+       (BP-DB in den Server-Worktree materialisieren)
   → HTTP 200 + report-status
 ```
 
-`git pull` / `git fetch` / `git clone` triggern keinen pre/post-receive auf dem Server — sie machen nur lesend. Materialisierung ins lokale Worktree entfällt, weil das Filename-Format bereits kanonische Namen liefert (Server-Push → Bare-Repo → Client-Clone ohne Rename).
+`git pull` / `git fetch` / `git clone` triggern keine Receive-Handler. Vor der Upload-Pack-Ref-Anzeige synchronisiert `BpToGitSyncService` jedoch die BP-Datenbank in den Default-Branch; der Client erhält diese Änderungen als normale Git-Commits.
 
 ### 1.3 Processid-Lookup-SQL (verifiziert 2026-09-10)
 
@@ -92,8 +91,8 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 | Risiko | Mitigation |
 |---|---|
 | SQL-Query ohne Index → langsam bei vielen Prozessen | Nonclustered-Index `IX_BPAProcess_Name` als Migrations-Schritt (siehe §1.3) |
-| TOCTOU zwischen Lock-Check und `/import` in `BpSyncService` | Bekanntes Finding #7 (Code-Review 2026-08-30); Mitigation via HOLDLOCK oder `lastmodifieddate`-CAS, siehe §3 |
-| `DeleteAsync` ist `NotImplemented` | Phase 4b-follow-up: SqlCommand DELETE + BPAAuditEvent sCode=P005 |
+| BP-Studio-Änderung zwischen BP→Git-Preflight und `/import` | Receive-Pack wird vorab mit dem DB-Stand abgeglichen; eine Änderung während des Push bleibt ohne DB-CAS ein Restrisiko, siehe §3 |
+| `DeleteAsync` ist `NotImplemented` | Out of scope per Design (referenzielle Abhängigkeiten), siehe `SPEC-git-server.md` §10 |
 | Processname-Unique-Constraint nicht erzwungen | BP-DB erzwingt uniqueness auf `name` per Konvention; `TOP 1` ohne `ORDER BY` ist non-deterministic bei theoretischen Duplikaten — in Praxis 1:1 |
 
 ---
@@ -102,17 +101,15 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 ## 3. Locking/Fork-Strategie
 
-**Status:** aktiv — TOCTOU-Race bekannt, Mitigation offen.
+**Status:** BPAProcessLock-Prüfung entfernt. Der Git-Server serialisiert seine eigenen Receive- und Fetch-Syncs; BP→Git läuft vor Receive-Pack. Ein zeitgleiches BP-Studio-Update ist nicht durch einen DB-CAS abgesichert.
 
 **Aktueller Stand:**
-- `BpSyncService.ModifyAsync`: Lookup → Lock-Check → `/import` mit `/forceid` — TOCTOU zwischen Lock-Check und Import (Finding #7 aus Code-Review 2026-08-30)
-- `BpSyncService.DeleteAsync`: `NotImplemented` (Phase 4b-follow-up)
+- `BpSyncService.ModifyAsync`: Name-Lookup → `/import` mit `/forceid`; keine `BPAProcessLock`-Abfrage.
+- `BpSyncService.DeleteAsync`: `NotImplemented` by design.
 
-**Strategie (final 2026-09-12):** Optimistic `lastmodifieddate`-CAS (Martin-Entscheid). Vor `/import` lesen, nach `/import` nochmal vergleichen, bei Differenz Push ablehnen. Keine Lock-Tabelle nötig — und kein Lock, das den Import selbst behindern könnte.
+**Git-Preflight:** Vor `git receive-pack` und vor Upload-Pack-Ref-Anzeige gleicht der Server BP→Git ab. Wenn der DB-Stand den Default-Branch fortschreibt, weist Git einen veralteten Push über den normalen Ref-/Fast-Forward-Check ab.
 
-**HOLDLOCK verworfen** (Martin 2026-09-12): Lock vor `/import` ist fatal — ein Lock würde den Import, den es schützen soll, selbst blockieren. Die existierende `BPAProcessLock`-Tabelle bleibt read-only für Diagnostics (`BpDbService.GetProcessLockAsync`), wird aber nicht in den Receive-Flow eingebunden.
-
-**Race-Mitigation:** CAS-Vergleich auf `BPAProcess.lastmodifieddate` reicht für den Single-User-MVP1-Use-Case (Stand 2026-09-11). Multi-Push-Concurrency wird durch Gits Smart-HTTP-Receive-Lock auf Ref-Ebene serialisiert (`receive-pack` schreibt atomar).
+**Verbleibendes Risiko:** Eine BP-Studio-Änderung kann nach dem Preflight und vor dem AutomateC-Import erfolgen. Es gibt derzeit weder einen `lastmodifieddate`-CAS noch eine `BPAProcessLock`-Prüfung; ein solcher Race ist daher nicht ausgeschlossen. Bei späteren Abrufen ist der Datenbankstand maßgeblich und wird zurück nach Git synchronisiert.
 
 ---
 
@@ -125,20 +122,20 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 | 3 | Locking/Fork-Strategie (§3) | 0.5 Tag | SPEC-pre-receive-wiring.md §3 | **spec done, impl open** |
 | ~~4~~ | ~~Pre-Receive-Gate-Implementation~~ | — | — | **obsolete** |
 | 5 | Pre-Receive-Wiring (C# im HTTP-Handler) | 0.5 Tag | `GitHttpHandler.HandleReceivePackAsync` | **done (2026-09-10, Phase 4b-follow-up commit `18ec5db`)** |
-| 6 | Post-Receive-Wiring (BP-DB-Sync) | 0.5 Tag | `GitHttpHandler.HandleReceivePackAsync` | **done (2026-09-10)** |
+| 6 | Post-Receive-Wiring (Server-Worktree-Materialisierung) | 0.5 Tag | `GitHttpHandler.HandleReceivePackAsync` | **done (2026-09-10)** |
 | ~~6b~~ | ~~Post-Checkout-Wiring (Client-Hook)~~ | — | — | **obsolete — Hook gestrichen 2026-09-10** |
 | ~~7~~ | ~~Delete-Implementation (Phase 4b-follow-up)~~ | — | `BpSyncService.DeleteAsync` mit SqlCommand | **out of scope (Martin 2026-09-12): referenzielle Verbindungen zu `BPAObject`/`BPAProcessBackup`/`BPAAssociate`. Wird in `BpSyncService.DeleteAsync` als `NotImplemented by design` zurückgegeben und in `AGENTS.md` dokumentiert. Doku-Markierung explizit "not implemented by design".** |
-| ~~8~~ | ~~HOLDLOCK-Implementation + Race-Tests~~ | — | `tests/BPGit.Server.Tests/PreReceiveRaceTests.cs` | **obsolete (Martin 2026-09-12): Lock vor `/import` ist fatal. Strategie umgestellt auf `lastmodifieddate`-CAS, siehe §3.** |
+| 8 | BP-DB-`lastmodifieddate`-CAS | offen | `BpSyncService` / `BpDbService` | Preflight synchronisiert BP→Git vor Push; CAS bleibt nötig, um ein BP-Studio-Update zwischen Preflight und `/import` atomar zu erkennen (siehe §3). |
 | 9 | SQL-Index `IX_BPAProcess_Name` Migration | 0.25 Tag | `bpgit-server init` Migrations-Schritt | open |
 | 10 | xunit-Integration gegen echtes BP-DB-Smoke | 1-2 Tage | smoke-test-script | open |
 
-**Gesamt-Aufwand (verbleibend):** ~0.5-1 Tag (Index-Migration + Smoke-Tests). Delete + HOLDLOCK weg per Martin 2026-09-12.
+**Gesamt-Aufwand (verbleibend):** SQL-Index, CAS und Smoke-Tests. Delete + HOLDLOCK bleiben out of scope.
 
 ---
 
 ## 5. Status Quo (Phase 5+ shipped 2026-09-10)
 
-**Stand 2026-09-11:** Pre-/Post-Receive-Logik läuft als C# im `bpgit-server`-HTTP-Handler (`PushOrchestrator` + `PreReceiveHandler`/`PostReceiveHandler`). `post-checkout` ist ersatzlos gestrichen (Commit `82a5e84`). Der ehemalige `bpgit pull`-Workaround entfällt, weil der Pull-Flow jetzt Single-Stage ist (Standard `git pull` reicht — siehe `SPEC-git-server.md` §9).
+**Stand 2026-10-26:** Pre-/Post-Receive-Logik läuft als C# im HTTP-Handler (`PushOrchestrator` + `PreReceiveHandler`/`PostReceiveHandler`). `BpToGitSyncService` gleicht vor Fetch-Ref-Anzeige und Receive-Pack die BP-Datenbank mit dem Default-Branch ab. `post-checkout` ist ersatzlos gestrichen (Commit `82a5e84`).
 
 ---
 
@@ -169,7 +166,7 @@ Der Filter auf `name IS NOT NULL` spart Platz, weil BP auch Rows mit `NULL`/Leer
 
 | Frage | Entscheidung nötig |
 |---|---|
-| ~~HOLDLOCK vs `lastmodifieddate`-CAS?~~ | ~~Martin - Spec §3~~ | **resolved 2026-09-12:** `lastmodifieddate`-CAS (HOLDLOCK verworfen, Lock vor Import fatal) |
+| ~~HOLDLOCK vs `lastmodifieddate`-CAS?~~ | ~~Martin - Spec §3~~ | **Design resolved 2026-09-12:** HOLDLOCK verworfen, CAS gewählt. CAS-Implementierung bleibt offen; bis dahin schützt BP→Git-Preflight vor den meisten veralteten Pushes, aber nicht vor zeitgleichen BP-Studio-Änderungen. |
 | SQL-Index `IX_BPAProcess_Name` Migration: in `bpgit-server init` oder separates Migrations-Script? | Martin — Spec §1.3 |
 | `PostCheckoutHandler.cs` Source-File löschen oder als Stub behalten? | Martin — Cleanup |
 | AGENTS.md Backlog-Block (iv) auf "done" setzen? | Martin — Doku-Hygiene |

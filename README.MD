@@ -1,8 +1,10 @@
 # bp-git — Blue Prism Processes in Git
 
-Git-Workflow für Blue Prism Processes und Objects. Standard-git-Befehle, keine Spezial-Tools nötig. Läuft als self-hosted Server auf OpenClawPC — kein IIS, keine bpgit.exe-Installation auf deiner Workstation. Der Server heißt `bpgit.exe` (ein einziges Binary, dient via `--serve` auch als Kestrel-HTTP-Server und via direkter Command-Line als Admin-CLI für Worktree-Sync).
+Git-Workflow für Blue Prism Processes und Objects. Standard-git-Befehle, keine Spezial-Tools nötig. Läuft als self-hosted Server auf OpenClawPC — kein IIS und keine `bpgit.exe`-Installation auf deiner Workstation. Auf dem Server ist `bpgit.exe` das Kestrel-HTTP-Server-Binary; BP-Import und Worktree-Materialisierung laufen serverseitig.
 
 ## Quickstart
+
+Der Server synchronisiert den aktuellen Blue-Prism-Datenbankstand vor jeder Ref-Anzeige für `clone`, `fetch` und `pull` in Git. Änderungen aus BP Studio erscheinen dadurch beim nächsten Git-Abruf als serverseitiger Commit; ein manueller Export ist nicht nötig.
 
 ```bash
 # 1. Repo klonen (einmalig)
@@ -52,20 +54,20 @@ VS Code / Editor                             │                            │
         │ ◄─────────────────────────────────│                            │
 ```
 
-## Funktionsumfang (Stand 2026-08-30)
+## Funktionsumfang (Stand 2026-10-26)
 
 | Operation | Aus Server-Sicht | Status |
 |---|---|---|
-| `git clone` | Worktree wird einmalig aus BP-DB materialisiert | ✅ Phase 4c (commit `f399ad1`) |
-| `git fetch` / `git pull` | Server liest nach erfolgreichem `git-upload-pack` aus BP-DB und materialisiert Worktree via `PostCheckoutHandler` → `WorktreeSyncService.MaterializeAsync(cfg.WorktreePath)` | ✅ **wired (side-effect post-apply per Spec §9)** |
-| `git push` | Server parst Ref-Update-Pkt-Lines, ruft `git receive-pack --stateless-rpc` (ref-update + pack-apply), danach `PreReceiveHandler` (processid-Lookup + Lock-Check + `/import`) und `PostReceiveHandler` (Worktree-Materialization). Side-effect post-apply: **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler. | ✅ **wired (side-effect post-apply per Spec §9)** |
-| Process-Edit in BP Studio → Worktree | Worktree wird beim nächsten `git fetch` / `git pull` durch `PostCheckoutHandler` aktualisiert (server-side Hook) | ✅ **wired** |
+| `git clone` | Synchronisiert BP→Git und klont danach den aktuellen Stand | ✅ |
+| `git fetch` / `git pull` | Synchronisiert BP→Git vor der Ref-Anzeige; Änderungen werden als `bpgit-server`-Commit sichtbar | ✅ |
+| `git push` | Gleicht BP→Git vor dem Empfang ab und importiert danach akzeptierte Änderungen in Blue Prism | ✅ |
+| BP-Studio-Edit → Git | Wird beim nächsten `clone`, `fetch` oder `pull` automatisch übernommen | ✅ |
 
-> ✅ **Hook-Status (Stand 2026-09-01):** Die drei Hooks `PreReceive`, `PostReceive`, `PostCheckout` sind produktiv verdrahtet (Hybrid-Ansatz per SPEC-pre-receive-wiring.md §1.3). `git receive-pack` delegiert an nativen `git --stateless-rpc` (Phase 4b-follow-up, commit `18ec5db`); davor läuft `PushOrchestrator.PreReceive`-Gate und danach `WorktreeSyncService.MaterializeAsync` per `PostReceive`. **Wichtiger Trade-off (Side-effect post-apply per Spec §9):** `PreReceive` läuft NACH `git receive-pack` ref-update, nicht davor. Push kann **nicht** abgelehnt werden, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie via BP-DB-Sync + stderr-Log, nicht via Push-Reject. Pre-emptive Validate-then-Apply bleibt Phase 5+ Backlog (Karte `866e5346`).
+> **Synchronisationsregel:** Blue Prism ist maßgeblich. Der Server vergleicht den DB-Stand vor Fetch-Ref-Anzeige und vor Receive-Pack mit dem Default-Branch und erstellt nur bei Änderungen einen Commit mit der Identität `bpgit-server`. Ein veralteter Push auf den Default-Branch wird von Git anhand des aktualisierten Refs abgelehnt; ein Importfehler nach einem akzeptierten Push wird beim nächsten Abruf durch den aktuellen DB-Stand korrigiert.
 
 **Was der Server heute tatsächlich macht:**
 - `/info/refs`: korrekt per LibGit2Sharp-`Repository.Refs` durch LibGit2Sharp-API (Smart-HTTP v2, voll funktional) — `git clone` + `git fetch` funktionieren.
-- `/git-upload-pack`, `/git-receive-pack`: Delegation an nativen `git --stateless-rpc` mit dazwischengeschalteter `PushOrchestrator`-Pipeline. Bei `/git-upload-pack` (clone/fetch) folgt `PostCheckoutHandler`-Hook; bei `/git-receive-pack` (push) folgt Pre-Receive + Post-Receive side-effect post-apply per Spec §9.
+- `/git-upload-pack`, `/git-receive-pack`: Delegation an natives `git --stateless-rpc`; vor Fetch-Ref-Anzeige und Receive-Pack synchronisiert der Server BP→Git, nach einem akzeptierten Receive-Pack Git→BP.
 - `/healthz`: anonymous Service-Health-Check.
 
 ## Filename-Regeln (WICHTIG)
@@ -139,8 +141,8 @@ git push
 **In Blue Prism Studio** (Standard-Workflow):
 
 1. Erstelle den Process in BP Studio wie gewohnt.
-2. `git pull` → Server materialisiert den neuen Process als XML-Datei.
-3. `git add . && git commit -m "Add new Process X"`.
+2. `git pull` → der Server übernimmt den neuen Process als Commit in den Default-Branch.
+3. Deine lokale Worktree-Version enthält den neuen Process.
 
 **Alternativ via Worktree**:
 
@@ -164,17 +166,11 @@ git pull   # Filename wird automatisch zu "New Name.xml" normalisiert
 
 ### Process löschen
 
-```bash
-git rm "processes/Processes/Default/My Process.xml"
-git commit -m "Remove My Process"
-git push   # Server löscht Process aus BP-DB
-```
-
-> **Achtung**: Process-Löschung ist endgültig. BPAAuditEvents bleiben für die Historie erhalten, aber der Process ist nicht mehr ausführbar.
+Das Löschen eines Processes per Git-Push ist derzeit nicht implementiert. Wird ein Process in BP Studio gelöscht, entfernt der Server die XML-Datei beim nächsten `git pull` automatisch aus dem Default-Branch.
 
 ### Konflikt (BP-DB wurde extern geändert)
 
-Wenn ein anderer User zwischen deinem `pull` und `push` denselben Process in BP Studio geändert hat, lehnt der Server deinen Push ab. Lösung:
+Beim nächsten `git pull` übernimmt der Server BP-Studio-Änderungen als Git-Commit. Wenn du dieselbe Datei lokal geändert hast, löst Git den daraus entstehenden Merge-Konflikt wie gewohnt:
 
 ```bash
 git pull   # Server merged die Änderungen aus BP-DB
@@ -188,7 +184,7 @@ git push
 
 ### Warum sehe ich keine `bpgit.exe`?
 
-Auf deiner Workstation brauchst du sie nicht. Das `bpgit.exe` ist das **Server-Binary** auf OpenClawPC — ein einziges Programm, das per `bpgit --serve` als Kestrel-HTTP-Server läuft und per direktem Aufruf (`bpgit init`, `bpgit pull`, `bpgit status`, …) als Admin-CLI fuer Worktree-Sync und Diagnose dient. Du arbeitest auf der Workstation nur mit Standard-`git`.
+Auf deiner Workstation brauchst du sie nicht. `bpgit.exe` ist das Server-Binary auf OpenClawPC. Push-Importe und Worktree-Materialisierung werden dort ausgeführt; du arbeitest auf der Workstation ausschließlich mit Standard-`git`.
 
 ### Was ist, wenn ich offline bin?
 
@@ -204,23 +200,15 @@ Oder direkt in Blue Prism Studio (Rechtsklick → Audit History). BPAAuditEvents
 
 ### Was ist, wenn ich den Process in BP Studio statt im Worktree editiere?
 
-**Beides ist OK.** Der Server syncronisiert in beide Richtungen:
-- Worktree → BP-DB: bei `git push`
-- BP-DB → Worktree: bei `git pull`
-
-Wichtig: nach einer Änderung in BP Studio immer `git pull`, damit dein Worktree aktuell ist.
+Der Server übernimmt BP-Studio-Änderungen beim nächsten `git clone`, `git fetch` oder `git pull` automatisch als Commit in den Default-Branch. Ein manueller Export ist nicht erforderlich.
 
 ### Ich habe `git mv` gemacht — was passiert?
 
-Funktioniert, aber der Server normalisiert beim nächsten Pull auf den canonical Filename (vom XML-Namen abgeleitet). Dein manueller Rename wird also effektiv rückgängig gemacht. **Lieber den Process-Namen in der XML ändern.**
+Ein `git mv` wird als Datei-Löschung und -Neuanlage behandelt; Prozesslöschung in BP ist absichtlich nicht implementiert. Für ein BP-Rename ändere stattdessen den Namen im XML und behalte den Git-Pfad bei.
 
-### Der Server hat meinen Push abgelehnt — warum?
+### BP-Synchronisierung nach einem Push fehlgeschlagen?
 
-Mögliche Gründe:
-- **BPAProcessLock** aktiv (jemand editiert den Process gerade in BP Studio) → warten oder `--force`
-- **Optimistic-Lock** (BP-DB wurde extern geändert seit deinem letzten pull) → `git pull` zuerst
-- **XML-Parse-Fehler** (deine XML-Datei ist kaputt) → Validierung in VS Code
-- **Process nicht gefunden** (rename-detection fehlgeschlagen, weil Similarity < 50%) → manuell prüfen
+Git hat den Push bereits angenommen, bevor der Server die Blue-Prism-Synchronisierung ausführt. Bei XML- oder Importfehlern bleibt BP die maßgebliche Quelle: Beim nächsten `git pull` gleicht der Server den Default-Branch mit der Datenbank ab und committet den DB-Stand. Prüfe die Server-Logs, falls die Synchronisierung weiterhin fehlschlägt.
 
 Für Details: Server-Logs auf OpenClawPC (`C:\bpgit\logs\`).
 
@@ -230,108 +218,26 @@ Für Details: Server-Logs auf OpenClawPC (`C:\bpgit\logs\`).
 - **Diff-Viewer**: `Ctrl+Shift+G` → Source-Control-Panel zeigt XML-Diffs inline.
 - **Auto-Pull**: Extension "Git Pull" für Auto-Pull in regelmäßigen Abständen (optional).
 
-## CLI-Commands
+## Server-Commands
 
-`bpgit.exe` ist das **Admin-CLI für Server-Setup und BP-Sync-Diagnose**. Es läuft auf OpenClawPC (nicht auf Workstations). Das gleiche Binary startet per `bpgit --serve` auch den Kestrel-Git-Server (siehe [Server-Mode](#server-mode)).
-
-Standard-Config: `<exe-dir>/bpgit.json` (wird beim Publish mit-exportiert). Override via `bpgit --serve /path/to/config.json`.
-
-### Globale Optionen
-
-| Option | Beschreibung |
-|---|---|
-| `--force` | Erforderlich für `commit` (expliziter Write) |
-| `-n, --limit N` | Limit rows für `log` (default 50) |
-| `--processid <guid>` | Filter by processid für `log` |
-| `--since YYYY-MM-DD` | Nur Einträge mit eventdatetime >= since für `log` |
-| `--event <sCode>` | Filter by event-type code (z.B. P006, L001) für `log` |
-| `-h, --help` | Show help message |
-
-Worktree-Pfade (`./processes`, `bpgit-snapshot.json`, `C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe`, Auth-Modus) werden aus `bpgit.json` gelesen — **kein** separater CLI-Output-Flag mehr.
-
-### Commands
-
-#### `bpgit init`
-
-Bootstrap CLI-Worktree aus BP-DB (Liest `bpgit.json`, materialisiert Worktree am konfigurierten `worktreeDir`, schreibt `bpgit-snapshot.json` daneben). **Kein** `.bpgit/`-Verzeichnis wird angelegt — die Unified-Config ist Single Source of Truth.
+`bpgit.exe` ist ein serverseitiges Binary; auf Developer-Workstations genügen Standard-`git`-Befehle. Es startet standardmäßig den Kestrel-Server. Die Flags `--serve`, `/s` und `-s` bleiben als Aliase verfügbar.
 
 ```bash
-bpgit init
-```
+# Standardkonfiguration aus <exe-dir>/bpgit.json laden und Server starten
+bpgit
 
-#### `bpgit pull`
-
-Re-exportiert BP-Processes aus der DB in den Worktree (canonical Filenames aus `BPAProcess.name`).
-
-```bash
-bpgit pull
-```
-
-#### `bpgit status`
-
-Zeigt Diff zwischen Worktree und Snapshot (welche Files wurden lokal geändert, welche sind in BP-DB neuer).
-
-```bash
-bpgit status
-```
-
-#### `bpgit diff [<processid>]`
-
-Hash-basierter Drift-Report (Worktree vs Snapshot). Optional per processid filtern.
-
-```bash
-bpgit diff
-bpgit diff <processid-guid>
-```
-
-#### `bpgit log`
-
-Zeigt BP per-edit Audit History aus `BPAAuditEvents`. Filter via `--processid`, `--since`, `--event`, `--limit`.
-
-```bash
-bpgit log
-bpgit log --limit 10
-bpgit log --processid <guid>
-bpgit log --since 2026-08-01
-bpgit log --event P006
-```
-
-#### `bpgit commit`
-
-Schreibt Worktree-Änderungen zurück in die BP-DB (benötigt `--force`).
-
-```bash
-bpgit --force commit
-```
-
-## Server-Mode
-
-`bpgit --serve` startet den Kestrel-HTTP-Server auf OpenClawPC. Das gleiche Binary, das auch als Admin-CLI dient — Dispatcher in `Program.cs` checkt `--serve` / `/s` / `-s` als erstes Argument und routet entsprechend.
-
-```bash
-# Default: lädt <exe-dir>/bpgit.json
+# Explizit im Server-Modus starten
 bpgit --serve
 
-# Custom config
+# Benutzerdefinierte Konfiguration
 bpgit --serve /path/to/config.json
 
-# Aliases für Windows-Shell-Gewohnheiten
-bpgit /s
-bpgit -s
+# Bare-Repo initialisieren
+bpgit init
+bpgit init my-bp-project
 ```
 
-### Server-Sub-Commands
-
-#### `bpgit --serve init <repo-name>`
-
-Initialisiert das Bare-Git-Repo mit XML-only `.gitignore`. Läuft einmal und beendet.
-
-```bash
-bpgit --serve init                    # nutzt repoName aus bpgit.json (default: bp-git)
-bpgit --serve init my-bp-project      # Repo-Name override
-```
-
-Das Repo wird unter `repoRoot/{repoName}.git` angelegt (Default: `C:\bpgit\repos\bp-git.git`). Der Initial-Commit enthält die `<exe-dir>/bpgit.json` (per `Content Update` beim Publish) und ein `.gitignore` mit XML-Whitelist.
+`bpgit init` initialisiert das Bare-Repo unter `repoRoot/{repoName}.git`. Eine optionale Config-Datei kann vor `init` angegeben werden: `bpgit C:\path\bpgit.json init`.
 
 ### Publish-Profile
 
@@ -356,4 +262,4 @@ dotnet publish src/BPGit.Server/BPGit.Server.csproj /p:PublishProfile=SelfContai
 - **Adapter-Layer**: [`specs/SPEC-adapter-architecture.md`](specs/SPEC-adapter-architecture.md) — Worktree-Layout, processid-Mapping
 - **BP-CLI-Referenz**: [`context/bp-cli-reference-7.5.1.md`](context/bp-cli-reference-7.5.1.md) — AutomateC.exe-Befehle
 - **BP-DB-Schema**: [`context/bp-database-schema.md`](context/bp-database-schema.md) - Tabellen-Referenz
-- **Test-Stand** (Martin #6385+#6401+#6415+#6427+#6462): README wurde umbenannt zu README.MD (Konvention), Inhalt identisch, 12 xunit-Test-Commits (75 gruen + 1 skipped in 3 Projekten: Server 53+1, Data 3, Cli 9, plus 9 gruen ausgewaehlt). 3 PreReceive HEAD-Tracking-Tests skip-attributed mit Issue-#802 workaround (commit `2fa730d`); 1 HeadTrackingDiagnosticTest skip-attributed (libgit2 0.32.0 API-Inkonsistenz). Phase 5+-Diagnose pending: tree.Count vs parents[0].tree.Count vergleichen.
+- **Test-Stand** (2026-10-26): `dotnet test BPGit.sln` führt 96 Server-xUnit-Tests aus. Tests verwenden Fakes und temporäre Repositories; Blue Prism muss lokal nicht installiert sein.

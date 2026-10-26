@@ -16,13 +16,6 @@ public class BpSyncServiceTests
 
     private static BpSyncService NewService(FakeBpDbService db) => new(db);
 
-    private static BpaProcessLockInfo SampleLock() =>
-        new(
-            LockDateTime: DateTime.UtcNow,
-            UserId: Guid.NewGuid(),
-            MachineName: "test-machine",
-            Username: "test-user");
-
     [Fact]
     public async Task ModifyAsync_ReturnsFailure_WhenProcessNotFound()
     {
@@ -34,22 +27,6 @@ public class BpSyncServiceTests
         Assert.False(result.Ok);
         Assert.Null(result.ProcessId);
         Assert.NotNull(result.Message);
-    }
-
-    [Fact]
-    public async Task ModifyAsync_ReturnsFailure_WhenLocked()
-    {
-        var db = NewDb();
-        var pid = Guid.NewGuid();
-        db.NameToProcessId["Old"] = pid;
-        db.Locks[pid] = SampleLock();
-        var svc = NewService(db);
-
-        var result = await svc.ModifyAsync("<process name=\"New\"/>", "Old", "New");
-
-        Assert.False(result.Ok);
-        Assert.Null(result.ProcessId);
-        Assert.Contains("locked by", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -76,23 +53,6 @@ public class BpSyncServiceTests
 
         Assert.False(result.Ok);
         Assert.True(result.IsNotFound);
-        Assert.False(result.IsLocked);
-    }
-
-    [Fact]
-    public async Task DeleteAsync_ReturnsLocked_WhenProcessLocked()
-    {
-        var db = NewDb();
-        var pid = Guid.NewGuid();
-        db.NameToProcessId["Locked"] = pid;
-        db.Locks[pid] = SampleLock();
-        var svc = NewService(db);
-
-        var result = await svc.DeleteAsync("Locked");
-
-        Assert.False(result.Ok);
-        Assert.True(result.IsLocked);
-        Assert.False(result.IsNotFound);
     }
 
     [Fact]
@@ -105,7 +65,6 @@ public class BpSyncServiceTests
         var result = await svc.DeleteAsync("ToDelete");
 
         Assert.False(result.Ok);
-        Assert.False(result.IsLocked);
         Assert.False(result.IsNotFound);
     }
 }

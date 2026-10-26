@@ -10,9 +10,5 @@
   "sqlPassword": null,
 
   "worktreeDir": "./processes",
-  "snapshotFileName": "bpgit-snapshot.json",
-
-  "cliAuthMode": "sso",
-  "cliUsername": null,
-  "cliPassword": null
+  "automatecPath": "C:\\Program Files\\Blue Prism Limited\\Blue Prism Automate\\AutomateC.exe"
 }

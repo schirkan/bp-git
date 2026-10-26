@@ -26,12 +26,12 @@
   <ItemGroup>
     <PackageReference Include="LibGit2Sharp" Version="0.32.0" />
     <PackageReference Include="LibGit2Sharp.NativeBinaries" Version="2.0.324" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.14" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.2" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BPGit.Cli\BPGit.Cli.csproj" />
     <ProjectReference Include="..\BPGit.Data\BPGit.Data.csproj" />
   </ItemGroup>
 

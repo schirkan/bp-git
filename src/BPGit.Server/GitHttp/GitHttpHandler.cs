@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using BPGit.Data;
+using BPGit.Server.Services;
 using LibGit2Sharp;
 
 namespace BPGit.Server.GitHttp;
@@ -10,9 +11,9 @@ namespace BPGit.Server.GitHttp;
 /// Implements the git smart-HTTP protocol (v2) endpoints:
 /// <list type="bullet">
 ///   <item><c>GET  /{repo}/info/refs?service=git-upload-pack</c>  - ref advertisement for fetch/clone</item>
-///   <item><c>POST /{repo}/git-upload-pack</c>                   - pack download (Phase 4b: full implementation; Materialization läuft lokal via `bpgit pull` CLI)</item>
+///   <item><c>POST /{repo}/git-upload-pack</c>                   - pack download for fetch and clone</item>
 ///   <item><c>GET  /{repo}/info/refs?service=git-receive-pack</c> - ref advertisement for push</item>
-///   <item><c>POST /{repo}/git-receive-pack</c>                  - pack upload (Phase 4b + 5+: full implementation + pre/post-receive hooks)</item>
+///   <item><c>POST /{repo}/git-receive-pack</c>                  - pack upload and server-side BP synchronization</item>
 /// </list>
 ///
 /// Pre-/Post-Receive-Logik im HTTP-Handler (kein Git-Hook-Script, Stand 2026-09-10, per <c>specs/SPEC-pre-receive-wiring.md</c> §1):
@@ -21,7 +22,8 @@ namespace BPGit.Server.GitHttp;
 ///    documented in SPEC-pre-receive-wiring.md §1.3) followed by <see cref="PostReceiveHandler"/>
 ///    for worktree materialization. The pack-apply itself remains delegated to native
 ///    <c>git receive-pack --stateless-rpc</c>.
-///  - <c>POST /git-upload-pack</c>: nur pack-delivery an den Client. KEINE server-seitige Materialisierung — Filename ist bereits kanonisch (`sanitize(BPAProcess.name) + ".xml"` per #6311). Falls der Client eine Aktualisierung gegen die lokale BP-DB braucht, ruft er `bpgit pull` (CLI) auf.
+///  - <c>git-upload-pack</c> discovery: BP-DB is materialized and committed to the default branch
+///    before refs are advertised, so clone/fetch/pull sees changes made in BP Studio.
 /// </summary>
 public static class GitHttpHandler
 {
@@ -48,7 +50,8 @@ public static class GitHttpHandler
     public static async Task<bool> HandleAsync(
         HttpContext ctx,
         ServerConfig cfg,
-        PushOrchestrator push)
+        PushOrchestrator push,
+        BpToGitSyncService bpToGitSync)
     {
         var path = ctx.Request.Path.Value ?? string.Empty;
 
@@ -56,7 +59,7 @@ public static class GitHttpHandler
         var infoRefsMatch = MatchRoute(path, suffix: "/info/refs");
         if (infoRefsMatch is { } repo1)
         {
-            return await HandleInfoRefsAsync(ctx, cfg, repo1);
+            return await HandleInfoRefsAsync(ctx, cfg, repo1, bpToGitSync);
         }
 
         // Route: /{repo}/git-upload-pack  (POST)
@@ -108,7 +111,11 @@ public static class GitHttpHandler
         return repoSegment;
     }
 
-    private static async Task<bool> HandleInfoRefsAsync(HttpContext ctx, ServerConfig cfg, string repoName)
+    private static async Task<bool> HandleInfoRefsAsync(
+        HttpContext ctx,
+        ServerConfig cfg,
+        string repoName,
+        BpToGitSyncService bpToGitSync)
     {
         var service = ctx.Request.Query["service"].ToString();
         if (service != "git-upload-pack" && service != "git-receive-pack")
@@ -124,6 +131,11 @@ public static class GitHttpHandler
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;
             await ctx.Response.WriteAsync($"Repository '{repoName}' not found at {cfg.RepoRoot}.");
             return true;
+        }
+
+        if (service == "git-upload-pack")
+        {
+            await bpToGitSync.SyncBeforeFetchAsync(repoPath, ctx.RequestAborted);
         }
 
         ctx.Response.StatusCode = StatusCodes.Status200OK;
@@ -174,9 +186,8 @@ public static class GitHttpHandler
 
     /// <summary>
     /// Delegates to native <c>git upload-pack --stateless-rpc</c> via Process spawn.
-    /// Pack wird an den Client gestreamt; **keine** server-seitige Materialisierung
-    /// (Stand 2026-09-10, post-checkout-Hook gestrichen). Falls der Client eine
-    /// Aktualisierung gegen die lokale BP-DB braucht, ruft er `bpgit pull` (CLI) auf.
+    /// The pack is streamed to the client; BP-to-Git synchronization already ran
+    /// during the preceding upload-pack ref discovery.
     /// </summary>
     private static async Task<bool> HandleUploadPackAsync(
         HttpContext ctx,
@@ -261,10 +272,6 @@ public static class GitHttpHandler
                 Console.Error.WriteLine($"[bpgit-server /git-upload-pack] {stderr.TrimEnd()}");
             }
         }
-
-        // Stand 2026-09-10: kein server-seitiges Post-Checkout mehr.
-        // Pack wurde an Client geliefert; eine etwaige Worktree-Aktualisierung gegen
-        // die lokale BP-DB macht der Client per `bpgit pull` (CLI).
 
         return true;
     }

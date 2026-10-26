@@ -39,7 +39,7 @@ public class ProcessMembership
 }
 
 /// <summary>
-/// Composite structure returned by ProcessRepository.GetFolderStructureAsync():
+/// Composite structure returned by IBpDbService.GetFolderStructureAsync():
 /// filtered Trees (Processes + Objects only) + their Groups + M:N Memberships.
 /// </summary>
 public record FolderStructure(

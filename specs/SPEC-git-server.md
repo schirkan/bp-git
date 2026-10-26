@@ -1,8 +1,8 @@
 # SPEC-git-server — Git-konformer Endpoint fuer Blue Prism Adapter
 
-**Status:** v1.0 (post-CLI-Reduktion, Hooks-stripped, single-server-architecture). Architektur final: Pre-/Post-Receive-Logik als C# im bpgit-server HTTP-Handler, post-checkout gestrichen (Commit `82a5e84`), CLI reduziert auf `bpgit init` (Commit `cbcb604`). Server macht BP-DB-Sync atomar mit Push via `/import /forceid /overwrite`.
+**Status:** v1.2 (server-only binary). BP→Git-Synchronisierung vor Ref-Anzeige bei clone/fetch/pull und vor Receive-Pack; Git→BP-Import nach Receive-Pack. Pre-/Post-Receive-Logik läuft als C# im HTTP-Handler, kein Client-CLI und kein `post-checkout`.
 
-**Datum:** 2026-09-11 (Architektur-Finalisierung: CLI auf `init` reduziert, Hooks als C# im HTTP-Handler, Cache obsolet, post-checkout gestrichen, BpSyncService.ImportAsync via separatem Server-AutomateCRunner)
+**Datum:** 2026-10-26 (BP→Git-Preflight vor Fetch und Push, automatische serverseitige Sync-Commits)
 **Autor:** bpgit-Projekt
 **Bezug:** Martin-Direktive #6295, #6313, #6311, #6309, #6307, #6289, #6287, #6285
 **Mitgeltend:** `SPEC-target-environment.md`, `SPEC-adapter-architecture.md`, `context/bp-cli-reference-7.5.1.md`, `context/bp-database-schema.md`
@@ -124,8 +124,8 @@ Theoretisch, Demo-DB hat 0 Duplicates: bei zwei Processes mit gleichem Namen in 
 | `M` | "X" | "X" (gleich) | DB-Lookup `WHERE name='X'` → processid → `/import /forceid /overwrite <file>` |
 | `M` (Rename via XML) | "Old" | "New" (≠) | DB-Lookup `WHERE name='New'` (0 Treffer), dann `WHERE name='Old'` (1 Treffer) → processid → `/import /forceid /overwrite <file>` (Name + Content-Update in einem Schritt) |
 | `A` | — | "New" | DB-Lookup `WHERE name='New'` (0 erwartet) → `/import <file>` (BP legt neuen Prozess an, /forceid NICHT noetig) |
-| `D` | "Gone" | — | DB-Lookup `WHERE name='Gone'` → wenn 1 Treffer: Prozess loeschen (BPAAuditEvent sCode=P005 manuell, oder direkt DELETE) |
-| `R` (git mv) | "Old" | "New" | Wie Modify-Rename-Fall: processid via old-name-Lookup → `/forceid /overwrite <new-path>`; Pull-Normalisierung schreibt spaeter canonical Filename |
+| `D` | "Gone" | — | Prozesslöschung via Git ist nicht implementiert; der DB-Prozess wird beim nächsten BP→Git-Abgleich wieder materialisiert. |
+| `R` (git mv) | "Old" | "New" | Wird vom Tree-Walker als Delete + Add behandelt; `git mv` ist kein unterstützter Rename-Workflow. |
 
 ### Rename-Walkthrough (komplett)
 
@@ -141,28 +141,21 @@ Theoretisch, Demo-DB hat 0 Duplicates: bei zwei Processes mit gleichem Namen in 
    - DB-Lookup `WHERE name='Old Name'` → processid `42b5169c-...`
    - **`/import /forceid 42b5169c-... /overwrite <tmpfile>`**
    - BP aktualisiert `BPAProcess.name="New Name"` + `processxml=<...New Name...>`, schreibt BPAAuditEvent (sCode=P006)
-4. Server `post-receive` schreibt canonical Filename:
-   - Schreibt `processes/Objects/Default/New Name.xml` (mit neuem XML)
-   - Loescht `processes/Objects/Default/Old Name.xml`
-   - Git committet dies als **Auto-Rename** (Similarity-Match), History bleibt erhalten
+4. Server `post-receive` materialisiert den neuen Namen im Server-Worktree.
+5. Beim nächsten `git pull` übernimmt der BP→Git-Abgleich den kanonischen Dateinamen als serverseitigen Commit und entfernt den alten Pfad.
 
 **Phase 2 — User renamed in BP Studio:**
 
 1. User benennt Prozess in BP Studio: "Old Name" → "New Name"
 2. BP aktualisiert `BPAProcess.name` + `processxml`, schreibt BPAAuditEvent (sCode=P006)
-3. Renname wird erst beim **nächsten Push** dieses Prozesses sichtbar:
-   - Server `pre-receive` (Phase 1-Mechanik) sieht Modify auf `Old Name.xml` mit XML-Root `name="New Name"` → DB-Lookup findet processid (alter Name passt nicht mehr) → server-seitige Renamierung des Worktrees im `post-receive`
-   - Da der Worktree nach `post-receive` kanonisch ist, sieht jeder nachfolgende `git pull` / `git clone` sofort `New Name.xml` ohne Client-Automation.
+3. Beim nächsten `git pull` synchronisiert der Server den neuen DB-Namen in Git und committet den kanonischen Dateipfad.
 
 **Phase 3 — git mv (manuell, unerwuenscht):**
 
 1. User `git mv Old Name.xml Renamed.xml` (kein XML-Content-Edit)
 2. Push
-3. Server `pre-receive`:
-   - Sieht **R100** (pure Rename, kein Content-Change)
-   - Alter Name (aus old path): "Old Name"
-   - Neuer Name (aus XML-Root): "Old Name" (unveraendert)
-   - DB-Lookup `WHERE name='Old Name'` → processid
+3. Der Server behandelt die Pfadänderung als Delete + Add. Der Löschpfad ist nicht implementiert; ein Add mit bereits vorhandenem BP-Namen schlägt fehl.
+4. Beim nächsten Fetch überschreibt der DB→Git-Abgleich den nicht-kanonischen Pfad mit dem aus `BPAProcess.name` abgeleiteten Namen.
    - `/import /forceid <pid> /overwrite Renamed.xml`
 4. Server `post-receive` normalisiert:
    - Schreibt canonical `Old Name.xml` (weil XML-Name immer noch "Old Name")
@@ -207,10 +200,9 @@ ls processes/Processes/Default/   # folder-aware materialisiert
 
 Server-Flow:
 1. Auth via Windows-Integrated-Auth (Domaenen-Credentials)
-2. Kestrel handled HTTP-Request, ruft LibGit2Sharp fuer git-smart-HTTP
-3. Bare-Repo servt initial git-protocol (refs, upload-pack)
-4. `git-upload-pack` liefert canonical-named Files direkt an den Client (kein server-seitiges Post-Checkout mehr, siehe §9 + §11)
-5. User erhaelt Worktree mit folder-aware Layout
+2. Bei `git-upload-pack`-Discovery materialisiert der Server BP-DB in seinen Worktree und committet Änderungen auf den Default-Branch.
+3. Kestrel annonciert danach die aktualisierten Refs; `git-upload-pack` liefert Git-Objekte aus dem Bare-Repo.
+4. Der Client erhält den synchronisierten BP-Stand als normalen Git-Worktree.
 
 ### Beispiel: git push
 
@@ -224,10 +216,11 @@ git push
 
 Server-Flow:
 1. Auth + push via git-receive-pack (LibGit2Sharp)
-2. Server-Hook pre-receive: parse `git diff oldrev..newrev` (siehe #4):
+2. Vor Receive-Pack gleicht der Server BP→Git ab; veraltete Updates auf den Default-Branch werden von Git abgelehnt.
+3. `PushOrchestrator` parst nach erfolgreichem Ref-Update `git diff oldrev..newrev` (siehe #4):
    - Pro Aenderung: processid-Lookup, dann `AutomateC.exe /import /forceid /overwrite`
    - BPAAuditEvents wird von BP-Runtime geschrieben (sCode=P006)
-3. Server-Hook post-receive: BP-DB pollen, neue XML-Dateien schreiben, alte loeschen (canonical Filename-Normalisierung)
+4. `PostReceiveHandler`: BP-DB pollen, neue XML-Dateien schreiben, alte loeschen (canonical Filename-Normalisierung)
 
 ---
 
@@ -252,9 +245,9 @@ Server-Flow:
 
 | Handler | Trigger | Aktion | Status |
 |---|---|---|---|
-| `PreReceiveHandler` | in HTTP-Handler vor ref-apply (side-effect post-apply per Spec §9) | parse `git diff`, name-Lookup via SQL, `/import /forceid /overwrite` pro Änderung | ✅ **wired** (`GitHttpHandler.HandleReceivePackAsync` ruft `PreReceiveHandler.HandleAsync` pro ref-update auf, **kann Push nicht ablehnen** bei BP-DB-Sync-Fehler — siehe MVP-1-Limitation) |
-| `PostReceiveHandler` | in HTTP-Handler nach ref-apply | BP-DB-Sync (`WorktreeSyncService.MaterializeAsync` — canonical-Filenames schreiben, stale-Files löschen) | ✅ **wired** (`GitHttpHandler.HandleReceivePackAsync` ruft `PostReceiveHandler.HandleAsync` nach ref-apply + PreReceive auf) |
-| ~~`PostCheckoutHandler`~~ | — | — | **gestrichen 2026-09-10** — Filename = `sanitize(BPAProcess.name) + ".xml"` per #6311, kein Client-Rename nötig, kein post-checkout-Hook mehr. File `PostCheckoutHandler.cs` kann gelöscht werden. |
+| `PreReceiveHandler` | in HTTP-Handler nach ref-apply | parse `git diff`, name-Lookup via SQL, `/import /forceid /overwrite` pro Änderung | ✅ **wired** (`PushOrchestrator` ruft `PreReceiveHandler.HandleAsync` nach erfolgreichem receive-pack auf; kann Push nicht nachträglich ablehnen) |
+| `PostReceiveHandler` | in HTTP-Handler nach ref-apply | Materialisiert den aktuellen BP-DB-Stand im Server-Worktree (`WorktreeSyncService.MaterializeAsync`); Git-Commits aus BP-Änderungen entstehen vor Fetch/Push durch `BpToGitSyncService` | ✅ **wired** (`PushOrchestrator` ruft `PostReceiveHandler.HandleAsync` nach ref-apply + PreReceive auf) |
+| ~~`PostCheckoutHandler`~~ | — | — | **gelöscht 2026-09-10** — kein `post-checkout`-Hook oder Client-Sync |
 
 
 > **Status-Disclaimer:** Die Handler sind im HTTP-Lifecycle verdrahtet (nicht als Git-Hook-Scripts). `PushOrchestrator` sitzt zwischen HTTP-Request-Body und `git receive-pack --stateless-rpc`: parst Ref-Update-Pkt-Lines, ruft nach ref-apply `PreReceiveHandler.HandleAsync` pro Ref-Update (außer Delete → übersprungen, solange `BpSyncService.DeleteAsync` NotImplemented), dann `PostReceiveHandler.HandleAsync` für Worktree-Materialization. Side-effect post-apply per Spec §9: Pre-Receive **kann** Push nicht ablehnen, wenn BP-DB-Sync fehlschlägt — Konsistenz-Garantie über BP-DB-Sync + stderr-Log, nicht über Push-Reject. Side-band-64k + ofs-delta Pack-Encoding bleibt obsolet (Hybrid-Ansatz aus §1.3 verworfen 2026-09-10, Spec §2/§3 in SPEC-pre-receive-wiring.md als "obsolete" markiert).
@@ -301,8 +294,8 @@ async Task<PreReceiveResult> HandlePreReceiveAsync(string oldrev, string newrev,
                 break;
 
             case "R":
-                // Wie M mit Rename-Logik (old-name → new-name)
-                // Server-Pull normalisiert spaeter auf canonical Filename
+                // The tree walker reports path changes as delete + add.
+                // Git path renames are not a supported BP rename workflow.
                 break;
         }
     }
@@ -315,8 +308,8 @@ async Task<PreReceiveResult> HandlePreReceiveAsync(string oldrev, string newrev,
 ```csharp
 async Task HandlePostReceiveAsync(string oldrev, string newrev, string refname)
 {
-    await _bpService.SyncToGitAsync();  // BPAProcess lesen, canonical Filenames schreiben
-    // Git erkennt Auto-Renames automatisch (Similarity-Match)
+    await _worktreeSync.MaterializeAsync(serverWorktree); // BP-DB -> server worktree
+    // Bare-Repo wird nicht hier geändert; BP->Git-Commit erfolgt vor Fetch/Push.
 }
 ```
 
@@ -346,127 +339,43 @@ processes_root = "processes"  # Wo XML-Dateien im Worktree liegen
 
 ## 9. BP-Synchronization-Flow
 
-### Pull-Flow (git clone, git pull)
+### Fetch-Flow (git clone, git fetch, git pull)
 
-**Stand 2026-09-11:** **Single-Stage.** CLI auf nur `init` reduziert (siehe §11), post-checkout komplett entfällt:
-
-1. **Single Stage:** `git clone` / `git pull` ruft `git-upload-pack` auf dem Server. Server liefert Pack + Refs. Client-Worktree enthaelt **kanonisch benannte XML-Files** (per #6311, weil Filename = `sanitize(BPAProcess.name) + ".xml"` und der Developer diese Files bereits so commited hat). **BP-DB ist bereits synchron** - der pre-receive `/import /forceid` hat den BP-DB-Stand bei jedem Push mit den Git-Objekten gleichgezogen, daher bekommt der Client auf Pull die Files, die exakt dem aktuellen BP-DB-Stand entsprechen.
-
-Kein Client-seitiger Sync noetig. Kein post-checkout. Kein `bpgit pull`. Kein `bpgit refresh`. Nur Standard-`git`.
-
-(Falls die lokale BP-DB jemals neuer ist als der Git-Stand - z.B. durch direkte BP-Studio-Edits ohne Push - ist das ein **Anti-Pattern** in dieser Architektur. Die korrekte Vorgehensweise ist: Export aus BP Studio -> Commit -> Push. Der pre-receive macht den Rest.)
-
-
-1. **Stage 1 (git-seitig):** `git clone` / `git pull` ruft `git-upload-pack` auf dem Server. Server liefert Pack + Refs. Client-Worktree enthält **kanonisch benannte XML-Files** (per #6311, weil Filename = `sanitize(BPAProcess.name) + ".xml"` und der Developer diese Files bereits so commited hat).
-**Performance-Hinweis** (per Martin #6285): NIEMALS `AutomateC.exe /export` fuer Pull - zu langsam. SqlCommand direkt ist Pflicht.
-
-**Worktree-Invariante** (per Martin #6311): `filename = sanitize(BPAProcess.name) + ".xml"` - derived, niemals manuell editierbar. Worktree enthaelt pure XML + git (kein `snapshot.json`, kein `folders.json`, keine Registry).
-
-**Hinweis seit CLI-Reduktion (2026-09-11):** `git clone` ohne weitere Schritte liefert den vollstaendigen Stand. BP-DB-Sync passiert automatisch im pre-receive bei jedem Push. Kein Client-Workflow braucht BP-DB-Zugriff.
+Before advertising refs for `git-upload-pack`, `BpToGitSyncService` reads BP process XML and folder assignments, materializes the configured server worktree, and commits differences under `processes/` to the default branch using the `bpgit-server` identity. The ref advertisement and upload-pack therefore include changes made directly in BP Studio. The initial clone also receives the current DB state without a manual export.
 
 ### Push-Flow (git push)
 
-**Architektur-Update Phase 4b-follow-up**: Smart-HTTP receive-pack delegiert an `git -C <bare-repo> receive-pack --stateless-rpc` (libgit2 0.32.0 hat keine public Server-seite fuer receive-pack; native CLI delegiert pkt-line parsing + ref-update + pack-index/apply + report-status). pre-receive laeuft aktuell als **side-effect post-apply**, nicht pre-emptive validate-then-apply.
+`PushOrchestrator` delegates pack and ref application to `git receive-pack --stateless-rpc`. Only after receive-pack exits successfully does it run the BP synchronization handlers:
 
-`pre-receive` Hook (siehe #7 Pseudocode) ist Pre-Receive-Validation:
+1. `PreReceiveHandler` compares the old and new commit trees under `processes/` and passes changed XML files to `BpSyncService`.
+2. Adds and modifications are imported through `AutomateC.exe /import`. Process deletion is currently unsupported by design.
+3. `PostReceiveHandler` materializes the current BP-DB state into the configured server worktree.
 
-1. Parse `git diff oldrev..newrev -- processes/` (LibGit2Sharp manueller Tree-Walker)
-2. Pro Aenderung (M/A/D/R) → processid-Lookup + `AutomateC.exe /import /forceid <guid> /overwrite`
-3. Bei Fehler (Lock/Conflict): Push ablehnen mit klarer Fehlermeldung + Owner-Info
-4. Bei Erfolg: `BPAAuditEvents` mit `sCode=P006` wird automatisch von BP-Runtime geschrieben
+This is **side-effect post-apply**, not an actual Git pre-receive gate. A BP import or delete failure is logged and cannot reject or roll back a Git ref update that has already succeeded. BP is authoritative on the next fetch: the server commits the current DB state to the default branch.
 
-`post-receive` Hook:
+### Initial repository
 
-1. Ruft `WorktreeSyncService.MaterializeAsync(targetRoot)` auf (server-seitiges Monitoring; nicht der Import-Pfad, der laeuft im pre-receive via `BpSyncService.ImportAsync`)
-2. BPAAuditEvents wurden bereits geschrieben (pre-receive)
-3. Server-seitige Auto-Rename-Erkennung via `git diff --find-renames` (alter Pfad-Name → neuer XML-`process name`)
-
-### Initial-Push (leeres Repo)
-
-1. `bpgit init` (server-side Admin-Tool) erstellt Bare-Repo + Bare-Repo-Worktree mit folder-aware Layout
-2. `git add . && git commit -m "Initial import"`
-3. User clone: `git clone http://openclawpc:8181/bp-git` (lokal auf OpenClawPC: `git clone http://localhost:8181/bp-git`)
+`bpgit init` creates the bare repository with an initial `.gitignore` commit. The first `clone`/`fetch`/`pull` synchronizes the current BP database into Git automatically.
 
 ---
 
-## 10. Conflicts & Lock-Handling
+## 10. Conflicts and synchronization limits
 
-### Optimistic Locking via lastmodifieddate (MVP1)
-
-- `pre-receive` Hook liest `BPAProcess.lastmodifieddate` zum Zeitpunkt des letzten Pulls (aus serverseitigem Cache, optional)
-- Vergleicht mit aktuellem Wert in BPAProcess
-- Wenn abweichend → Konflikt → Push ablehnen mit Hinweis "BP process was modified outside bpgit, please pull first"
-
-### BPAProcessLock
-
-- Vor `pre-receive` → Check `BPAProcessLock.userid`
-- Wenn Lock vorhanden und nicht von current-user → Lock-Owner anzeigen, Push ablehnen
-- Optional: `--force` Flag fuer Admin-Override
-
-### Multi-User (MVP2, nicht MVP1)
-
-- Pessimistic Locking via `BPAProcessLock` (BP-Studio setzt automatisch beim Edit)
-- bpgit.exe respektiert Locks
-- Konflikt-Resolution: User A locked, User B wartet oder benutzt `--force`
+- Git receive-pack serializes ref updates. The server applies each accepted Git update before attempting BP synchronization.
+- BP-to-Git synchronization runs before refs are advertised for fetch; an import failure after push cannot reject the already-applied update.
+- The server serializes its own push and fetch synchronization operations. Concurrent edits in BP Studio after the preflight sync remain a race; no `BPAProcessLock` check is performed in the receive flow.
+- Deleting a process from Git does not delete it from BP-DB; `DeleteAsync` is intentionally not implemented because of Blue Prism referential dependencies.
+- No `--force` option or client-side BP sync command exists in the server binary.
 
 ---
+## 11. Server binary and initialization
 
-## 11. CLI-Reduktion (per #6295, final 2026-09-11)
+The former client/admin CLI was reduced to `bpgit init` in commit `cbcb604`. That command only created the configured worktree directory; `WorktreeSyncService.MaterializeAsync` already creates it when needed. The CLI project and its empty test project were therefore removed on 2026-10-26. BP import, Git receive-pack orchestration, and worktree materialization remain server-side.
 
-### Subcommands - End-State
-
-Nach Architektur-Switch zu server-side BP-DB-Sync (`PreReceiveHandler` macht `/import /forceid /overwrite` atomar mit jedem Push) ist die CLI auf **ein einziges Subcommand** reduziert — alle anderen Funktionen laufen über die Git-Smart-HTTP-API. Der Server hält die Single Source of Truth für BP-DB und Git, der Client braucht keinen eigenen BP-DB-Zugriff.
-
-| Subcommand | Status | Zweck |
-|---|---|---|
-| `bpgit init` | Admin | Initialisiert Bare-Repo + Worktree auf Server (einmalig pro Repo) |
-
-**Alle anderen Subcommands wurden gestrichen** (Martin-Entscheid 2026-09-11, Konsequenz aus §7 + §9 Architektur):
-
-| Ehemals | Ersetzt durch |
-|---|---|
-| `bpgit commit --force` (Worktree → BP-DB via AutomateC.exe `/import`) | Standard `git commit && git push` — Server-`PreReceiveHandler` macht `/import /forceid /overwrite` atomar mit dem Push (per #6274) |
-| `bpgit pull` (Worktree-Materialisierung gegen lokale BP-DB) | Standard `git pull` — Client bekommt canonical-named Files direkt aus Bare-Repo; BP-DB ist nach jedem Push via PreReceive synchron |
-| `bpgit diff` / `bpgit status` / `bpgit log` | Standard `git diff` / `git status` / `git log` |
-| `bpgit server start/stop/status` | Kestrel-Server läuft als separate Binary `bpgit-server.exe` (eigener Entry-Point in `src/BPGit.Server/Program.cs`) |
-| `bpgit hook install` | Obsolet — alle Hooks sind im HTTP-Handler integriert, kein Shell-Script |
-
-### CLI-Executable
-
-- `bpgit.exe` bleibt im PATH **nur auf dem Server** (OpenClawPC)
-- User benötigt KEIN `bpgit.exe` lokal — nur Standard-`git`
-- Kestrel-Server läuft als separate Binary `bpgit-server.exe` (eigener Entry-Point)
-
-### Architektur-Begründung
-
-Der Server macht die DB-Synchronisierung im pre-receive **atomar mit dem Push** (kein Client-Sync nötig):
-
-```
-Developer pusht XML-Änderung
-     ↓
-HTTP POST /git-receive-pack
-     ↓
-PushOrchestrator
-     ├─► PreReceiveHandler (C# im HTTP-Handler)
-     │   ├─ parsed git diff
-     │   ├─ SQL: BPAProcess WHERE name = @name
-     │   ├─ Lock-Check
-     │   └─ AutomateC.exe /import /forceid /overwrite  ← BP-DB SCHREIBEN
-     ├─► git receive-pack --stateless-rpc              ← Git-Objekte SCHREIBEN
-     └─► PostReceiveHandler (C# im HTTP-Handler)
-         └─ WorktreeSyncService.MaterializeAsync       ← Server-Monitoring (optional)
-
-Beim nächsten git pull:
-     ↓
-HTTP POST /git-upload-pack
-     ↓
-git upload-pack --stateless-rpc                       ← Client bekommt canonical-named Files
-```
-
-Es gibt keinen Workflow, der Client-seitig BP-DB-Zugriff bräuchte — daher kein Bedarf für eine Workstation-CLI.
-
----
-
+- Running `bpgit` starts the Kestrel server; `--serve`, `/s`, and `-s` remain compatibility aliases.
+- `bpgit init [repo-name]` initializes the server bare repository with its initial `.gitignore` commit.
+- Developers use only standard `git`; no client-side bpgit CLI or BP database connection is required.
+- Before advertising upload-pack refs and before receive-pack, the server synchronizes BP→Git. After a receive-pack ref update, it imports Git→BP and materializes the current DB state.
 ## 12. Deployment (MVP1)
 
 ### Voraussetzungen
@@ -529,14 +438,11 @@ git pull  # Client bekommt canonical-named Files direkt aus Bare-Repo
 
 ## 13. Migration Path
 
-### Stand 2026-09-11 (post-CLI-Reduktion)
-
-CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Workflows laufen ueber Standard-`git`. Kein Migrations-Pfad noetig — die Architektur ist final.
-
+The former client CLI was removed on 2026-10-26. Its only remaining command created a worktree directory that the server materializer already creates. The server binary retains `init` for bare-repository setup; developer workstations use standard Git only.
 ### Historische Migrationen (abgeschlossen)
 
 - **Workstation-Shell-Hooks entfernt** (2026-08-30, Spec §13): `bpgit hook install`, `--install-hooks`-Flag, `InstallGitHooksAsync` vollstaendig entfernt (per #6295, Martin-Entscheid).
-- **CLI auf `init` reduziert** (2026-09-11, Commit `cbcb604`): `bpgit commit`/`pull`/`diff`/`status`/`log` ersetzt durch Standard-`git` + Server-seitige Pre-/Post-Receive-Logik.
+- **CLI entfernt** (2026-10-26): Das verbliebene CLI-`init` legte nur das Worktree-Verzeichnis an, das der Server selbst erzeugt. Der Bare-Repo-Bootstrap bleibt als Server-Subcommand verfügbar.
 - **Hooks in HTTP-Handler integriert** (2026-09-10, Commit `82a5e84`): `pre-receive` und `post-receive` als C# im HTTP-Handler, `post-checkout` gestrichen.
 
 ## 14. Open Questions
@@ -546,7 +452,7 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 | HTTPS statt HTTP? | Remote-Zugriff noetig? | nach MVP1 |
 | Port-Wahl | 8181 (BP-Default Resource-PC) vs 80/443 | Martin |
 | Multi-User-MVP2? | BP-Lizenz erlaubt concurrent users? | **resolved 2026-09-12 (Martin)**: Lizenz irrelevant — concurrent Pushes über Git Smart-HTTP API (`receive-pack` serialisiert Ref-Updates atomar pro Receive-Request) |
-| Lock-Strategie | Optimistic vs pessimistic | **resolved 2026-09-12 (Martin)**: optimistic via `lastmodifieddate`-CAS. Pessimistic `HOLDLOCK`/`BPAProcessLock` verworfen — Lock vor `/import` wäre fatal. Multi-Push-Concurrency via Gits Smart-HTTP-Receive-Lock auf Ref-Ebene. |
+| Lock-Strategie | Optimistic vs pessimistic | `HOLDLOCK`/`BPAProcessLock` vor `/import` verworfen. BP→Git-Preflight vor Fetch und Push ist implementiert; ein `lastmodifieddate`-CAS ist noch nicht implementiert, daher bleibt ein Race mit zeitgleichen BP-Studio-Änderungen möglich. |
 | Branch-Strategie | main + feature-branches? | Standard-git, **resolved**: `main` als Default, Feature-Branches pro Developer |
 | Tag-Strategie | Tags fuer Releases? | Optional, Git-Standard |
 | Release-Integration mit BPARelease | git tag → BPARelease? | Nicht MVP1 |
@@ -563,8 +469,8 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 - Phase 4b-follow-up: git --stateless-rpc Delegation
 - Phase 4c: PostReceive-Logik (WorktreeSyncService.MaterializeAsync, server-seitig)
 - Phase 5+ (Hooks-Integration): Pre-/Post-Receive als C# im HTTP-Handler, post-checkout gestrichen (Commit `82a5e84`)
-- Phase 5+ (CLI-Reduktion): CLI auf nur `bpgit init` reduziert (Commit `cbcb604`)
-- xunit-Tests-Welle (12 Test-Commits, 65 gruen + 4 skipped)
+- Server-only binary cleanup: obsolete CLI, serializer, and unused Data repository removed (2026-10-26)
+- Server xUnit suite (96 tests; no local Blue Prism installation required)
 
 ### Offen (Backlog siehe §14)
 
@@ -573,7 +479,7 @@ CLI ist komplett gestrichen bis auf `bpgit init` (Admin-Tool). Alle Developer-Wo
 ### Out of scope / obsolet per Martin 2026-09-12 (zur Info, nicht mehr offen)
 
 - `DeleteAsync`-Implementation — referenzielle Verbindungen zu `BPAProcessBackup`/`BPAObject`/`BPARelease` (kein Cascade-Delete ohne Risiko), gibt `DeleteResult.NotImplemented()` by design zurück
-- HOLDLOCK-Migration + Race-Tests — Lock vor `/import` wäre fatal, optimistic `lastmodifieddate`-CAS reicht
+- BP-DB-`lastmodifieddate`-CAS — noch nicht implementiert; Preflight-Synchronisierung reduziert, aber beseitigt zeitgleiche BP-Studio-Races nicht (siehe §10)
 - Multi-User-MVP2 — Lizenz-Frage irrelevant, Git Smart-HTTP API reicht (siehe §14)
 - IDE-Integration (VS Code Extension) — separates Projekt obsolet, Workstation-Editor/Standard-IDE mit Git-Integration reicht
 - Workboard-Karte `bp-git-pre-receive-wiring` (`866e5346`) — done per Commit `82a5e84` (gestrichen)

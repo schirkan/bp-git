@@ -1,4 +1,5 @@
 using System;
+using System.Data.Common;
 using System.IO;
 using BPGit.Data;
 using Xunit;
@@ -102,20 +103,9 @@ public class ServerConfigTests : IDisposable
         var cfg = ServerConfig.Load(_tempConfigPath);
 
         Assert.True(Path.IsPathRooted(cfg.WorktreePath));
-    }
-
-    [Fact]
-    public void SnapshotPath_CombinesWorktreeDirAndSnapshotFileName()
-    {
-        File.WriteAllText(_tempConfigPath, @"{
-            ""worktreeDir"": ""./processes"",
-            ""snapshotFileName"": ""my-snapshot.json""
-        }");
-
-        var cfg = ServerConfig.Load(_tempConfigPath);
-
-        Assert.EndsWith("my-snapshot.json", cfg.SnapshotPath);
-        Assert.Equal(Path.Combine(cfg.WorktreePath, "my-snapshot.json"), cfg.SnapshotPath);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "processes")),
+            cfg.WorktreePath);
     }
 
     [Fact]
@@ -145,17 +135,25 @@ public class ServerConfigTests : IDisposable
             ""sqlDatabase"": ""bpdb"",
             ""sqlAuth"": ""user"",
             ""sqlUser"": ""myuser"",
-            ""sqlPassword"": ""mypwd""
+            ""sqlPassword"": ""my;pwd""
         }");
 
         var cfg = ServerConfig.Load(_tempConfigPath);
         var conn = cfg.GetEffectiveConnectionString();
+        var parsed = new DbConnectionStringBuilder { ConnectionString = conn };
 
-        Assert.Contains("Server=MYHOST\\SQLEXPRESS", conn);
-        Assert.Contains("Database=bpdb", conn);
-        Assert.Contains("User Id=myuser", conn);
-        Assert.Contains("Password=mypwd", conn);
+        Assert.Equal("MYHOST\\SQLEXPRESS", parsed["Server"]);
+        Assert.Equal("bpdb", parsed["Database"]);
+        Assert.Equal("myuser", parsed["User ID"]);
+        Assert.Equal("my;pwd", parsed["Password"]);
     }
+
+    [Fact]
+    public void GetEffectiveConnectionString_UserMode_RequiresCredentials()
+    {
+        var cfg = new ServerConfig { SqlAuth = "user" };
+
+        Assert.Throws<InvalidOperationException>(cfg.GetEffectiveConnectionString);    }
 
     [Fact]
     public void AutomateCPath_DefaultsToBpInstallPath_WhenAbsentFromJson()

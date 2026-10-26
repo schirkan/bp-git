@@ -10,7 +10,7 @@ namespace BPGit.Server.Services;
 /// Orchestriert das processid-Lookup + <c>/import</c> pro Git-Diff-Eintrag.
 /// Wird vom <see cref="GitHttp.GitHttpHandler"/> pre-receive-Pfad aufgerufen.
 ///
-/// Siehe <c>context/SPEC-git-server.md</c> Kapitel 4 (processid-Mapping) +
+/// Siehe <c>specs/SPEC-git-server.md</c> Kapitel 4 (processid-Mapping) +
 /// Kapitel 7 (Server-Side Hooks).
 ///
 /// XML-Konventionen:
@@ -43,16 +43,6 @@ public sealed class BpSyncService : IBpSyncService
                 $"Wahrscheinlich Rename ohne vorherigen Pull oder BP-DB wurde extern geloescht.");
         }
 
-        // Lock-Check vor /import
-        var lockInfo = await _db.GetProcessLockAsync(processId.Value);
-        if (lockInfo is not null)
-        {
-            return ImportResult.Failure(
-                $"Modify: process '{oldName}' -> '{newName}' locked by " +
-                $"{lockInfo.Username ?? lockInfo.UserId.ToString()} on " +
-                $"{lockInfo.MachineName ?? "(unknown)"} since {lockInfo.LockDateTime:O}.");
-        }
-
         return await ImportAsync(xmlContent, forceId: processId.Value, label: $"Modify {oldName}->{newName}");
     }
 
@@ -73,9 +63,9 @@ public sealed class BpSyncService : IBpSyncService
     }
 
     /// <summary>
-    /// Loescht einen Process (via SqlCommand — AutomateC.exe hat kein /removeprocess).
-    /// Out of scope per design per Martin 2026-09-12: referenzielle Verbindungen zu `BPAProcessBackup`/`BPAObject`/`BPARelease`
-    /// verhindern Delete ohne Cascade-Logik. Wirft `DeleteResult.NotImplemented()` by design. Phase 4b-follow-up obsolet.
+    /// Reports process deletion as unsupported. Referential links to
+    /// <c>BPAProcessBackup</c>, <c>BPAObject</c>, and <c>BPARelease</c> require
+    /// cascade handling, which is out of scope by design.
     /// </summary>
     public async Task<DeleteResult> DeleteAsync(string name)
     {
@@ -85,17 +75,8 @@ public sealed class BpSyncService : IBpSyncService
             return DeleteResult.NotFound($"Delete: process '{name}' not found in BP-DB.");
         }
 
-        var lockInfo = await _db.GetProcessLockAsync(processId.Value);
-        if (lockInfo is not null)
-        {
-            return DeleteResult.Locked(
-                $"Delete: process '{name}' locked by {lockInfo.Username ?? lockInfo.UserId.ToString()} on " +
-                $"{lockInfo.MachineName ?? "(unknown)"} since {lockInfo.LockDateTime:O}.");
-        }
-
         return DeleteResult.NotImplemented(
-            $"Delete of process '{name}' (processid={processId}) not yet implemented. " +
-            $"TODO Phase 4b-follow-up: SqlCommand DELETE BPAProcess + BPAAuditEvent-Insert (sCode=P005).");
+            $"Delete of process '{name}' (processid={processId}) is not supported by design.");
     }
 
     private async Task<ImportResult> ImportAsync(string xmlContent, Guid? forceId, string label)
@@ -157,9 +138,8 @@ public sealed record ImportResult(bool Ok, string? Message)
     public static ImportResult Failure(string message) => new(false, message);
 }
 
-public sealed record DeleteResult(bool Ok, string? Message, bool IsLocked = false, bool IsNotFound = false)
+public sealed record DeleteResult(bool Ok, string? Message, bool IsNotFound = false)
 {
-    public static DeleteResult NotFound(string message) => new(false, message, false, true);
-    public static DeleteResult Locked(string message) => new(false, message, true, false);
+    public static DeleteResult NotFound(string message) => new(false, message, true);
     public static DeleteResult NotImplemented(string message) => new(false, message);
 }

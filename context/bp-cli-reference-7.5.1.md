@@ -246,10 +246,8 @@ Credential-Typen: General, BasicAuthentication, OAuth2ClientCredentials, OAuth2J
 | Process-Import (Test) | `/import <filespec>` — NICHT fuer bpgit-Workflow | direkter SqlCommand in `CommitCommand.cs` (Phase 2a) |
 | Process-Export | `/export <processname>` | direkter SQL via `BPAProcess.processxml` |
 
-**Wichtig fuer bpgit-Design:**
-- `bpgit pull` nutzt `BPAProcess` direkt (nicht CLI)
-- `bpgit commit` nutzt SqlCommand direkt (nicht CLI) — Martin-Direktive "KEIN automateC.exe-Round-Trip"
-- `bpgit log` liest `BPAAuditEvents` (Per-Edit-Log) oder `BPAReleaseEntry` (Release-Manifest) — **nicht** `BPAProcessBackup` (nur Autosave)
+**Historische bpgit-Notiz (Phase 2, nicht mehr aktueller Funktionsumfang):**
+Die damaligen `bpgit pull`-, `commit`- und `log`-Kommandos wurden im Rahmen des Architekturwechsels entfernt. Aktuell laufen Git-Push-Importe und BP-Datenbankzugriffe ausschließlich serverseitig.
 
 ---
 

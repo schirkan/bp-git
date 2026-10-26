@@ -1,28 +1,28 @@
+using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace BPGit.Data;
 
 /// <summary>
-/// Unified configuration for both Server- and CLI-modes, loaded from
+/// Server configuration loaded from
 /// <c>bpgit.json</c> next to the executable (or via <paramref name="configPath"/>
 /// override). All fields have defaults so a fresh install with an empty config
 /// still works.
 ///
 /// Sections (logical, not literal JSON sections):
 ///  - Server-side: <c>listenUrls</c>, <c>repoRoot</c>, <c>repoName</c>
-///  - BP-DB connection (shared): <c>bpServer</c>, <c>bpDatabase</c>, <c>bpAuth</c>,
-///    <c>bpUser</c>, <c>bpPassword</c>
-///  - Worktree / CLI-side: <c>worktreeDir</c>, <c>snapshotFileName</c>,
-///    <c>automatecPath</c>, <c>cliAuthMode</c>, <c>cliUsername</c>, <c>cliPassword</c>
+///  - BP-DB connection: <c>sqlServer</c>, <c>sqlDatabase</c>, <c>sqlAuth</c>,
+///    <c>sqlUser</c>, <c>sqlPassword</c>
+///  - Server-side: <c>worktreeDir</c>, <c>automatecPath</c>
 ///
 /// Default config-path: <c>AppContext.BaseDirectory/bpgit.json</c> (the directory
 /// containing the <c>bpgit</c> binary). Override via:
-///  - CLI: <c>--serve /path/to/config.json</c> (server-mode positional arg)
+///  - Server: positional config-path argument
 ///  - Test: <c>ServerConfig.Load("/path/to/config.json")</c>
 ///
-/// Lives in BPGit.Data to avoid a circular project dependency (BPGit.Server
-/// -> BPGit.Cli -> BPGit.Server) when both Server and CLI need to use this type.
+/// Lives in BPGit.Data because server services and repository initialization
+/// both need this configuration.
 /// </summary>
 public sealed class ServerConfig
 {
@@ -71,29 +71,13 @@ public sealed class ServerConfig
     [JsonPropertyName("sqlPassword")]
     public string? SqlPassword { get; init; }
 
-    /// <summary>CLI output directory for pulled/written BP process XML files. Default: ./processes</summary>
+    /// <summary>Server worktree directory for materialized BP process XML files. Must be the repository's processes directory. Relative paths resolve against the executable directory.</summary>
     [JsonPropertyName("worktreeDir")]
     public string WorktreeDir { get; init; } = "./processes";
-
-    /// <summary>Snapshot-state filename inside <see cref="WorktreeDir"/>. Default: bpgit-snapshot.json</summary>
-    [JsonPropertyName("snapshotFileName")]
-    public string SnapshotFileName { get; init; } = "bpgit-snapshot.json";
 
     /// <summary>Path to AutomateC.exe. Default: standard install location.</summary>
     [JsonPropertyName("automatecPath")]
     public string AutomateCPath { get; init; } = @"C:\Program Files\Blue Prism Limited\Blue Prism Automate\AutomateC.exe";
-
-    /// <summary>Auth mode for AutomateC.exe: <c>sso</c> or <c>user</c>.</summary>
-    [JsonPropertyName("cliAuthMode")]
-    public string CliAuthMode { get; init; } = "sso";
-
-    /// <summary>AutomateC.exe username (only used when <see cref="CliAuthMode"/> = <c>user</c>).</summary>
-    [JsonPropertyName("cliUsername")]
-    public string? CliUsername { get; init; }
-
-    /// <summary>AutomateC.exe password (only used when <see cref="CliAuthMode"/> = <c>user</c>).</summary>
-    [JsonPropertyName("cliPassword")]
-    public string? CliPassword { get; init; }
 
     /// <summary>Absolute path to the bare repo (derived from <see cref="RepoRoot"/> + <see cref="RepoName"/>).
     /// Relative <see cref="RepoRoot"/> is resolved against <c>AppContext.BaseDirectory</c> so the
@@ -110,28 +94,45 @@ public sealed class ServerConfig
         }
     }
 
-    /// <summary>Effective snapshot path (derived from <see cref="WorktreeDir"/> + <see cref="SnapshotFileName"/>).</summary>
-    [JsonIgnore]
-    public string SnapshotPath => Path.GetFullPath(Path.Combine(WorktreeDir, SnapshotFileName));
-
     /// <summary>Effective worktree directory (absolute path resolved from <see cref="WorktreeDir"/>).</summary>
     [JsonIgnore]
-    public string WorktreePath => Path.GetFullPath(WorktreeDir);
+    public string WorktreePath => Path.GetFullPath(
+        Path.IsPathRooted(WorktreeDir)
+            ? WorktreeDir
+            : Path.Combine(AppContext.BaseDirectory, WorktreeDir));
 
     /// <summary>
-    /// Builds the ADO.NET connection string from the BP_* fields.
-    /// SSO mode: <c>Server=...;Database=...;Integrated Security=SSPI;TrustServerCertificate=true;</c>
-    /// User mode: appends <c>User Id=...;Password=...;</c>
+    /// Builds the ADO.NET connection string from the SQL configuration.
+    /// SQL-auth credentials are included only in the returned connection string;
+    /// callers must not log it.
     /// </summary>
     public string GetEffectiveConnectionString()
     {
+        var builder = new DbConnectionStringBuilder
+        {
+            ["Server"] = SqlServer,
+            ["Database"] = SqlDatabase,
+            ["TrustServerCertificate"] = true,
+        };
+
         if (SqlAuth.Equals("sso", StringComparison.OrdinalIgnoreCase))
         {
-            return $"Server={SqlServer};Database={SqlDatabase};Integrated Security=SSPI;TrustServerCertificate=true;";
+            builder["Integrated Security"] = "SSPI";
+            return builder.ConnectionString;
         }
-        var userPart = string.IsNullOrWhiteSpace(SqlUser) ? "" : $"User Id={SqlUser};";
-        var pwdPart = string.IsNullOrWhiteSpace(SqlPassword) ? "" : $"Password={SqlPassword};";
-        return $"Server={SqlServer};Database={SqlDatabase};{userPart}{pwdPart}TrustServerCertificate=true;";
+
+        if (!SqlAuth.Equals("user", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Unsupported SQL authentication mode '{SqlAuth}'. Expected 'sso' or 'user'.");
+        }
+        if (string.IsNullOrWhiteSpace(SqlUser) || string.IsNullOrWhiteSpace(SqlPassword))
+        {
+            throw new InvalidOperationException("sqlUser and sqlPassword are required when sqlAuth is 'user'.");
+        }
+
+        builder["User ID"] = SqlUser;
+        builder["Password"] = SqlPassword;
+        return builder.ConnectionString;
     }
 
     /// <summary>

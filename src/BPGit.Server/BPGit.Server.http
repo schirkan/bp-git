@@ -1,6 +1,6 @@
 @BPGit.Server_HostAddress = http://localhost:5215
 
-GET {{BPGit.Server_HostAddress}}/weatherforecast/
+GET {{BPGit.Server_HostAddress}}/healthz
 Accept: application/json
 
 ###

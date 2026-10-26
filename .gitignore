@@ -59,15 +59,9 @@ TestResults/
 # --- bpgit runtime/test artifacts ---
 .bpgit/                        # runtime config dir (legacy; superseded by unified bpgit.json)
 processes/                      # test worktree from smoke-phase4c.ps1
-src/BPGit.Server/BPGit.Server.http   # .http test artifact from `dotnet new webapi` scaffold
+# src/BPGit.Server/BPGit.Server.http  # tracked VS Code REST Client health-check smoke test
 src/BPGit.Server/Properties/    # launchSettings.json (debug-only)
 
-# --- bpgit config (sensitive: BP-credentials land in plaintext) ---
-# The committed src/BPGit.Server/bpgit.json is a harmless template (no
-# sqlPassword). If you override defaults for a local install — especially
-# sqlAuth="user" with sqlPassword filled in — copy the template to a
-# separate file (e.g. bpgit.local.json, bpgit.production.json) and pass it
-# via --serve. NEVER commit credentials to the tracked template.
 # --- bpgit config (sensitive: BP-credentials land in plaintext) ---
 # The committed src/BPGit.Server/bpgit.json is a harmless template (no
 # sqlPassword). If you override defaults for a local install - especially
@@ -84,4 +78,3 @@ bpgit.production.json
 bpgit.*.local.json
 # --- Blue Prism Education License (lokal, nie committen) ---
 *.lic
-

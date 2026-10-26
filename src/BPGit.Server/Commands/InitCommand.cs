@@ -7,7 +7,7 @@ using LibGit2Sharp;
 namespace BPGit.Server.Commands;
 
 /// <summary>
-/// <c>bpgit-server init</c> subcommand — creates a bare git repo at
+/// <c>bpgit init</c> subcommand — creates a bare git repo at
 /// <c>{RepoRoot}/{RepoName}.git</c> AND seeds it with an initial commit containing
 /// a bpgit-curated <c>.gitignore</c> (XML-only whitelist).
 ///
@@ -19,11 +19,11 @@ public static class InitCommand
 {
     /// <summary>
     /// bpgit-curated <c>.gitignore</c>: allow-list approach — ignore everything, then
-    /// whitelist directories, XML files, <c>.gitignore</c> itself, and <c>.bpgit/config.toml</c>.
+    /// whitelist directories, XML files, and <c>.gitignore</c>.
     /// </summary>
     public const string GitIgnoreContent = """
-        # bpgit: only allow XML files (BP process definitions) plus bpgit config
-        # See context/SPEC-git-server.md Kapitel 3 "Worktree-Layout"
+        # bpgit: only allow XML files (BP process definitions) plus .gitignore
+        # See specs/SPEC-git-server.md Kapitel 3 "Worktree-Layout"
 
         # Ignore everything by default
         *
@@ -37,9 +37,6 @@ public static class InitCommand
         # Allow .gitignore itself
         !.gitignore
 
-        # Allow bpgit config directory + files
-        !.bpgit/
-        !.bpgit/config.toml
         """;
 
     public static int Run(ServerConfig cfg)
@@ -69,7 +66,7 @@ public static class InitCommand
 
         Console.WriteLine($"[bpgit-server init] Initialized bare repository at {repoPath}");
         Console.WriteLine($"[bpgit-server init] Initial commit seeded with .gitignore (XML-only whitelist).");
-        Console.WriteLine($"[bpgit-server init] Next: start the server with `bpgit-server` (no args) or run as Windows service.");
+        Console.WriteLine($"[bpgit-server init] Next: start the server with `bpgit` (no args) or run as Windows service.");
         return 0;
     }
 
@@ -78,27 +75,13 @@ public static class InitCommand
     /// Uses LibGit2Sharp's low-level <see cref="ObjectDatabase"/> APIs to bypass
     /// the working tree (a bare repo has none).
     ///
-    /// LibGit2Sharp 0.32.0 API notes:
-    /// <list type="bullet">
-    ///   <item><c>CreateBlob(string)</c> — takes string content directly (UTF-8 internal).</item>
-    ///   <item><c>TreeDefinition.Add(path, oid, mode)</c> — builder pattern for tree entries.</item>
-    ///   <item><c>CreateCommit(author, committer, message, tree, params ObjectId[] parents)</c> — variadic parents, empty array for initial.</item>
-    ///   <item><c>Refs.Add(name, ObjectId)</c> — for unborn refs (no <c>UpdateTarget(string, ObjectId)</c> overload in 0.32.0).</item>
-    /// </list>
+    /// Creates the blob from a stream because the string overload treats its argument as a file path.
     /// </summary>
     private static void CreateInitialCommitWithGitIgnore(string repoPath)
     {
         using var repo = new Repository(repoPath);
 
-        // 1. Create the .gitignore blob.
-        //    WICHTIG: In LibGit2Sharp 0.32.0 gibt es folgende CreateBlob-Overloads:
-        //      - CreateBlob(Stream stream)          -- liest Content aus dem Stream
-        //      - CreateBlob(string path)            -- interpretiert als DATEIPFAD (nicht Content!)
-        //      - CreateBlob(byte[] data)            -- nicht (mehr) vorhanden in 0.32.0
-        //    Wir nutzen den Stream-Overload mit MemoryStream-Wrapper, weil:
-        //      a) kein Temp-File noetig (kein Cleanup-Aufwand)
-        //      b) funktioniert in bare repos (kein Working-Directory-Pfad noetig)
-        //      c) der string-Overload wuerde sonst unsere .gitignore-Inhalte als Pfad interpretieren
+        // Create the .gitignore blob without a temporary file.
         using var gitignoreStream = new MemoryStream(Encoding.UTF8.GetBytes(GitIgnoreContent));
         var blob = repo.ObjectDatabase.CreateBlob(gitignoreStream);
 
@@ -107,9 +90,7 @@ public static class InitCommand
         treeDef.Add(".gitignore", blob.Id, Mode.NonExecutableFile);
         var tree = repo.ObjectDatabase.CreateTree(treeDef);
 
-        // 3. Create the initial commit (no parents via empty IEnumerable<Commit>)
-        //    LibGit2Sharp 0.32.0 CreateCommit: (Signature, Signature, string, Tree, IEnumerable<Commit>, Boolean amend)
-        //    -- IEnumerable<Commit> ist required (kein params), Boolean ist required (positional, heisst nicht 'amend').
+        // Create the initial commit with no parents.
         var author = new Signature("bpgit-server", "noreply@openclawpc", DateTimeOffset.UtcNow);
         var commit = repo.ObjectDatabase.CreateCommit(
             author, author,
@@ -118,14 +99,10 @@ public static class InitCommand
             Array.Empty<Commit>(),
             false);
 
-        // 4. Create refs/heads/main (unborn branch in fresh bare repo)
         repo.Refs.Add("refs/heads/main", commit.Id);
 
-        // 5. Update HEAD to point to refs/heads/main explicitly.
-        //    LibGit2's bare-repo default is refs/heads/master, but our convention is
-        //    refs/heads/main. Without this, HEAD is symbolic to refs/heads/master
-        //    (non-existent) and `git show HEAD:.gitignore` fails.
-        var headRef = repo.Refs["HEAD"];
-        repo.Refs.UpdateTarget(headRef, "refs/heads/main");
+        // Point HEAD symbolically to main so clients and the server can resolve
+        // the default branch after initialization.
+        repo.Refs.Add("HEAD", "refs/heads/main", allowOverwrite: true);
     }
 }

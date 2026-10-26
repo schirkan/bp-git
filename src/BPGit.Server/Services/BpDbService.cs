@@ -7,9 +7,9 @@ using Microsoft.Data.SqlClient;
 namespace BPGit.Server.Services;
 
 /// <summary>
-/// DB-Wrapper fuer BP-DB-Lookups (BPAProcess + BPAProcessLock + BPATree + BPAGroup + BPAGroupProcess).
-/// Wird vom pre-receive Hook (processid-Lookup) und von WorktreeSyncService
-/// (Materialization BP-DB → Worktree) verwendet.
+/// DB-Wrapper fuer BP-DB-Lookups (BPAProcess + BPATree + BPAGroup + BPAGroupProcess).
+/// Wird vom PreReceive-Prozess-Lookup und von WorktreeSyncService
+/// (BP-DB → Server-Worktree/Git) verwendet.
 ///
 /// Connection-Pooling laeuft automatisch via .NET's built-in <see cref="SqlConnection"/>
 /// pool (Connection-String identisch fuer mehrere Calls).
@@ -36,54 +36,6 @@ public sealed class BpDbService : IBpDbService
         return result is Guid g ? g : null;
     }
 
-    /// <summary>Lookup <c>BPAProcess.lastmodifieddate</c> by processid. Wird fuer Optimistic-Lock-Check verwendet.</summary>
-    public async Task<DateTime?> GetLastModifiedAsync(Guid processId)
-    {
-        await using var conn = new SqlConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT lastmodifieddate FROM BPAProcess WHERE processid = @id";
-        cmd.Parameters.AddWithValue("@id", processId);
-        var result = await cmd.ExecuteScalarAsync();
-        return result is DateTime dt ? dt : null;
-    }
-
-    /// <summary>Lookup <c>BPAProcessLock</c> fuer eine processid. Returns null wenn kein Lock.</summary>
-    public async Task<BpaProcessLockInfo?> GetProcessLockAsync(Guid processId)
-    {
-        await using var conn = new SqlConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT l.lockdatetime, l.userid, l.machinename, u.username
-            FROM BPAProcessLock l
-            LEFT JOIN BPAUser u ON u.userid = l.userid
-            WHERE l.processid = @id";
-        cmd.Parameters.AddWithValue("@id", processId);
-        await using var rdr = await cmd.ExecuteReaderAsync();
-        if (await rdr.ReadAsync())
-        {
-            return new BpaProcessLockInfo(
-                LockDateTime: rdr.GetDateTime(0),
-                UserId: rdr.GetGuid(1),
-                MachineName: rdr.IsDBNull(2) ? null : rdr.GetString(2),
-                Username: rdr.IsDBNull(3) ? null : rdr.GetString(3));
-        }
-        return null;
-    }
-
-    /// <summary>Lookup <c>BPAProcess.name</c> by processid (inverse Lookup fuer Status-Reporting).</summary>
-    public async Task<string?> GetProcessNameAsync(Guid processId)
-    {
-        await using var conn = new SqlConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT name FROM BPAProcess WHERE processid = @id";
-        cmd.Parameters.AddWithValue("@id", processId);
-        var result = await cmd.ExecuteScalarAsync();
-        return result is string s ? s : null;
-    }
-
     /// <summary>
     /// Read all processes with name + xml content. Used by WorktreeSyncService for materialization.
     /// </summary>
@@ -91,14 +43,14 @@ public sealed class BpDbService : IBpDbService
     {
         var results = new List<BpProcessRow>();
         await using var conn = new SqlConnection(_connectionString);
-        await conn.OpenAsync();
+        await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT processid, name, processxml
             FROM BPAProcess
             WHERE name IS NOT NULL AND name <> ''";
-        await using var rdr = await cmd.ExecuteReaderAsync();
-        while (await rdr.ReadAsync())
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        while (await rdr.ReadAsync(ct))
         {
             results.Add(new BpProcessRow(
                 ProcessId: rdr.GetGuid(0),
@@ -121,14 +73,14 @@ public sealed class BpDbService : IBpDbService
         var memberships = new List<ProcessMembership>();
 
         await using var conn = new SqlConnection(_connectionString);
-        await conn.OpenAsync();
+        await conn.OpenAsync(ct);
 
         // Trees (only Processes=2 and Objects=3)
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = "SELECT id, name FROM BPATree WHERE id IN (2, 3) ORDER BY id";
-            await using var rdr = await cmd.ExecuteReaderAsync();
-            while (await rdr.ReadAsync())
+            await using var rdr = await cmd.ExecuteReaderAsync(ct);
+            while (await rdr.ReadAsync(ct))
                 trees.Add(new Tree { Id = rdr.GetInt32(0), Name = rdr.GetString(1) });
         }
 
@@ -136,8 +88,8 @@ public sealed class BpDbService : IBpDbService
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = "SELECT id, treeid, name FROM BPAGroup WHERE treeid IN (2, 3)";
-            await using var rdr = await cmd.ExecuteReaderAsync();
-            while (await rdr.ReadAsync())
+            await using var rdr = await cmd.ExecuteReaderAsync(ct);
+            while (await rdr.ReadAsync(ct))
                 groups.Add(new Group
                 {
                     Id = rdr.GetGuid(0),
@@ -150,7 +102,7 @@ public sealed class BpDbService : IBpDbService
         // Memberships (M:N Process-Group). Use a single parameter containing the
         // comma-separated group IDs and SQL Server's STRING_SPLIT, so the IN-list
         // comes from a typed parameter (no string concatenation). Mirrors the
-        // Dapper-style IN @groupIds pattern used in ProcessRepository.GetFolderStructureAsync.
+        // Parameterized group-id lookup for the selected BP trees.
         if (groups.Count > 0)
         {
             var groupIdsCsv = string.Join(",", groups.Select(g => g.Id));
@@ -161,8 +113,8 @@ public sealed class BpDbService : IBpDbService
                     FROM BPAGroupProcess
                     WHERE groupid IN (SELECT TRY_CONVERT(uniqueidentifier, value) FROM STRING_SPLIT(@groupIdsCsv, ','))";
                 cmd.Parameters.AddWithValue("@groupIdsCsv", groupIdsCsv);
-                await using var rdr = await cmd.ExecuteReaderAsync();
-                while (await rdr.ReadAsync())
+                await using var rdr = await cmd.ExecuteReaderAsync(ct);
+                while (await rdr.ReadAsync(ct))
                     memberships.Add(new ProcessMembership
                     {
                         GroupId = rdr.GetGuid(0),
@@ -174,11 +126,5 @@ public sealed class BpDbService : IBpDbService
         return new FolderStructure(trees, groups, memberships);
     }
 }
-
-public sealed record BpaProcessLockInfo(
-    DateTime LockDateTime,
-    Guid UserId,
-    string? MachineName,
-    string? Username);
 
 public sealed record BpProcessRow(Guid ProcessId, string Name, string? XmlContent);

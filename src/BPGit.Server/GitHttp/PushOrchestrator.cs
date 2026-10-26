@@ -14,40 +14,46 @@ namespace BPGit.Server.GitHttp;
 /// Orchestrates the smart-HTTP receive-pack flow (C# im HTTP-Handler, kein Git-Hook-Script)
 /// documented in <c>specs/SPEC-pre-receive-wiring.md</c> §1.3:
 ///
-///  1. Read the request body into a memory buffer.
-///  2. Parse ref-update commands from the pkt-line section
+///  1. Before reading the body, synchronize BP-DB to the default branch so
+///     stale client refs are rejected by normal receive-pack validation.
+///  2. Read the request body into a memory buffer.
+///  3. Parse ref-update commands from the pkt-line section
 ///     (the binary pack-data section that follows the flush packet is
 ///      forwarded verbatim to native <c>git receive-pack --stateless-rpc</c>).
-///  3. Spawn <c>git receive-pack</c>, pipe the buffered body in,
+///  4. Spawn <c>git receive-pack</c>, pipe the buffered body in,
 ///     pipe stdout (report-status) back to the response.
-///  4. On git-exit 0 (pack applied, refs updated), run the Pre-Receive
-///     handler as **side-effect post-apply** (per Spec §9 Architektur-Update
-///     + SPEC-pre-receive-wiring.md §1.3). This is the documented MVP-1
-///     trade-off: pre-validate cannot reject the push today, but BP-DB
-///     gets synced so downstream <c>git pull</c> / <c>git clone</c> sees
-///     consistent XML state.
-///  5. Run the Post-Receive handler for worktree materialization
+///  5. On git-exit 0 (pack applied, refs updated), run the BP import handler
+///     as **side-effect post-apply** (per Spec §9 Architektur-Update
+///     + SPEC-pre-receive-wiring.md §1.3). An import failure cannot reject
+///     the applied update; BP-DB is reconciled into Git on the next fetch.
+///  6. Run the Post-Receive handler for worktree materialization
 ///     (<c>WorktreeSyncService.MaterializeAsync</c>).
 ///
 /// Ref-updates with <c>new-rev == 0000…0</c> (delete) are skipped because
-/// <see cref="BpSyncService.DeleteAsync"/> is NotImplemented (Phase 4b-follow-up).
+/// process deletion is out of scope by design.
 /// </summary>
 public sealed class PushOrchestrator
 {
     private readonly PreReceiveHandler _preReceive;
     private readonly PostReceiveHandler _postReceive;
+    private readonly BpToGitSyncService _bpToGitSync;
     private readonly ServerConfig _cfg;
+    private readonly RepositoryOperationLock _operationLock;
     private readonly ILogger<PushOrchestrator>? _logger;
 
     public PushOrchestrator(
         PreReceiveHandler preReceive,
         PostReceiveHandler postReceive,
+        BpToGitSyncService bpToGitSync,
         ServerConfig cfg,
+        RepositoryOperationLock operationLock,
         ILogger<PushOrchestrator>? logger = null)
     {
         _preReceive = preReceive;
         _postReceive = postReceive;
+        _bpToGitSync = bpToGitSync;
         _cfg = cfg;
+        _operationLock = operationLock;
         _logger = logger;
     }
 
@@ -65,8 +71,29 @@ public sealed class PushOrchestrator
         Stream responseBody,
         CancellationToken externalCt)
     {
+        await _operationLock.WaitAsync(externalCt);
+        try
+        {
+            return await ExecuteLockedAsync(repoPath, requestBody, responseBody, externalCt);
+        }
+        finally
+        {
+            _operationLock.Release();
+        }
+    }
+
+    private async Task<PushOrchestrationResult> ExecuteLockedAsync(
+        string repoPath,
+        Stream requestBody,
+        Stream responseBody,
+        CancellationToken externalCt)
+    {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
         cts.CancelAfter(DefaultTimeout);
+
+        // Bring the default branch up to date before receive-pack checks the
+        // client's old ref. Stale pushes then fail Git's normal ref validation.
+        await _bpToGitSync.SyncUnderRepositoryLockAsync(repoPath, cts.Token);
 
         // 1. Buffer request body. MVP-1 pushes are small (BP-DB-process XML,
         //    single-user, LAN-only). Memory cost ~10 KB / push typical.
@@ -174,8 +201,7 @@ public sealed class PushOrchestrator
         {
             ct.ThrowIfCancellationRequested();
 
-            // Skip deletes: BpSyncService.DeleteAsync is NotImplemented
-            // (Phase 4b-follow-up, see SPEC-pre-receive-wiring §1.3).
+            // Skip deletes: process deletion is out of scope by design.
             // Skipping prevents pushing deletes from blocking BP-DB sync
             // for the modify/add ref-updates in the same push.
             if (IsZeroSha(update.NewRev))

@@ -4,42 +4,40 @@ using BPGit.Server.GitHttp;
 using BPGit.Server.Services;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 
-// Unified entry point for both Server- and CLI-modes.
-//
-// Server-Mode (Kestrel):  bpgit-server --serve [config-path]
-//                         bpgit-server /s      [config-path]
-//                         bpgit-server -s      [config-path]
-//                         bpgit-server --serve init [repo-name]
-//                         bpgit-server --serve init my-repo
-//
-// CLI-Mode (default):      bpgit-server init
-//                         bpgit-server pull
-//                         bpgit-server status
-//                         bpgit-server diff  [processid]
-//                         bpgit-server log    [--limit N] [--processid guid] [--since YYYY-MM-DD] [--event SCODE]
-//                         bpgit-server commit --force
-//
-// Internal sub-commands (server-side bare-repo bootstrap) live under --serve
-// so they don't collide with CLI's worktree-space commands.
+// Server entry point. The optional --serve, /s, and -s flags are retained for
+// compatibility; without a flag the binary also starts the server.
 
 public static partial class Program
 {
     static Task<int> Main(string[] args)
     {
-        // Dispatch: --serve [config-path] | /s [config-path] | -s [config-path] starts server mode
-        if (args.Length > 0 && IsServerFlag(args[0]))
+        var serverArgs = args.Length > 0 && IsServerFlag(args[0])
+            ? args[1..]
+            : args;
+        if (serverArgs.Length > 0 && IsHelpFlag(serverArgs[0]))
         {
-            var serverArgs = args.Length > 1 ? args[1..] : Array.Empty<string>();
-            return Task.FromResult(RunServer(serverArgs));
+            PrintHelp();
+            return Task.FromResult(0);
         }
 
-        // CLI mode: delegate to BPGit.Cli (its Program.Main is the static entry
-        // point of the referenced assembly).
-        return BPGit.Cli.Program.Main(args);
+        return Task.FromResult(RunServer(serverArgs));
     }
 
     static bool IsServerFlag(string flag) =>
         flag == "--serve" || flag == "/s" || flag == "-s";
+
+    static bool IsHelpFlag(string flag) =>
+        flag == "--help" || flag == "-h" || flag == "/?";
+
+    static void PrintHelp()
+    {
+        Console.WriteLine("bpgit - Blue Prism Git HTTP server");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  bpgit [config-path]              Start the server");
+        Console.WriteLine("  bpgit [--serve] init [repo-name] Initialize a bare repository");
+        Console.WriteLine("  bpgit --help                     Show this help");
+    }
 
     static int RunServer(string[] args)
     {
@@ -54,8 +52,7 @@ public static partial class Program
 
         var cfg = ServerConfig.Load(configPath);
 
-        // Server-Mode subcommand: `bpgit --serve init [repo]` - runs once and exits.
-        // Without flag, unified binary runs in CLI mode where `init` is the CLI init.
+        // `bpgit [--serve] init [repo]` initializes the bare repository and exits.
         if (remainingArgs.Length > 0 && remainingArgs[0].Equals("init", StringComparison.OrdinalIgnoreCase))
         {
             var overrideName = (remainingArgs.Length >= 2 && !string.IsNullOrWhiteSpace(remainingArgs[1]))
@@ -75,27 +72,21 @@ public static partial class Program
                 SqlUser = cfg.SqlUser,
                 SqlPassword = cfg.SqlPassword,
                 WorktreeDir = cfg.WorktreeDir,
-                SnapshotFileName = cfg.SnapshotFileName,
                 AutomateCPath = cfg.AutomateCPath,
-                CliAuthMode = cfg.CliAuthMode,
-                CliUsername = cfg.CliUsername,
-                CliPassword = cfg.CliPassword,
             };
 
             return InitCommand.Run(cfg);
         }
 
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = WebApplication.CreateBuilder(Array.Empty<string>());
         builder.WebHost.UseUrls(cfg.ListenUrls.ToArray());
 
         // ------------------------------------------------------------------
         // Auth-Setup
         //
         // Heutiger Stand (post Code-Review 2026-08-30):
-        //  - /admin/* und /healthz waren AllowAnonymous() — ein MVP-Smoke-Test-
-        //    Kompromiss (vor Hook-Wiring, Phase 5+ geplant — siehe Spec §9 + Finding #1).
-        //    Inzwischen entfernt: /admin/db-lookup, /admin/db-lock, /admin/sync-worktree.
-        //    Diagnose-Funktionen wandern in CLI-Subcommands (z.B. `bpgit sync --root <path>`).
+        //  - Es gibt keine /admin/*-Diagnose-Endpunkte. /healthz bleibt anonym,
+        //    damit Monitoring ohne Git-Client-Anmeldung möglich ist.
         //  - Smart-HTTP-Endpoints (/{repo}/info/refs, /{repo}/git-*-pack) bleiben anonym,
         //    weil git-Clients per Spec keine Credentials mitschicken. Das explizite
         //    `AllowAnonymousGit`-Policy-Pattern steht weiter unten.
@@ -114,6 +105,7 @@ public static partial class Program
         });
 
         builder.Services.AddSingleton(cfg);
+        builder.Services.AddSingleton<RepositoryOperationLock>();
 
         // BP-DB Connection String: single source of truth ist
         // ServerConfig.GetEffectiveConnectionString() — kein Duplikat-Builder hier.
@@ -134,6 +126,7 @@ public static partial class Program
             var db = sp.GetRequiredService<BpDbService>();
             return new WorktreeSyncService(db);
         });
+        builder.Services.AddSingleton<BpToGitSyncService>();
 
         // Pre-/Post-Receive-Handler als C# im HTTP-Handler (kein Git-Hook-Script, Stand 2026-09-10):
         //   PreReceiveHandler   - side-effect post-apply für git-receive-pack
@@ -151,7 +144,7 @@ public static partial class Program
         {
             status = "ok",
             server = "bpgit-server",
-            version = "0.2.0-unified-cli",
+            version = typeof(Program).Assembly.GetName().Version?.ToString(),
             repoRoot = cfg.RepoRoot,
             repoName = cfg.RepoName,
             bareRepo = cfg.BareRepoPath,
@@ -171,9 +164,10 @@ public static partial class Program
         // The catch-all is registered as MapFallback so it does not collide
         // with /healthz or other explicit routes.
         app.MapFallback(async (HttpContext ctx, ServerConfig srvCfg,
-                                PushOrchestrator push) =>
+                                PushOrchestrator push,
+                                BpToGitSyncService bpToGitSync) =>
         {
-            var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg, push);
+            var handled = await GitHttpHandler.HandleAsync(ctx, srvCfg, push, bpToGitSync);
             if (!handled)
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
